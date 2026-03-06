@@ -1,49 +1,49 @@
-# О проекте
+# About the Project
 
 oneentry — OneEntry NPM package
 
-**Документация SDK:** https://js-sdk.oneentry.cloud/docs/index/
+**SDK Documentation:** https://js-sdk.oneentry.cloud/docs/index/
 
-## Контекст проекта
+## Project Context
 
-**Что такое OneEntry:**
-OneEntry — headless CMS для e-commerce и контент-проектов.
+**What is OneEntry:**
+OneEntry — a headless CMS for e-commerce and content projects.
 
-**SDK позволяет:**
+**The SDK allows you to:**
 
-- Управлять каталогом товаров, категориями
-- Создавать и обрабатывать заказы
-- Работать с авторизацией и профилями
-- Интегрировать платежные системы
-- Управлять многоязычным контентом
-- Работать с формами, меню, страницами и множеством других сущностей
+- Manage a product catalog and categories
+- Create and process orders
+- Work with authentication and user profiles
+- Integrate payment systems
+- Manage multilingual content
+- Work with forms, menus, pages, and many other entities
 
-## Инструкции для AI
+## Instructions for AI
 
-### 🗂️ Временные файлы — только в `.claude/temp/`
+### 🗂️ Temporary files — only in `.claude/temp/`
 
-При работе над проектом AI часто создаёт временные скрипты для инспекции API, тестирования, отладки (`_inspect.mjs`, `test.ts`, `debug.js` и т.д.).
+While working on a project, AI often creates temporary scripts for API inspection, testing, and debugging (`_inspect.mjs`, `test.ts`, `debug.js`, etc.).
 
-**Правило:**
+**Rule:**
 
-- Все временные файлы создавать **только** в `.claude/temp/`
-- Папка `.claude/temp/` существует на протяжении всего проекта — файлы из неё можно переиспользовать между сессиями
-- По окончании задачи, где временный файл больше не нужен — удалять его
-- **НИКОГДА** не оставлять временные файлы в корне проекта или других папках
+- Create all temporary files **only** in `.claude/temp/`
+- The `.claude/temp/` folder persists throughout the project — files can be reused between sessions
+- When a task is done and a temporary file is no longer needed — delete it
+- **NEVER** leave temporary files in the project root or other folders
 
 ```text
 .claude/
   temp/
-    inspect-api.mjs     ← скрипты инспекции API
-    debug-blocks.mjs    ← отладочные скрипты
-    test-auth.mjs       ← тесты авторизации
+    inspect-api.mjs     ← API inspection scripts
+    debug-blocks.mjs    ← debug scripts
+    test-auth.mjs       ← auth tests
 ```
 
 ---
 
-### 🗂️ Структура папки `components/`
+### 🗂️ `components/` folder structure
 
-**НИКОГДА** не складывай компоненты в плоскую папку `components/`. Всегда раскладывай по логическим группам:
+**NEVER** put components in a flat `components/` folder. Always organize them into logical groups:
 
 ```text
 components/
@@ -54,175 +54,175 @@ components/
   favorites/    ← FavoriteButton
   search/       ← SearchBar
   user/         ← UserStateSync, ProfileForm
-  ui/           ← переиспользуемые примитивы (Button, Modal, Skeleton и т.д.)
+  ui/           ← reusable primitives (Button, Modal, Skeleton, etc.)
 ```
 
-**Правила:**
+**Rules:**
 
-- При создании нового компонента — сразу определи к какой группе он относится
-- Если компонент не вписывается ни в одну группу — создай новую с понятным названием
-- `ui/` — только для универсальных переиспользуемых примитивов без бизнес-логики
+- When creating a new component — immediately decide which group it belongs to
+- If a component doesn't fit any group — create a new one with a clear name
+- `ui/` — only for universal reusable primitives without business logic
 
 ---
 
-При генерации кода с OneEntry SDK **ВСЕГДА**:
+When generating code with the OneEntry SDK **ALWAYS**:
 
-### ⚠️ КРИТИЧЕСКИ ВАЖНО: Проверка типов ПЕРЕД написанием кода и их использование
+### ⚠️ CRITICAL: Check types BEFORE writing code and use them
 
-#### ВСЕГДА проверяй структуру данных в SDK ПЕРЕД написанием кода
+#### ALWAYS check the data structure in the SDK BEFORE writing code
 
-`node_modules/oneentry/dist/` содержит все интерфейсы (IProductsEntity, IBlockEntity, IAuthPostBody и т.д.). Используй `grep` для поиска интерфейсов ПЕРЕД написанием кода.
+`node_modules/oneentry/dist/` contains all interfaces (IProductsEntity, IBlockEntity, IAuthPostBody, etc.). Use `grep` to find interfaces BEFORE writing code.
 
 ```bash
-# Найти интерфейс
+# Find an interface
 grep -r "interface IAuthPostBody" node_modules/oneentry/dist --include="*.d.ts" -A 10
 
-# Найти сигнатуру метода
+# Find a method signature
 grep -r "auth(marker" node_modules/oneentry/dist --include="*.d.ts" -A 5
 ```
 
-**НИКОГДА НЕ ВЫДУМЫВАЙ структуру ДАННЫХ!** Даже если примеры в документации выглядят по-другому - проверяй реальные типы TypeScript.
-**НИКОГДА НЕ ВЫДУМЫВАЙ ДАННЫЕ! Всегда получай из API (Pages, Menus, Products, Blocks и другие сущности). Не знаешь откуда взять данные → СПРОСИ У ПОЛЬЗОВАТЕЛЯ. Это КРИТИЧЕСКИ ВАЖНО!**
+**NEVER FABRICATE data structure!** Even if documentation examples look different — check the real TypeScript types.
+**NEVER FABRICATE DATA! Always fetch from API (Pages, Menus, Products, Blocks, and other entities). Don't know where to get data → ASK THE USER. This is CRITICALLY IMPORTANT!**
 
-#### Импортируй типы из SDK
+#### Import types from the SDK
 
 (`oneentry/dist/.../...Interfaces`)
 
-#### Проверяй результат каждого API вызова
+#### Check the result of every API call
 
-### 🚫 ЗАПРЕЩЕНО использовать `as any` и `any[]`
+### 🚫 FORBIDDEN to use `as any` and `any[]`
 
-Вместо `as any` — всегда импортируй тип из `oneentry/dist/`:
+Instead of `as any` — always import the type from `oneentry/dist/`:
 
 - `import type { IPagesEntity } from 'oneentry/dist/pages/pagesInterfaces'`
 - `import type { IProductsResponse, IProductsEntity } from 'oneentry/dist/products/productsInterfaces'`
 
-Исключение: SDK сам объявляет поле как `any` (например `ILocalizeInfo`, `IError`) — тогда `as any` не нужен вообще.
+Exception: the SDK itself declares a field as `any` (e.g. `ILocalizeInfo`, `IError`) — then `as any` is not needed at all.
 
-### 🔍 Чек-лист перед написанием кода
+### 🔍 Pre-code checklist
 
-**ВСЕГДА проверяй ДО генерации кода:**
+**ALWAYS verify BEFORE generating code:**
 
-1. ☑️ **Откуда данные?**
-   - Есть API метод? → Используй его
-   - Нет API метода? → СПРОСИ У ПОЛЬЗОВАТЕЛЯ откуда взять данные
-   - НЕ выдумывай источник данных!
-1. ☑️ **Проверил ли типы в SDK?**
-   - **КРИТИЧЕСКИ ВАЖНО:** ВСЕГДА проверяй интерфейсы ПЕРЕД написанием кода!
-   - Используй grep: `grep -r "interface IAuthPostBody" node_modules/oneentry/dist --include="*.d.ts" -A 10`
-   - Проверь сигнатуру метода: `grep -r "auth(marker" node_modules/oneentry/dist --include="*.d.ts"`
-   - НЕ полагайся на примеры из документации - они могут быть устаревшими!
-   - НЕ выдумывай структуру данных - проверяй реальные типы TypeScript!
-1. ☑️ **Знаешь ли структуру данных?**
-   - 1️⃣ Сначала смотри тип в SDK (`node_modules/oneentry/dist/`)
-   - 2️⃣ Затем делай реальный вызов и смотри данные (`console.log`)
-   - НЕ угадывай поля объектов!
-1. ☑️ **Нужен ли marker?**
-   - Метод требует marker? → запусти **`/inspect-api`** чтобы увидеть реальные маркеры из API
-   - Нет доступа к Bash? → СПРОСИ У ПОЛЬЗОВАТЕЛЯ какой маркер
-   - НЕ угадывай маркеры типа 'main', 'header', 'footer'!
-1. ☑️ **Правильный ли langCode?**
-   - Есть params в Next.js? → Используй его (не забудь await в Next.js 15+/16!)
-   - НЕ хардкодь 'en_US' в компонентах! Язык по умолчанию и так установлен и поле langCode не обязательное.
-   - Правила локализации: `.claude/rules/localization.md`
-1. ☑️ **Используешь params в Next.js 15+/16?**
-   - Функция async? → Да, обязательно!
-   - Тип params: `Promise<{...}>`? → Да, это Promise!
+1. ☑️ **Where does the data come from?**
+   - Is there an API method? → Use it
+   - No API method? → ASK THE USER where to get the data
+   - Do NOT fabricate a data source!
+1. ☑️ **Did you check the types in the SDK?**
+   - **CRITICALLY IMPORTANT:** ALWAYS check interfaces BEFORE writing code!
+   - Use grep: `grep -r "interface IAuthPostBody" node_modules/oneentry/dist --include="*.d.ts" -A 10`
+   - Check method signature: `grep -r "auth(marker" node_modules/oneentry/dist --include="*.d.ts"`
+   - Do NOT rely on documentation examples — they may be outdated!
+   - Do NOT fabricate data structures — check real TypeScript types!
+1. ☑️ **Do you know the data structure?**
+   - 1️⃣ First look at the type in the SDK (`node_modules/oneentry/dist/`)
+   - 2️⃣ Then make a real call and inspect the data (`console.log`)
+   - Do NOT guess object fields!
+1. ☑️ **Is a marker needed?**
+   - Method requires a marker? → run **`/inspect-api`** to see real markers from the API
+   - No Bash access? → ASK THE USER what marker to use
+   - Do NOT guess markers like 'main', 'header', 'footer'!
+1. ☑️ **Is the langCode correct?**
+   - Are params available in Next.js? → Use them (don't forget await in Next.js 15+/16!)
+   - Do NOT hardcode 'en_US' in components! The default language is already set and langCode is optional.
+   - Localization rules: `.claude/rules/localization.md`
+1. ☑️ **Are you using params in Next.js 15+/16?**
+   - Is the function async? → Yes, required!
+   - Is params type `Promise<{...}>`? → Yes, it's a Promise!
    - Awaited params? → `const { locale } = await params;`
-   - НЕ забывай await - иначе получишь undefined!
-1. ☑️ **Нужна ли трансформация данных?**
-   - Данные из API уже в нужном формате? → Используй напрямую
-   - НЕ создавай промежуточные объекты без необходимости!
-1. ☑️ **Компонент требует SDK (форма, авторизация, данные)?**
-   - Пользователь дал верстку формы/компонента → СРАЗУ подключай к SDK, не создавай сначала статическую заглушку
-   - Нужен маркер → запусти **`/inspect-api`** ДО написания компонента
-   - Нужен Server Action → создай его ВМЕСТЕ с компонентом в одном шаге
-   - **НИКОГДА** не откладывай подключение к SDK на «потом»
+   - Do NOT forget await — otherwise you'll get undefined!
+1. ☑️ **Is data transformation needed?**
+   - Is data from the API already in the required format? → Use it directly
+   - Do NOT create intermediate objects unnecessarily!
+1. ☑️ **Does the component require the SDK (form, auth, data)?**
+   - User provided markup for a form/component → IMMEDIATELY connect to the SDK, don't create a static placeholder first
+   - Marker needed → run **`/inspect-api`** BEFORE writing the component
+   - Server Action needed → create it TOGETHER with the component in one step
+   - **NEVER** defer SDK integration to "later"
 
-#### 🛑 Когда ОСТАНОВИТЬСЯ и СПРОСИТЬ у пользователя
+#### 🛑 When to STOP and ASK the user
 
-**НЕ пиши код если:**
+**Do NOT write code if:**
 
-1. ❓ **Не проверил типы в SDK**
-   → СНАЧАЛА: `grep -r "interface I[ИмяТипа]" node_modules/oneentry/dist --include="*.d.ts" -A 10`
-   → Пример: Перед использованием `getApi().AuthProvider.auth()` ОБЯЗАТЕЛЬНО проверь структуру IAuthPostBody
-1. ❓ **Не знаешь маркер** для Menus, Forms, Orders, Blocks, AuthProvider и так далее
-   → Запусти **`/inspect-api`** — вернёт реальные маркеры из API
-   → Нет Bash доступа: Для AuthProvider — `getApi().AuthProvider.getAuthProviders()`, для Forms — `getApi().Forms.getAllForms()`
-   → Ничего не помогло: Спроси: "Какой маркер использовать для [название]?"
-1. ❓ **Получаешь 403 Forbidden**
-   → Проверь: вызываешь ли `AuthProvider.auth/signUp/generateCode` через Server Action? → перенеси в Client Component (fingerprint)
-   → Или проверь права группы пользователей в админке (`PROJECT_URL/users/groups`)
-1. ❓ **Не видел верстку** но нужно создать компонент
-   → Спроси: "Есть ли пример верстки/дизайна для этого компонента?"
-1. ❓ **Есть верстка, но не знаешь маркер** для подключения к SDK
-   → Сначала запусти **`/inspect-api`**, получи маркер — и только потом создавай компонент уже подключённым
-   → НЕ создавай статическую заглушку с намерением «подключить позже»
-1. ❓ **Не понимаешь откуда брать данные**
-   → Спроси: "Откуда должны браться данные для [компонент]?"
-1. ❓ **Есть несколько вариантов решения**
-   → Предложи варианты: "Можно сделать X или Y, какой вариант предпочитаешь?"
+1. ❓ **You haven't checked types in the SDK**
+   → FIRST: `grep -r "interface I[TypeName]" node_modules/oneentry/dist --include="*.d.ts" -A 10`
+   → Example: Before using `getApi().AuthProvider.auth()` ALWAYS check the IAuthPostBody structure
+1. ❓ **You don't know the marker** for Menus, Forms, Orders, Blocks, AuthProvider, etc.
+   → Run **`/inspect-api`** — returns real markers from the API
+   → No Bash access: For AuthProvider — `getApi().AuthProvider.getAuthProviders()`, for Forms — `getApi().Forms.getAllForms()`
+   → Nothing worked: Ask: "What marker should I use for [name]?"
+1. ❓ **Getting 403 Forbidden**
+   → Check: are you calling `AuthProvider.auth/signUp/generateCode` via Server Action? → move to Client Component (fingerprint)
+   → Or check user group permissions in the admin panel (`PROJECT_URL/users/groups`)
+1. ❓ **Haven't seen the markup** but need to create a component
+   → Ask: "Is there a markup/design example for this component?"
+1. ❓ **Markup exists but you don't know the marker** for SDK connection
+   → First run **`/inspect-api`**, get the marker — then create the component already connected
+   → Do NOT create a static placeholder intending to "connect later"
+1. ❓ **Don't understand where to get data**
+   → Ask: "Where should the data for [component] come from?"
+1. ❓ **Multiple solution options exist**
+   → Suggest options: "Can be done as X or Y, which do you prefer?"
 
-### Обязательно
+### Required
 
-1. **💰 ЭКОНОМЬ ТОКЕНЫ: Не исправляй линтинг, форматирование, мелкие warning'и. Оставь эту работу пользователю. Фокусируйся на главной задаче.**
-1. **🎯 ПИШИ КОД ПО ПРАВИЛАМ ЛИНТЕРА: При написании нового кода всегда соблюдай настройки линтера проекта (ESLint, Prettier и т.д.). Проверяй конфиг линтера в проекте перед написанием кода, если не знаешь настройки.**
-1. **🎨 ТОЧНО КОПИРУЙ ВЕРСТКУ: Если пользователь предоставил верстку (HTML/JSX), копируй её точно, особенно если используется тот же фреймворк (например Tailwind CSS). Не изменяй классы, структуру и стили без явной необходимости. Только заменяй хардкод данными из API.**
-1. **🔌 СРАЗУ ПОДКЛЮЧАЙ К SDK: Если пользователь предоставил верстку компонента, который должен работать с SDK (форма авторизации, форма заказа, данные из CMS) — НИКОГДА не создавай сначала статическую UI-заглушку. Сразу: (1) запусти `/inspect-api` чтобы получить маркеры, (2) создай Server Action, (3) подключи компонент к SDK — всё в одном шаге.**
-1. **📋 ФОРМЫ ВСЕГДА ДИНАМИЧЕСКИЕ: НИКОГДА не хардкодь поля формы (`<input>` с захардкоженным `name`/`type`). Всегда получай поля через `getFormByMarker(marker)` и рендери их динамически по `attribute.type` и `attribute.marker`. Верстка пользователя задаёт только визуальный стиль — поля берутся из API.**
-1. **❓ СПРАШИВАЙ МАРКЕРЫ:** Многие методы API требуют marker (Menus.getMenusByMarker и т.д.), но нет методов "получить все". НЕ УГАДЫВАЙ маркеры типа 'main', 'footer', 'header'. ВСЕГДА спрашивай у пользователя какой marker использовать для нужной сущности.
-1. Для AuthProvider можно получить список провайдеров: `getApi().AuthProvider.getAuthProviders()` чтобы узнать доступные маркеры. Для Forms можно получить список форм: `getApi().Forms.getAllForms()` чтобы узнать доступные маркеры. и т.д.
-1. Создать type guard `isError`
-1. Использовать async/await
-1. **Выносить api инстанс в отдельный файл (singleton). Использовать `getApi()` для получения текущего экземпляра. НЕ создавать новые инстансы `defineOneEntry()` в компонентах — использовать `reDefine()` для изменения конфигурации (refreshToken, langCode)**
-1. **🚨 ОДИН API инстанс на группу user-authorized вызовов: Каждый вызов `defineOneEntry(url, { auth: { refreshToken } })` вызывает `/refresh` и сжигает токен. НИКОГДА не вызывай `makeUserApi(refreshToken)` несколько раз с одним токеном. Объединяй все связанные вызовы в ОДНУ Server Action с ОДНИМ инстансом:**
+1. **💰 SAVE TOKENS: Don't fix linting, formatting, minor warnings. Leave that work to the user. Focus on the main task.**
+1. **🎯 WRITE CODE BY LINTER RULES: When writing new code, always follow the project's linter settings (ESLint, Prettier, etc.). Check the linter config in the project before writing code if you don't know the settings.**
+1. **🎨 COPY MARKUP EXACTLY: If the user provided markup (HTML/JSX), copy it exactly, especially if the same framework is used (e.g. Tailwind CSS). Don't change classes, structure, and styles without explicit need. Only replace hardcoded data with API data.**
+1. **🔌 CONNECT TO SDK IMMEDIATELY: If the user provided markup for a component that should work with the SDK (auth form, order form, CMS data) — NEVER create a static UI placeholder first. Right away: (1) run `/inspect-api` to get markers, (2) create Server Action, (3) connect component to SDK — all in one step.**
+1. **📋 FORMS ARE ALWAYS DYNAMIC: NEVER hardcode form fields (`<input>` with hardcoded `name`/`type`). Always get fields via `getFormByMarker(marker)` and render them dynamically by `attribute.type` and `attribute.marker`. User's markup defines only the visual style — fields come from the API.**
+1. **❓ ASK FOR MARKERS:** Many API methods require a marker (Menus.getMenusByMarker, etc.) but there are no "get all" methods. Do NOT guess markers like 'main', 'footer', 'header'. ALWAYS ask the user which marker to use for the entity.
+1. For AuthProvider you can get the list of providers: `getApi().AuthProvider.getAuthProviders()` to find available markers. For Forms you can get the list of forms: `getApi().Forms.getAllForms()` to find available markers. etc.
+1. Create `isError` type guard
+1. Use async/await
+1. **Extract the API instance into a separate file (singleton). Use `getApi()` to get the current instance. Do NOT create new `defineOneEntry()` instances in components — use `reDefine()` to change configuration (refreshToken, langCode)**
+1. **🚨 ONE API instance per group of user-authorized calls: Each call to `defineOneEntry(url, { auth: { refreshToken } })` calls `/refresh` and burns the token. NEVER call `makeUserApi(refreshToken)` multiple times with the same token. Combine all related calls into ONE Server Action with ONE instance:**
 
    ```typescript
-   // ❌ НЕПРАВИЛЬНО — токен сожжён первой функцией, вторая получает 401
+   // ❌ WRONG — token burned by first function, second gets 401
    const storages = await getAllOrdersStorage(refreshToken);
    const orders = await getAllOrdersByMarker(marker, refreshToken); // 401!
 
-   // ✅ ПРАВИЛЬНО — один инстанс для всех вызовов
+   // ✅ CORRECT — one instance for all calls
    export async function loadAllOrders(refreshToken: string) {
-     const { api } = makeUserApi(refreshToken); // единственный /refresh
-     const storages = await api.Orders.getAllOrdersStorage(); // ← используем api, не getApi()!
-     const orders = await api.Orders.getAllOrdersByMarker(marker); // ← используем api, не getApi()!
+     const { api } = makeUserApi(refreshToken); // single /refresh
+     const storages = await api.Orders.getAllOrdersStorage(); // ← use api, not getApi()!
+     const orders = await api.Orders.getAllOrdersByMarker(marker); // ← use api, not getApi()!
      return orders;
    }
    ```
 
-1. Указывать правильные TypeScript типы
-1. **При создании страниц получать контент из CMS Pages, а не хардкодить**
-1. **При работе с attributeValues: если ЗНАЕШЬ marker (имя атрибута), обращайся напрямую `attrs.title?.value`. Если НЕ знаешь - спроси у пользователя или ищи по типу если пользователь тоже не знает `Object.values(attrs).find(a => a.type === 'image')`**
-1. **🚨 ПЕРЕД написанием кода доступа к атрибуту — ВСЕГДА проверяй его `type`, затем используй правильную структуру `value` для этого типа. НЕ угадывай структуру! Таблица типов:**
-   - `string`, `integer`, `real`, `float` → `attrs.marker?.value` (примитив)
-   - `text` → `attrs.marker?.value?.htmlValue` или `value.plainValue` (объект с полями)
+1. Use correct TypeScript types
+1. **When creating pages — get content from CMS Pages, don't hardcode**
+1. **When working with attributeValues: if you KNOW the marker (attribute name), access directly `attrs.title?.value`. If you DON'T know — ask the user or search by type if the user doesn't know either `Object.values(attrs).find(a => a.type === 'image')`**
+1. **🚨 BEFORE writing attribute access code — ALWAYS check its `type`, then use the correct `value` structure for that type. Do NOT guess the structure! Type table:**
+   - `string`, `integer`, `real`, `float` → `attrs.marker?.value` (primitive)
+   - `text` → `attrs.marker?.value?.htmlValue` or `value.plainValue` (object with fields)
    - `textWithHeader` → `attrs.marker?.value?.header`, `value.htmlValue`
-   - `image`, `groupOfImages` → `attrs.marker?.value?.[0]?.downloadLink` (МАССИВ!)
-   - `file` → `attrs.marker?.value?.downloadLink` (объект)
-   - `date`, `dateTime`, `time` → `attrs.marker?.value?.fullDate` или `value.formattedValue`
-   - `radioButton` → `attrs.marker?.value` (строка-id)
-   - `list` → `attrs.marker?.value` (массив id или объектов с extended)
-   - `entity` → `attrs.marker?.value` (массив маркеров)
+   - `image`, `groupOfImages` → `attrs.marker?.value?.[0]?.downloadLink` (ARRAY!)
+   - `file` → `attrs.marker?.value?.downloadLink` (object)
+   - `date`, `dateTime`, `time` → `attrs.marker?.value?.fullDate` or `value.formattedValue`
+   - `radioButton` → `attrs.marker?.value` (string id)
+   - `list` → `attrs.marker?.value` (array of ids or objects with extended)
+   - `entity` → `attrs.marker?.value` (array of markers)
    - `json` → `JSON.parse(attrs.marker?.value || '{}')`
-   - `spam` → **поле капчи (Google reCAPTCHA v3 Enterprise)** — НЕ рендерить как `<input>`! Рендерить компонент `FormReCaptcha`. ⚠️ Тип называется `'spam'`, не `'captcha'`
-   - **Если не знаешь тип атрибута — сначала добавь `console.log` чтобы увидеть данные, и только потом пиши код**
-1. **Для типа "image, groupOfImages" value это МАССИВ, брать `value[0].downloadLink`, а не просто `value`**
-1. SDK работает как на сервере, так и на клиенте (`NEXT_PUBLIC_*` переменные доступны в обоих контекстах). Выбор между Server Component / Server Action / Client Component — вопрос **стратегии рендеринга**, а не ограничений SDK. Исключение: `AuthProvider.auth/signUp/generateCode` — **только клиент** (fingerprint устройства).
+   - `spam` → **captcha field (Google reCAPTCHA v3 Enterprise)** — do NOT render as `<input>`! Render the `FormReCaptcha` component. ⚠️ The type is called `'spam'`, not `'captcha'`
+   - **If you don't know the attribute type — first add `console.log` to see the data, then write code**
+1. **For "image, groupOfImages" type, value is an ARRAY — take `value[0].downloadLink`, not just `value`**
+1. The SDK works both on the server and on the client (`NEXT_PUBLIC_*` variables are available in both contexts). The choice between Server Component / Server Action / Client Component is a matter of **rendering strategy**, not SDK limitations. Exception: `AuthProvider.auth/signUp/generateCode` — **client only** (device fingerprint).
 
-### ВАЖНО: Разрешения API и ограничения количества записей
+### IMPORTANT: API permissions and record count limits
 
-По умолчанию в OneEntry для группы пользователей "Гости" установлено ограничение **максимум 10 объектов** для сущностей (Pages, Products и т.д.).
+By default in OneEntry, the "Guests" user group has a limit of **maximum 10 objects** for entities (Pages, Products, etc.).
 
-**Перед использованием запросов сущностей:**
+**Before using entity queries:**
 
-1. Открой админку: `PROJECT_URL/users/groups/edit-group/1?tab`
-1. Для каждой сущности (Pages, Products, Forms и т.д.) измени разрешения:
+1. Open the admin panel: `PROJECT_URL/users/groups/edit-group/1?tab`
+1. For each entity (Pages, Products, Forms, etc.) change the permissions:
    - **Read: Yes, with restriction - with restriction on the number of records**
-   - → переключи на **without restrictions**
-1. Это позволит получать **все сущности без ограничений** по количеству
+   - → switch to **without restrictions**
+1. This allows fetching **all entities without count restrictions**
 
-**Пример:**
+**Example:**
 
 ```text
 https://react-native-course.oneentry.cloud/users/groups/edit-group/1?tab
@@ -230,40 +230,40 @@ https://react-native-course.oneentry.cloud/users/groups/edit-group/1?tab
 → Products: Read → without restrictions
 ```
 
-Без этой настройки `getPages()`, `getProducts()` и другие методы вернут максимум 10 записей!
+Without this setting, `getPages()`, `getProducts()`, and other methods will return a maximum of 10 records!
 
-### Рекомендуется
+### Recommended
 
-1. Обрабатывать пагинацию для списков
-1. Передавать `langCode` из контекста (i18n)
-1. Использовать маркеры вместо ID где возможно
-1. Добавлять loading состояния
-1. Всегда проверять результат через `isError` guard
+1. Handle pagination for lists
+1. Pass `langCode` from context (i18n)
+1. Use markers instead of IDs where possible
+1. Add loading states
+1. Always check results with the `isError` guard
 
-### Работа со страницами
+### Working with pages
 
-Когда пользователь просит создать страницу, **ВСЕГДА** получать контент из CMS Pages, а не хардкодить. Использовать `getPageByUrl(url)` и `getBlocksByPageUrl(url)`. Главная страница обычно имеет URL `'home'`.
+When a user asks to create a page, **ALWAYS** get content from CMS Pages, don't hardcode it. Use `getPageByUrl(url)` and `getBlocksByPageUrl(url)`. The home page usually has URL `'home'`.
 
-> Паттерн страницы: `.claude/rules/nextjs-pages.md` | Skill: **`/create-page`**
+> Page pattern: `.claude/rules/nextjs-pages.md` | Skill: **`/create-page`**
 
-### Контексты вызова SDK (Next.js)
+### SDK call contexts (Next.js)
 
-SDK изоморфный — работает и на сервере, и на клиенте. Выбор контекста зависит от стратегии рендеринга:
+The SDK is isomorphic — works both on the server and on the client. The choice of context depends on the rendering strategy:
 
 - **SSR/SSG/ISR** → Server Component / `generateStaticParams` / `revalidate`
-- **Мутации, серверная логика** → Server Action (`'use server'`)
-- **CSR, динамика, поиск** → Client Component (`'use client'`) напрямую через `getApi()`
-- **Пользовательские данные** (Orders, Users, Payments) → Server Action с `makeUserApi()` или Client с `reDefine()`
+- **Mutations, server logic** → Server Action (`'use server'`)
+- **CSR, dynamic, search** → Client Component (`'use client'`) directly via `getApi()`
+- **User data** (Orders, Users, Payments) → Server Action with `makeUserApi()` or Client with `reDefine()`
 
-**Единственное жёсткое ограничение:** `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **только из Client Component** (на сервере `deviceInfo.browser` в fingerprint будет серверным, а не реальным браузером пользователя).
+**The only hard restriction:** `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **Client Component only** (on the server, `deviceInfo.browser` in the fingerprint will be the server, not the real user's browser).
 
-> Правила Server Actions: `.claude/rules/server-actions.md` | Правила авторизации: `.claude/rules/auth-provider.md`
+> Server Actions rules: `.claude/rules/server-actions.md` | Auth rules: `.claude/rules/auth-provider.md`
 
-## Инициализация SDK
+## SDK Initialization
 
-> **Быстрая инициализация нового проекта:** используй skill **`/setup-oneentry`** — создаст `lib/oneentry.ts`, настроит `next.config.ts` и покажет нужные переменные окружения.
+> **Quick initialization for a new project:** use skill **`/setup-oneentry`** — creates `lib/oneentry.ts`, configures `next.config.ts` and shows the required environment variables.
 
-### Минимальная настройка
+### Minimal setup
 
 ```typescript
 const api = defineOneEntry('https://your-project.oneentry.cloud', {
@@ -271,7 +271,7 @@ const api = defineOneEntry('https://your-project.oneentry.cloud', {
 })
 ```
 
-### Рекомендуемая настройка (production)
+### Recommended setup (production)
 
 ```typescript
 const api = defineOneEntry(process.env.ONEENTRY_URL, {
@@ -285,35 +285,35 @@ const api = defineOneEntry(process.env.ONEENTRY_URL, {
 })
 ```
 
-### Интеграция с Next.js (Singleton паттерн)
+### Next.js integration (Singleton pattern)
 
-**Настройка `.env.local`:**
+**`.env.local` setup:**
 
-Если файл `.env.local` не существует — создай его и спроси у пользователя URL проекта и App Token (Settings → App Token в админке OneEntry).
+If the `.env.local` file doesn't exist — create it and ask the user for the project URL and App Token (Settings → App Token in the OneEntry admin panel).
 
 ```env
 NEXT_PUBLIC_ONEENTRY_URL=https://your-project.oneentry.cloud
 NEXT_PUBLIC_ONEENTRY_TOKEN=your-app-token
 ```
 
-> `NEXT_PUBLIC_` — переменные доступны и на сервере, и на клиенте. Это позволяет использовать SDK в обоих контекстах.
+> `NEXT_PUBLIC_` — variables are available both on the server and on the client. This allows using the SDK in both contexts.
 
-Файл `lib/oneentry.ts` содержит три экспорта:
+The `lib/oneentry.ts` file contains three exports:
 
-- **`getApi()`** — возвращает текущий API инстанс. Используй везде для публичных запросов (работает и на сервере, и на клиенте)
-- **`reDefine(refreshToken, langCode)`** — пересоздаёт инстанс с пользовательским токеном (вызывать после логина **на клиенте**)
-- **`makeUserApi(refreshToken)`** — одноразовый user-auth инстанс для Server Actions. ⚠️ Каждый вызов сжигает токен через `/refresh` — создавай один раз на функцию
+- **`getApi()`** — returns the current API instance. Use everywhere for public requests (works both on the server and on the client)
+- **`reDefine(refreshToken, langCode)`** — recreates the instance with a user token (call after login **on the client**)
+- **`makeUserApi(refreshToken)`** — one-time user-auth instance for Server Actions. ⚠️ Each call burns the token via `/refresh` — create once per function
 
-Правила работы с токенами вынесены в `.claude/rules/tokens.md` (загружается автоматически при работе с `app/actions/**/*.ts`).
+Token rules are in `.claude/rules/tokens.md` (auto-loaded when working with `app/actions/**/*.ts`).
 
-**⚠️ ОДИН `makeUserApi` на всю Server Action:**
+**⚠️ ONE `makeUserApi` per entire Server Action:**
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО — токен сожжён первым вызовом, второй → 401
+// ❌ WRONG — token burned by first call, second → 401
 const storages = await getAllOrdersStorage(refreshToken);
 const orders = await getAllOrdersByMarker(marker, refreshToken);
 
-// ✅ ПРАВИЛЬНО — один инстанс, все запросы через него
+// ✅ CORRECT — one instance, all requests through it
 export async function loadAllOrders(refreshToken: string) {
   const { api, getNewToken } = makeUserApi(refreshToken);
   const storages = await api.Orders.getAllOrdersStorage();
@@ -322,19 +322,19 @@ export async function loadAllOrders(refreshToken: string) {
 }
 ```
 
-**ВАЖНО: `next.config.ts` — добавь `remotePatterns` для изображений `*.oneentry.cloud`, иначе `next/image` выдаст ошибку.**
+**IMPORTANT: `next.config.ts` — add `remotePatterns` for `*.oneentry.cloud` images, otherwise `next/image` will throw an error.**
 
-### Контексты выполнения SDK (Server vs Client)
+### SDK execution contexts (Server vs Client)
 
-SDK работает **как на сервере, так и на клиенте** — переменные окружения `NEXT_PUBLIC_*` доступны в обоих контекстах. Выбор контекста зависит от стратегии рендеринга Next.js и типа операции.
+The SDK works **both on the server and on the client** — `NEXT_PUBLIC_*` environment variables are available in both contexts. The context choice depends on the Next.js rendering strategy and operation type.
 
-| Стратегия | Где выполняется | Пример использования |
+| Strategy | Where it runs | Example usage |
 |---|---|---|
-| **SSR** (Server Component) | Сервер | Каталог, страницы, меню, блоки |
-| **SSG** (`generateStaticParams`) | Сервер (build-time) | Генерация статических маршрутов продуктов |
-| **ISR** (`revalidate`) | Сервер (периодически) | Контент с редким обновлением |
-| **CSR** (Client Component) | Клиент (браузер) | Авторизация, динамические данные, поиск |
-| **Server Action** (`'use server'`) | Сервер | Мутации, отправка форм, user-authorized данные |
+| **SSR** (Server Component) | Server | Catalog, pages, menus, blocks |
+| **SSG** (`generateStaticParams`) | Server (build-time) | Generating static product routes |
+| **ISR** (`revalidate`) | Server (periodically) | Infrequently updated content |
+| **CSR** (Client Component) | Client (browser) | Auth, dynamic data, search |
+| **Server Action** (`'use server'`) | Server | Mutations, form submission, user-authorized data |
 
 ```tsx
 // SSR — Server Component
@@ -344,15 +344,15 @@ export default async function CatalogPage({ params }) {
   // ...
 }
 
-// SSG — генерация статических путей
+// SSG — static path generation
 export async function generateStaticParams() {
   const products = await getApi().Products.getProducts({ limit: 100 });
   if (isError(products)) return [];
   return products.map(p => ({ id: String(p.id) }));
 }
 
-// ISR — инкрементальная регенерация
-export const revalidate = 3600; // обновлять раз в час
+// ISR — incremental regeneration
+export const revalidate = 3600; // update every hour
 
 // CSR — Client Component
 'use client';
@@ -360,60 +360,60 @@ import { getApi, isError } from '@/lib/oneentry';
 const results = await getApi().Products.searchProducts({ name: query });
 ```
 
-### ⚠️ Авторизация — ТОЛЬКО на клиенте (fingerprint)
+### ⚠️ Auth — Client ONLY (fingerprint)
 
-SDK при авторизации передаёт **fingerprint устройства** пользователя. На сервере SDK тоже генерирует fingerprint, но в `deviceInfo.browser` будет `"Node.js/..."` вместо реального браузера пользователя. Поэтому `auth()` / `signUp()` лучше вызывать с клиента.
+The SDK transmits the user's **device fingerprint** during authentication. On the server the SDK also generates a fingerprint, but `deviceInfo.browser` will be `"Node.js/..."` instead of the real user's browser. Therefore `auth()` / `signUp()` should be called from the client.
 
 ```tsx
-// ❌ НЕЖЕЛАТЕЛЬНО — auth через Server Action (deviceInfo.browser = "Node.js/...", не реальный браузер)
+// ❌ UNDESIRABLE — auth via Server Action (deviceInfo.browser = "Node.js/...", not real browser)
 // app/actions/auth.ts
 'use server';
 export async function signIn(authData) {
-  return await getApi().AuthProvider.auth('email', { authData }); // browser в fingerprint = Node.js
+  return await getApi().AuthProvider.auth('email', { authData }); // browser in fingerprint = Node.js
 }
 
-// ✅ ПРАВИЛЬНО — auth напрямую из Client Component (fingerprint = браузер пользователя)
-// components/AuthForm.tsx
+// ✅ CORRECT — auth directly from Client Component (fingerprint = user's browser)
+// components/user/AuthForm.tsx
 'use client';
 import { getApi, isError } from '@/lib/oneentry';
 
 async function handleSignIn(authData) {
   const result = await getApi().AuthProvider.auth('email', { authData });
-  if (isError(result)) { /* обработка ошибки */ return; }
+  if (isError(result)) { /* handle error */ return; }
   localStorage.setItem('accessToken', result.accessToken);
   localStorage.setItem('refreshToken', result.refreshToken);
 }
 ```
 
-> Подробные правила авторизации: `.claude/rules/auth-provider.md`
+> Detailed auth rules: `.claude/rules/auth-provider.md`
 
-### Сводка: что где вызывать
+### Summary: what to call where
 
-| Операция | Контекст | Почему |
+| Operation | Context | Why |
 |---|---|---|
-| Публичные данные (Pages, Products, Menus, Blocks) | Server Component / Server Action / Client Component | Нет ограничений — зависит от стратегии рендеринга |
-| Авторизация (auth, signUp, generateCode) | **Только Client Component** | Fingerprint устройства |
-| Пользовательские данные (Orders, Users, Payments) | Server Action (`makeUserApi`) или Client (`reDefine`) | Зависит от архитектуры |
-| Формы и отправка данных | Server Action или Client Component | Зависит от стратегии |
+| Public data (Pages, Products, Menus, Blocks) | Server Component / Server Action / Client Component | No restrictions — depends on rendering strategy |
+| Auth (auth, signUp, generateCode) | **Client Component only** | Device fingerprint |
+| User data (Orders, Users, Payments) | Server Action (`makeUserApi`) or Client (`reDefine`) | Depends on architecture |
+| Forms and data submission | Server Action or Client Component | Depends on strategy |
 
-### ⚠️ params и searchParams в Next.js 15+/16 — это Promise
+### ⚠️ params and searchParams in Next.js 15+/16 are Promises
 
-В Next.js 15+ `params` и `searchParams` являются Promise. Правила для страниц вынесены в `.claude/rules/nextjs-pages.md` (загружается автоматически при работе с `page.tsx` / `layout.tsx`).
-Правила локализации вынесены в `.claude/rules/localization.md` (загружается автоматически при работе с `page.tsx`, `layout.tsx`, `app/actions/**/*.ts`).
-Кратко:
+In Next.js 15+, `params` and `searchParams` are Promises. Page rules are in `.claude/rules/nextjs-pages.md` (auto-loaded when working with `page.tsx` / `layout.tsx`).
+Localization rules are in `.claude/rules/localization.md` (auto-loaded when working with `page.tsx`, `layout.tsx`, `app/actions/**/*.ts`).
+In brief:
 
 ```tsx
-// ✅ Всегда await params
+// ✅ Always await params
 export default async function Page({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
 }
 ```
 
-## Обработка ошибок
+## Error Handling
 
-SDK по умолчанию (`isShell: true`) возвращает ошибки как объект `IError`, а не выбрасывает исключение. Используй `isError` guard для проверки.
+The SDK by default (`isShell: true`) returns errors as an `IError` object, not exceptions. Use the `isError` guard to check.
 
-Если SDK инициализирован с `isShell: false` — он выбрасывает исключения, используй `try/catch`.
+If the SDK is initialized with `isShell: false` — it throws exceptions, use `try/catch`.
 
 ```typescript
 function isError(result: any): result is IError {
@@ -432,7 +432,7 @@ async function getProduct(id: number) {
 }
 ```
 
-### Структура IError (из SDK)
+### IError structure (from SDK)
 
 ```typescript
 // oneentry/dist/errors/errorsInterfaces
@@ -442,13 +442,13 @@ interface IError {
   error?: string
 }
 
-// Проверка кода ошибки
+// Check error code
 if (isError(result)) {
   switch (result.statusCode) {
     case 400: // Bad Request
-    case 401: // Unauthorized — нет или истёк токен
-    case 403: // Forbidden — нет прав
-    case 404: // Not Found — ресурс не найден
+    case 401: // Unauthorized — missing or expired token
+    case 403: // Forbidden — no permissions
+    case 404: // Not Found — resource not found
     case 429: // Rate Limit Exceeded
     case 500: // Server Error
     case 502: // Bad Gateway
@@ -458,62 +458,62 @@ if (isError(result)) {
 }
 ```
 
-## Response структуры
+## Response Structures
 
-**Интерфейсы сущностей** ищи в `node_modules/oneentry/dist/`. Ключевые поля любой entity: `id`, `localizeInfos`, `attributeValues`, `pageUrl`.
+**Entity interfaces** can be found in `node_modules/oneentry/dist/`. Key fields of any entity: `id`, `localizeInfos`, `attributeValues`, `pageUrl`.
 
 ```typescript
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
 import type { IAttributesSetsEntity } from 'oneentry/dist/attribute-sets/attributeSetsInterfaces'
 ```
 
-### attributeValues — типы и доступ к value
+### attributeValues — types and value access
 
-> Подробные примеры каждого типа: `.claude/rules/attribute-values.md`
+> Detailed examples for each type: `.claude/rules/attribute-values.md`
 
-| Тип | Доступ к value | Примечание |
+| Type | Value access | Note |
 | --- | --- | --- |
-| `string`, `integer`, `real`, `float` | `attrs.marker?.value` | примитив |
-| `text` | `attrs.marker?.value?.htmlValue` | или `plainValue`, `mdValue` |
+| `string`, `integer`, `real`, `float` | `attrs.marker?.value` | primitive |
+| `text` | `attrs.marker?.value?.htmlValue` | or `plainValue`, `mdValue` |
 | `textWithHeader` | `attrs.marker?.value?.header`, `.htmlValue` | |
-| `image`, `groupOfImages` | `attrs.marker?.value?.[0]?.downloadLink` | **МАССИВ!** |
-| `file` | `attrs.marker?.value?.downloadLink` | объект |
-| `date`, `dateTime`, `time` | `attrs.marker?.value?.fullDate` | или `formattedValue` |
-| `radioButton` | `attrs.marker?.value` | строка-id |
-| `list` | `attrs.marker?.value` | массив id или объектов с `extended` |
-| `entity` | `attrs.marker?.value` | массив маркеров |
+| `image`, `groupOfImages` | `attrs.marker?.value?.[0]?.downloadLink` | **ARRAY!** |
+| `file` | `attrs.marker?.value?.downloadLink` | object |
+| `date`, `dateTime`, `time` | `attrs.marker?.value?.fullDate` | or `formattedValue` |
+| `radioButton` | `attrs.marker?.value` | string id |
+| `list` | `attrs.marker?.value` | array of ids or objects with `extended` |
+| `entity` | `attrs.marker?.value` | array of markers |
 | `json` | `JSON.parse(attrs.marker?.value \|\| '{}')` | |
 | `timeInterval` | `attrs.marker?.value` | `[[ISO, ISO], ...]` |
-| `spam` | — | капча reCAPTCHA v3 → `<FormReCaptcha>` |
+| `spam` | — | reCAPTCHA v3 captcha → `<FormReCaptcha>` |
 
 ```typescript
-// Если знаешь маркер — напрямую (предпочтительно):
+// If you know the marker — directly (preferred):
 const title = attrs.title?.value
-const img = attrs.photo?.value?.[0]?.downloadLink   // image — МАССИВ!
+const img = attrs.photo?.value?.[0]?.downloadLink   // image — ARRAY!
 const badges = attrs.badges?.value || []
 const icon = badges[0]?.extended?.value?.downloadLink
 
-// Если не знаешь маркер — поиск по типу:
+// If you don't know the marker — search by type:
 const imgAttr = Object.values(attrs).find((a: any) => a?.type === 'image')
 const imgUrl = imgAttr?.value?.[0]?.downloadLink || ''
 ```
 
-### Фильтрация по attributeValues
+### Filtering by attributeValues
 
-| Оператор | Описание | Пример |
+| Operator | Description | Example |
 | --- | --- | --- |
-| `in` | Значение в списке | `"red,blue,green"` |
-| `nin` | НЕ в списке | `"red,blue"` |
-| `eq` | Равно | `100` |
-| `neq` | Не равно | `0` |
-| `mth` | Больше (more than) | `50` |
-| `lth` | Меньше (less than) | `1000` |
-| `exs` | Существует | — |
-| `nexs` | Не существует | — |
-| `pat` | Содержит подстроку | `"Pro"` |
-| `same` | Точное совпадение | `"Headphones"` |
+| `in` | Value in list | `"red,blue,green"` |
+| `nin` | NOT in list | `"red,blue"` |
+| `eq` | Equal | `100` |
+| `neq` | Not equal | `0` |
+| `mth` | More than | `50` |
+| `lth` | Less than | `1000` |
+| `exs` | Exists | — |
+| `nexs` | Does not exist | — |
+| `pat` | Contains substring | `"Pro"` |
+| `same` | Exact match | `"Headphones"` |
 
-Спецзначения: `today` (для date/dateTime), `now` (для time/dateTime).
+Special values: `today` (for date/dateTime), `now` (for time/dateTime).
 
 ```typescript
 const filters = [
@@ -525,28 +525,28 @@ const products = await getApi().Products.getProducts(filters)
 
 ### localizeInfos
 
-Содержит данные для языка запроса. Прямой доступ к полям (без вложенности по языку!):
+Contains data for the request language. Direct field access (no nesting by language!):
 
 ```typescript
-page.localizeInfos?.title        // заголовок
-page.localizeInfos?.menuTitle    // название в меню
-page.localizeInfos?.htmlContent  // HTML контент (проверять первым)
-page.localizeInfos?.content      // простой текст
-page.localizeInfos?.plainContent // текст без форматирования
+page.localizeInfos?.title        // title
+page.localizeInfos?.menuTitle    // menu title
+page.localizeInfos?.htmlContent  // HTML content (check first)
+page.localizeInfos?.content      // plain text
+page.localizeInfos?.plainContent // text without formatting
 ```
 
-## Типичные сценарии
+## Typical Scenarios
 
 ### E-commerce
 
 ```typescript
-// Список товаров
+// Product list
 const products = await getApi().Products.getProducts()
 
-// Товар по ID
+// Product by ID
 const product = await getApi().Products.getProductById(65)
 
-// Фильтрация: цена 100-500
+// Filter: price 100-500
 const filtered = await getApi().Products.getProducts(
   [
     { attributeMarker: 'price', conditionMarker: 'mth', conditionValue: 100 },
@@ -554,7 +554,7 @@ const filtered = await getApi().Products.getProducts(
   ]
 )
 
-// Заказ + платёжная сессия (через makeUserApi — один /refresh)
+// Order + payment session (via makeUserApi — one /refresh)
 const { api } = makeUserApi(refreshToken)
 const order = await api.Orders.createOrder('storage_marker', {
   formIdentifier, paymentAccountIdentifier, formData, products,
@@ -563,161 +563,161 @@ if (isError(order)) return
 const session = await api.Payments.createSession(order.id, 'session', false) as any
 ```
 
-Для создания каталога товаров используй skill **`/create-product-list`** — он создаст Server Component с `getProductsByPageUrl`, фильтрацией через URL query params, пагинацией (load more), `FilterPanel` с данными цен и цветов из API и `ProductGrid` с ремаунтом через `key`.
+Use skill **`/create-product-list`** to create a product catalog — it will create a Server Component with `getProductsByPageUrl`, URL query param filtering, load more pagination, `FilterPanel` with price and color data from the API, and `ProductGrid` with remount via `key`.
 
-Для создания страницы одного товара используй skill **`/create-product-card`** — он создаст страницу товара с `getProductById`, извлечением атрибутов по типу и маркеру, галереей изображений, блоком цены и секцией связанных товаров через `getRelatedProductsById`.
+Use skill **`/create-product-card`** to create a single product page — it will create a product page with `getProductById`, attribute extraction by type and marker, image gallery, price block, and related products section via `getRelatedProductsById`.
 
-Для создания списка заказов пользователей используй skill **`/create-orders-list`** — он создаст Client Component с загрузкой через все хранилища (`getAllOrdersStorage` + `getAllOrdersByMarker`), один `makeUserApi` на всё, клиентскую пагинацию и защиту от token race condition.
+Use skill **`/create-orders-list`** to create a user order list — it will create a Client Component loading via all storages (`getAllOrdersStorage` + `getAllOrdersByMarker`), one `makeUserApi` for everything, client pagination and token race condition protection.
 
-Для создания страницы оформления заказа используй skill **`/create-checkout`** — он создаст форму с полями из Forms API (`getFormByMarker` по `formIdentifier` хранилища), обработкой поля типа `timeInterval` (слоты доставки), один `makeUserApi` для `createOrder` + `createSession` и редиректом на платёжную страницу.
+Use skill **`/create-checkout`** to create a checkout page — it will create a form with fields from the Forms API (`getFormByMarker` by storage `formIdentifier`), `timeInterval` field handling (delivery slots), one `makeUserApi` for `createOrder` + `createSession`, and redirect to the payment page.
 
-Для управления корзиной (Redux slice + redux-persist, add/remove/quantity) используй skill **`/create-cart-manager`** — создаст `CartSlice`, store с персистентностью и `StoreProvider`.
+Use skill **`/create-cart-manager`** to manage the cart (Redux slice + redux-persist, add/remove/quantity) — creates `CartSlice`, store with persistence and `StoreProvider`.
 
-Для списка избранного (Redux slice + persist, хранит только ID товаров) используй skill **`/create-favorites`** — создаст `FavoritesSlice`, кнопку и страницу с загрузкой данных из API.
+Use skill **`/create-favorites`** for the favorites list (Redux slice + persist, stores only product IDs) — creates `FavoritesSlice`, button, and page with data loading from the API.
 
-Для панели фильтров (цена, цвет, наличие + `FilterContext` + Apply/Reset) используй skill **`/create-filter-panel`**.
+Use skill **`/create-filter-panel`** for the filter panel (price, color, availability + `FilterContext` + Apply/Reset).
 
-Для подписки на изменение цены и наличия товара используй skill **`/create-subscription-events`** — `Events.subscribeByMarker` / `unsubscribeByMarker`.
+Use skill **`/create-subscription-events`** to subscribe to product price and availability changes — `Events.subscribeByMarker` / `unsubscribeByMarker`.
 
-### Авторизация и пользователи
+### Auth and users
 
-Для создания формы авторизации/регистрации используй skill **`/create-auth`** — он создаст Client Component с прямыми вызовами SDK (fingerprint!) и Server Actions только для `getAuthProviders`/`logout`. Поля динамические из Forms API, правильная структура `authData`, синхронизация токенов.
+Use skill **`/create-auth`** to create an auth/registration form — it will create a Client Component with direct SDK calls (fingerprint!) and Server Actions only for `getAuthProviders`/`logout`. Dynamic fields from Forms API, correct `authData` structure, token synchronization.
 
-Для страницы профиля пользователя используй skill **`/create-profile`** — поля из Users API, обновление данных, обработка token race condition.
+Use skill **`/create-profile`** for the user profile page — fields from Users API, data update, token race condition handling.
 
-Для страницы списка заказов используй skill **`/create-orders-list`** — загрузка через все хранилища, отмена, повтор, клиентская пагинация.
+Use skill **`/create-orders-list`** for the order list page — load via all storages, cancel, retry, client pagination.
 
-Для переключателя языков используй skill **`/create-locale-switcher`** — загружает локали через `getLocales()`, строит ссылки на текущую страницу с другим locale-сегментом.
+Use skill **`/create-locale-switcher`** for the language switcher — loads locales via `getLocales()`, builds links to the current page with a different locale segment.
 
-Для строки поиска используй skill **`/create-search`** — дебаунс 300ms, Server Action, dropdown результатов.
+Use skill **`/create-search`** for the search bar — 300ms debounce, Server Action, dropdown results.
 
-### Создание страниц с контентом из CMS
+### Creating pages with CMS content
 
-Для создания Next.js страниц с данными из OneEntry используй skill **`/create-page`** — он создаст файл страницы с `getPageByUrl`, `getBlocksByPageUrl` и правильной обработкой `isError`.
+Use skill **`/create-page`** to create Next.js pages with OneEntry data — it will create a page file with `getPageByUrl`, `getBlocksByPageUrl`, and correct `isError` handling.
 
-Правила работы со страницами, langCode и `params` (Next.js 15+): `.claude/rules/nextjs-pages.md`.
+Page rules, langCode and `params` (Next.js 15+): `.claude/rules/nextjs-pages.md`.
 
-## Контент и страницы
+## Content and Pages
 
-> Для создания страницы с контентом из CMS используй skill **`/create-page`**.
-> Правила для `params`/`searchParams` (Next.js 15+) и работы с `langCode`: `.claude/rules/nextjs-pages.md` (загружается при работе с `page.tsx`/`layout.tsx`).
+> Use skill **`/create-page`** to create a page with CMS content.
+> Rules for `params`/`searchParams` (Next.js 15+) and working with `langCode`: `.claude/rules/nextjs-pages.md` (auto-loaded when working with `page.tsx`/`layout.tsx`).
 
-**⚠️ КРИТИЧЕСКИ ВАЖНО: pageUrl это МАРКЕР, не полный путь!**
+**⚠️ CRITICALLY IMPORTANT: pageUrl is a MARKER, not a full path!**
 
-В OneEntry поле `pageUrl` - это **идентификатор/маркер страницы**, а НЕ реальный URL маршрута приложения.
+In OneEntry, the `pageUrl` field is a **page identifier/marker**, NOT the real URL route of the application.
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО - передавать полный путь роута
+// ❌ WRONG - passing full route path
 const categoryPage = await getApi().Pages.getPageByUrl('shop/category/ship_designer', locale)
 
-// ✅ ПРАВИЛЬНО - передавать только маркер страницы
+// ✅ CORRECT - passing only the page marker
 const categoryPage = await getApi().Pages.getPageByUrl('ship_designer', locale)
 
-// То же для Products
+// Same for Products
 const products = await getApi().Products.getProductsByPageUrl('ship_designer', [], locale)
-// НЕ 'shop/category/ship_designer'!
+// NOT 'shop/category/ship_designer'!
 ```
 
-**Правило:** URL роута в Next.js (например `/shop/category/ship_designer`) и `pageUrl` в OneEntry (`"ship_designer"`) - это **разные вещи**. При вызове методов SDK OneEntry всегда используй только маркер из `pageUrl`.
+**Rule:** The route URL in Next.js (e.g. `/shop/category/ship_designer`) and `pageUrl` in OneEntry (`"ship_designer"`) are **different things**. When calling OneEntry SDK methods, always use only the marker from `pageUrl`.
 
-### Многоязычный контент
+### Multilingual content
 
 ```typescript
-// Страница на русском
+// Page in Russian
 const pageRU = await getApi().Pages.getPageByUrl('about', 'ru_RU')
 
-// Меню на английском
+// Menu in English
 const menuEN = await getApi().Menus.getMenusByMarker('main', 'en_US')
 ```
 
-### Навигационное меню с иерархией
+### Navigation menu with hierarchy
 
-Для создания навигационного меню с поддержкой подменю и URL-префиксов используй skill **`/create-menu`** — он правильно обработает иерархию через `parentId`, нормализует `pages` и построит URL.
+Use skill **`/create-menu`** to create a navigation menu with submenu support and URL prefixes — it correctly handles hierarchy via `parentId`, normalizes `pages`, and builds URLs.
 
-## Работа с блоками и атрибутами
+## Working with Blocks and Attributes
 
-> Таблица типов `attributeValues` и примеры доступа: `.claude/rules/attribute-values.md` (загружается при работе с `*.tsx`-компонентами).
+> `attributeValues` type table and access examples: `.claude/rules/attribute-values.md` (auto-loaded when working with `*.tsx` components).
 
-### Работа с Blocks
+### Working with Blocks
 
 ```typescript
-// Получение блока по маркеру
+// Get a block by marker
 const block = await getApi().Blocks.getBlockByMarker('hero_section', 'en_US')
 if (isError(block)) return null
 
 const attrs = block.attributeValues || {}
 
-// Извлечение атрибутов
+// Extract attributes
 const title = attrs.title?.value || block.localizeInfos?.title || ''
 const description = attrs.description?.value || ''
 const bgImage = attrs.bg?.value?.[0]?.downloadLink || ''
 
-// Фильтрация блоков страницы
+// Filter page blocks
 const blocks = await getApi().Pages.getBlocksByPageUrl('home')
 if (!isError(blocks)) {
-  // Исключить определенные блоки по identifier
+  // Exclude specific blocks by identifier
   const filteredBlocks = blocks.filter(
     (block: any) => block.identifier !== 'home_badges'
   )
 
-  // Сортировка по position
+  // Sort by position
   const sortedBlocks = [...blocks].sort(
     (a: any, b: any) => a.position - b.position
   )
 }
 ```
 
-## Типичные ошибки
+## Common Mistakes
 
-### Забывать проверку на ошибки
+### Forgetting error checking
 
 ```typescript
-// НЕПРАВИЛЬНО
+// WRONG
 const product = await getApi().Products.getProductById(123)
-console.log(product.attributeValues.title) // Крашится если IError
+console.log(product.attributeValues.title) // Crashes if IError
 
-// ПРАВИЛЬНО
+// CORRECT
 const product = await getApi().Products.getProductById(123)
 if (isError(product)) return
 console.log(product.attributeValues.title)
 ```
 
-### Создавать SDK инстанс в компоненте
+### Creating SDK instance in a component
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО - новый инстанс при каждом рендере
+// ❌ WRONG - new instance on every render
 function ProductList() {
   const api = defineOneEntry(url, config)
 }
 
-// ✅ ПРАВИЛЬНО - singleton через getApi()
+// ✅ CORRECT - singleton via getApi()
 const products = await getApi().Products.getProducts()
 ```
 
-> Полный singleton паттерн: раздел **Инициализация SDK**
+> Full singleton pattern: **SDK Initialization** section
 
-### Угадывать маркеры меню и фильтровать по названиям
+### Guessing menu markers and filtering by names
 
 ```typescript
-// НЕПРАВИЛЬНО - угадываю маркер 'main' и фильтрую по названиям
+// WRONG - guess marker 'main' and filter by names
 const menu = await getApi().Menus.getMenusByMarker('main', 'en_US')
 const quickLinks = menu.pages.filter(p =>
   ['Shop', 'Contact us'].includes(p.localizeInfos?.title)
 )
 
-// ПРАВИЛЬНО - спросить маркер у пользователя и получить напрямую
+// CORRECT - ask user for marker and get directly
 const quickLinksMenu = await getApi().Menus.getMenusByMarker('quick_links', 'en_US')
 const quickLinks = !isError(quickLinksMenu) && quickLinksMenu.pages
   ? (Array.isArray(quickLinksMenu.pages) ? quickLinksMenu.pages : [quickLinksMenu.pages])
   : []
 ```
 
-### Создавать промежуточные типы и маппить данные API в кастомные объекты
+### Creating intermediate types and mapping API data to custom objects
 
-**НИКОГДА** не создавай промежуточный `type`/`interface` для обёртки данных из API и не маппи их в Server Actions. Компоненты должны работать напрямую с тем что вернул API.
+**NEVER** create an intermediate `type`/`interface` to wrap API data and map it in Server Actions. Components should work directly with what the API returned.
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО — создаю кастомный тип и маплю attributes в него
+// ❌ WRONG — creating custom type and mapping attributes to it
 type FeedbackField = { marker: string; title: string; required: boolean; ... }
 
 export async function getFormFields() {
@@ -725,14 +725,14 @@ export async function getFormFields() {
   return {
     fields: form.attributes.map((a: any) => ({
       marker: a.marker,
-      title: a.localizeInfos?.title,                        // ← уже есть в a.localizeInfos.title!
-      required: !!a.validators?.requiredValidator?.strict,  // ← уже есть в a.validators!
-      listOptions: a.listTitles.map((t: any) => t.value),  // ← теряем title, extended!
+      title: a.localizeInfos?.title,                        // ← already in a.localizeInfos.title!
+      required: !!a.validators?.requiredValidator?.strict,  // ← already in a.validators!
+      listOptions: a.listTitles.map((t: any) => t.value),  // ← lose title, extended!
     }))
   }
 }
 
-// ✅ ПРАВИЛЬНО — возвращаю attributes как есть
+// ✅ CORRECT — return attributes as-is
 export async function getFormFields() {
   const form = await getApi().Forms.getFormByMarker('contact_us') as any
   if (isError(form)) return { error: form.message }
@@ -743,30 +743,30 @@ export async function getFormFields() {
   }
 }
 
-// В компоненте обращаюсь к полям напрямую:
+// In the component, access fields directly:
 field.localizeInfos?.title
 field.validators?.requiredValidator?.strict
 field.validators?.stringInspectionValidator?.stringMax
-field.listTitles   // полные объекты с title, value, extended
+field.listTitles   // full objects with title, value, extended
 ```
 
-**Правило:** Server Action — это тонкий прокси. Единственно допустимые операции над данными API: `filter` (исключить типы) и `sort` (по `position`). Всё остальное — в компоненте.
+**Rule:** A Server Action is a thin proxy. The only acceptable operations on API data are: `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
 
-### Выдумывать структуры данных и создавать ненужные трансформации
+### Fabricating data structures and creating unnecessary transformations
 
 ```typescript
-// НЕПРАВИЛЬНО - создаю промежуточный объект, выдумываю структуру
+// WRONG - creating intermediate object, fabricating structure
 const navItems = pages.map(item => ({
   id: item.id,
   title: item.localizeInfos?.title || '',
   url: item.pageUrl || '#',
-  children: item.children || []  // ← поля children НЕТ в API!
+  children: item.children || []  // ← there is NO children field in the API!
 }))
 
-// ПРАВИЛЬНО - использую данные из API напрямую как есть
+// CORRECT - use API data directly as-is
 const navItems = pages.filter((p: any) => !p.parentId)
 
-// В JSX обращаюсь к полям API напрямую
+// In JSX access API fields directly
 {navItems.map((item: any) => (
   <Link href={`/${item.pageUrl}`}>
     {item.localizeInfos?.title}
@@ -774,58 +774,58 @@ const navItems = pages.filter((p: any) => !p.parentId)
 ))}
 ```
 
-### Разлогинивать пользователя на любой ошибке в account-страницах
+### Logging out the user on any error in account pages
 
-**Проблема:** При 401 нужно делать retry с актуальным токеном из localStorage (другая операция могла уже его обновить), и разлогинивать ТОЛЬКО при подтверждённой 401/403 после retry.
+**Problem:** On 401 you need to retry with the current token from localStorage (another operation may have already updated it), and log out ONLY on confirmed 401/403 after retry.
 
-Полный паттерн profile-страницы — skill **`/create-profile`**.
-Полный паттерн orders-страницы — skill **`/create-orders-list`**.
+Full profile page pattern — skill **`/create-profile`**.
+Full orders page pattern — skill **`/create-orders-list`**.
 
-**Никогда не делай `localStorage.removeItem('refreshToken')` при ошибке загрузки форм/данных** — это уничтожает свежий токен, который только что записала другая операция.
+**Never do `localStorage.removeItem('refreshToken')` on form/data load error** — this destroys the fresh token that another operation just wrote.
 
-### Показывать прелоадер при изменении состояния (не только при загрузке)
+### Showing a preloader on state changes (not just initial load)
 
-**Проблема:** При добавлении/удалении из избранного/корзины весь список перезагружается с лоадером.
+**Problem:** When adding/removing from favorites/cart, the entire list reloads with a loader.
 
-**Решение:** кэш в `useState<Record<id, Entity>>` + `useMemo` для видимого списка. `useEffect` фетчит только НОВЫЕ id (через `prevIdsRef`), удалённые пересчитываются без запроса.
+**Solution:** cache in `useState<Record<id, Entity>>` + `useMemo` for the visible list. `useEffect` fetches only NEW ids (via `prevIdsRef`), removed items are recalculated without a request.
 
-> Готовый паттерн с Redux + persist — skill **`/create-favorites`**
+> Ready pattern with Redux + persist — skill **`/create-favorites`**
 
-### Вызывать setState синхронно внутри useEffect
+### Calling setState synchronously inside useEffect
 
-**Проблема:** Синхронный `setState` / `dispatch` в теле `useEffect` вызывает каскадные ре-рендеры.
+**Problem:** Synchronous `setState` / `dispatch` in the `useEffect` body causes cascading re-renders.
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО — синхронный setState в useEffect
+// ❌ WRONG — synchronous setState in useEffect
 useEffect(() => { setMounted(true); }, []);
 
-// ❌ НЕПРАВИЛЬНО — синхронный dispatch внутри эффекта
+// ❌ WRONG — synchronous dispatch inside effect
 useEffect(() => {
   if (!ids.length) { dispatch(setLoadedProducts([])); return; }
   // ...
 }, [ids]);
 ```
 
-**Правила:**
+**Rules:**
 
-- Не вызывай `setState` / `dispatch` синхронно в теле `useEffect` — выноси начальное значение в `useState(initialValue)` или вычисляй через `useMemo`
-- Для проверки "смонтирован ли компонент" — **не используй** `useEffect + setMounted`. Вместо этого используй `useSyncExternalStore` или управляй видимостью через данные
-- Если нужно сбросить состояние при изменении зависимости — передавай начальное значение прямо в `useState`, а не через эффект
-- Асинхронные вызовы (fetch, dispatch после await) — допустимы внутри `useEffect`
+- Do not call `setState` / `dispatch` synchronously in the `useEffect` body — put the initial value into `useState(initialValue)` or compute via `useMemo`
+- To check "is the component mounted" — **do not use** `useEffect + setMounted`. Instead use `useSyncExternalStore` or manage visibility through data
+- If you need to reset state when a dependency changes — pass the initial value directly to `useState`, not via an effect
+- Async calls (fetch, dispatch after await) — allowed inside `useEffect`
 
 ```typescript
-// ✅ ПРАВИЛЬНО — начальное значение сразу в useState
+// ✅ CORRECT — initial value right in useState
 const [items, setItems] = useState<Item[]>(() => computeInitial());
 
-// ✅ ПРАВИЛЬНО — dispatch только после async операции
+// ✅ CORRECT — dispatch only after async operation
 useEffect(() => {
-  if (!ids.length) return; // просто return, не dispatch
+  if (!ids.length) return; // just return, not dispatch
   fetchProductsByIds(ids).then((loaded) => {
-    dispatch(setLoadedProducts(loaded)); // ← после await — ок
+    dispatch(setLoadedProducts(loaded)); // ← after await — ok
   });
 }, [ids]);
 
-// ✅ ПРАВИЛЬНО — mounted через useSyncExternalStore
+// ✅ CORRECT — mounted via useSyncExternalStore
 import { useSyncExternalStore } from 'react';
 const mounted = useSyncExternalStore(
   () => () => {},
@@ -834,172 +834,172 @@ const mounted = useSyncExternalStore(
 );
 ```
 
-## Частые галлюцинации AI (реальные примеры ошибок)
+## Common AI Hallucinations (real error examples)
 
-### Выдуманное поле `children` в меню
+### Fabricated `children` field in menus
 
-Поля `children` нет в `IMenusPages` — используй `parentId` (см. раздел выше).
+There is no `children` field in `IMenusPages` — use `parentId` (see section above).
 
 > Skill: **`/create-menu`**
 
-### Рендерить поле капчи как обычный input
+### Rendering the captcha field as a regular input
 
-Тип капчи в OneEntry — `'spam'`, не `'captcha'`. Это **невидимая** reCAPTCHA v3 — рендерить `<FormReCaptcha>`, не `<input>`.
+The captcha type in OneEntry is `'spam'`, not `'captcha'`. This is an **invisible** reCAPTCHA v3 — render `<FormReCaptcha>`, not `<input>`.
 
 ```tsx
-// ❌ ГАЛЛЮЦИНАЦИЯ
+// ❌ HALLUCINATION
 if (field.type === 'captcha') return <input type="text" />;
 
-// ✅ ПРАВИЛЬНО
+// ✅ CORRECT
 if (field.type === 'spam') {
   return <FormReCaptcha siteKey={field.validators?.siteKey} ... />;
 }
 ```
 
-Полный паттерн динамической формы — skill **`/create-form`**.
+Full dynamic form pattern — skill **`/create-form`**.
 
-### Хардкод langCode
+### Hardcoded langCode
 
 ```typescript
-// ❌ ГАЛЛЮЦИНАЦИЯ - хардкод языка в компонентах
+// ❌ HALLUCINATION - hardcoded language in components
 const page = await getApi().Pages.getPageByUrl('home', 'en_US')
 
-// ✅ ПРАВИЛЬНО — await params в Next.js 15+!
+// ✅ CORRECT — await params in Next.js 15+!
 export default async function Page({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   const page = await getApi().Pages.getPageByUrl('home', locale)
 }
 ```
 
-### Хардкодить данные фильтров (цвета, диапазон цен)
+### Hardcoding filter data (colors, price range)
 
-Цвета и диапазон цен получай из API, не хардкодь. Полный паттерн каталога с фильтрами — skill **`/create-product-list`**.
+Get colors and price range from the API, don't hardcode them. Full catalog with filters pattern — skill **`/create-product-list`**.
 
-### Передавать filters и gridKey как server props в ShopView
+### Passing filters and gridKey as server props to ShopView
 
-`ShopView` ОБЯЗАН читать `activeFilters` и `gridKey` из `useSearchParams`, иначе `loadMore` игнорирует фильтры. Полный паттерн — skill **`/create-product-list`**.
+`ShopView` MUST read `activeFilters` and `gridKey` from `useSearchParams`, otherwise `loadMore` ignores filters. Full pattern — skill **`/create-product-list`**.
 
-## Работа с реальными данными проекта
+## Working with Real Project Data
 
-**ВАЖНО:** Для определения структуры данных и полей сущностей используй реальные данные проекта.
+**IMPORTANT:** Use real project data to determine the data structure and entity fields.
 
-### ✅ ПРЕДПОЧТИТЕЛЬНЫЙ СПОСОБ: skill `/inspect-api`
+### ✅ PREFERRED METHOD: `/inspect-api` skill
 
-Используй skill **`/inspect-api`** — он автоматически прочитает `.env.local` и выполнит нужные curl-запросы:
+Use skill **`/inspect-api`** — it will automatically read `.env.local` and make the needed curl requests:
 
 ```
-/inspect-api             # все данные сразу
-/inspect-api pages       # маркеры страниц
-/inspect-api menus       # маркеры меню
-/inspect-api products    # атрибуты товаров
-/inspect-api forms       # маркеры форм
+/inspect-api             # all data at once
+/inspect-api pages       # page markers
+/inspect-api menus       # menu markers
+/inspect-api products    # product attributes
+/inspect-api forms       # form markers
 /inspect-api auth-providers
 /inspect-api product-statuses
 ```
 
-Результат: структурированный отчёт с реальными маркерами, типами атрибутов и `statusIdentifier`.
+Result: a structured report with real markers, attribute types, and `statusIdentifier`.
 
-**Что анализировать в ответе:**
+**What to analyze in the response:**
 
-- `items[0].statusIdentifier` — реальный статус товара
-- `items[0].attributeValues` — все атрибуты с `marker`, `type`, `value`
-- `identifier` — реальный маркер для меню/форм/провайдеров
-- `pageUrl` — реальный маркер для страниц
+- `items[0].statusIdentifier` — real product status
+- `items[0].attributeValues` — all attributes with `marker`, `type`, `value`
+- `identifier` — real marker for menus/forms/providers
+- `pageUrl` — real marker for pages
 
-## Шаблон работы с новой сущностью
+## Template for Working with a New Entity
 
-**Когда работаешь с новой сущностью (Product, Page, Block, Menu):**
+**When working with a new entity (Product, Page, Block, Menu):**
 
-### Шаг 1: Посмотреть тип в SDK
+### Step 1: Look up the type in the SDK
 
 ```typescript
 // node_modules/oneentry/dist/products/productsInterfaces.ts
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
 ```
 
-### Шаг 2: Сделать реальный вызов и посмотреть данные
+### Step 2: Make a real call and inspect the data
 
 ```typescript
-// Получить 1 объект и проверить реальную структуру
+// Get 1 object and check the real structure
 const testData = await getApi().Products.getProducts({ limit: 1 })
-console.log('Структура:', testData[0])
-console.log('Атрибуты:', testData[0]?.attributeValues)
+console.log('Structure:', testData[0])
+console.log('Attributes:', testData[0]?.attributeValues)
 ```
 
-### Шаг 3: Написать код на основе реальной структуры
+### Step 3: Write code based on the real structure
 
 ```typescript
-// Использовать РЕАЛЬНЫЕ поля из шагов 1-2
+// Use REAL fields from steps 1-2
 const attrs = product.attributeValues || {}
-const title = attrs.product_title?.value  // ← знаю что product_title существует из шагов 1-2
+const title = attrs.product_title?.value  // ← know product_title exists from steps 1-2
 ```
 
-**⚠️ НЕ пропускай шаги 1-2! НЕ угадывай структуру!**
+**⚠️ Do NOT skip steps 1-2! Do NOT guess the structure!**
 
-## 🚨 ЗАПРЕЩЕНО: брать маркеры из существующего кода
+## 🚨 FORBIDDEN: Taking markers from existing code
 
-**Существующий код мог быть написан с ошибкой или угадан — он НЕ является источником истины.**
+**Existing code may have been written with an error or guessed — it is NOT the source of truth.**
 
 ```typescript
-// ❌ НЕЛЬЗЯ — видишь в коде и используешь без проверки:
+// ❌ NOT ALLOWED — you see it in code and use it without verification:
 const inStock = product.statusIdentifier === 'in_stock'
-// → и сразу пишешь: query.statusMarker = 'in_stock'  ← НЕЛЬЗЯ!
+// → and immediately write: query.statusMarker = 'in_stock'  ← NOT ALLOWED!
 
-// ❌ НЕЛЬЗЯ — видишь в коде и используешь без проверки:
+// ❌ NOT ALLOWED — you see it in code and use it without verification:
 const stockQty = attrs.units_product?.value
-// → и сразу пишешь: { attributeMarker: 'units_product', ... }  ← НЕЛЬЗЯ!
+// → and immediately write: { attributeMarker: 'units_product', ... }  ← NOT ALLOWED!
 ```
 
-**Даже если значение выглядит правдоподобно — ВСЕГДА проверяй через реальный API запрос.**
+**Even if the value looks plausible — ALWAYS verify via a real API request.**
 
-### Как проверить перед написанием кода
+### How to verify before writing code
 
-Используй skill **`/inspect-api`** — он автоматически прочитает `.env.local` и вернёт реальные маркеры.
+Use skill **`/inspect-api`** — it will automatically read `.env.local` and return real markers.
 
-Если `.env.local` не найден — запроси у пользователя URL проекта и токен.
+If `.env.local` is not found — ask the user for the project URL and token.
 
-## Общие паттерны
+## Common Patterns
 
-### Работа с маркерами
+### Working with markers
 
 ```typescript
-// По ID
+// By ID
 const product = await getApi().Products.getProductById(123)
-// По маркеру/URL
+// By marker/URL
 const product = await getApi().Products.getProductByUrl('/catalog/sneakers')
 ```
 
-### Локализация
+### Localization
 
-- `langCode?: string` — код языка (default: "en_US")
+- `langCode?: string` — language code (default: "en_US")
 
 ```typescript
 const productEN = await getApi().Products.getProductById(123, 'en_US')
 const productRU = await getApi().Products.getProductById(123, 'ru_RU')
 ```
 
-### Пагинация
+### Pagination
 
-- `offset?: number` — смещение (default: 0)
-- `limit?: number` — количество записей (default: 30)
+- `offset?: number` — offset (default: 0)
+- `limit?: number` — record count (default: 30)
 
 ```typescript
-// Страница 1
+// Page 1
 const page1 = await getApi().Products.getProducts({ offset: 0, limit: 20 })
-// Страница 2
+// Page 2
 const page2 = await getApi().Products.getProducts({ offset: 20, limit: 20 })
 ```
 
-### Фильтрация (AttributeType[])
+### Filtering (AttributeType[])
 
 ```typescript
 interface AttributeType {
-  attributeMarker: string  // имя атрибута
-  conditionMarker: string  // оператор: "eq", "mth", "lth", "in", "nin"
-  conditionValue: any      // значение
+  attributeMarker: string  // attribute name
+  conditionMarker: string  // operator: "eq", "mth", "lth", "in", "nin"
+  conditionValue: any      // value
 }
 
-// Пример: цена 100-500
+// Example: price 100-500
 const filters: AttributeType[] = [
   { attributeMarker: "price", conditionMarker: "mth", conditionValue: 100 },
   { attributeMarker: "price", conditionMarker: "lth", conditionValue: 500 }
@@ -1007,10 +1007,10 @@ const filters: AttributeType[] = [
 const products = await getApi().Products.getProducts({ body: filters })
 ```
 
-### SSR/SSG стратегии (Next.js)
+### SSR/SSG strategies (Next.js)
 
 ```tsx
-// SSG - статическая генерация
+// SSG - static generation
 export async function generateStaticParams() {
   const products = await getApi().Products.getProducts({ limit: 100 })
   if (isError(products)) return []
@@ -1023,25 +1023,25 @@ export default async function ProductPage({ params }) {
   return <ProductView product={product} />
 }
 
-// ISR - инкрементальная регенерация
-export const revalidate = 3600 // 1 час
+// ISR - incremental regeneration
+export const revalidate = 3600 // 1 hour
 ```
 
-### user.state — хранилище произвольных данных пользователя
+### user.state — arbitrary user data storage
 
-`user.state` — это объект произвольной формы в `IUserEntity`, который можно использовать для хранения любых клиентских данных: корзина, избранное, настройки, история просмотров.
+`user.state` is a free-form object in `IUserEntity` that can be used to store any client data: cart, favorites, settings, view history.
 
-**⚠️ Критические правила:**
+**⚠️ Critical rules:**
 
-1. **Всегда спредить** `{ ...user.state, newField }` — не затирать другие поля целиком
-2. **Один `makeUserApi`** на getUser + updateUser — иначе токен сгорит между вызовами
-3. **`formIdentifier`** берётся из `user.formIdentifier` — не хардкодить
+1. **Always spread** `{ ...user.state, newField }` — don't overwrite other fields entirely
+2. **One `makeUserApi`** for getUser + updateUser — otherwise the token burns between calls
+3. **`formIdentifier`** is taken from `user.formIdentifier` — don't hardcode it
 
 ```typescript
 // app/actions/users.ts
 'use server';
 
-// Чтение state
+// Read state
 export async function getUserState(refreshToken: string) {
   const { api, getNewToken } = makeUserApi(refreshToken);
   const user = (await api.Users.getUser()) as IUserEntity;
@@ -1052,31 +1052,31 @@ export async function getUserState(refreshToken: string) {
   };
 }
 
-// Запись одного поля — ОДИН инстанс для getUser + updateUser
+// Write one field — ONE instance for getUser + updateUser
 export async function saveUserFavorites(refreshToken: string, favorites: number[]) {
   const { api, getNewToken } = makeUserApi(refreshToken);
   const user = (await api.Users.getUser()) as IUserEntity;
   await api.Users.updateUser({
-    formIdentifier: user.formIdentifier, // берём из user!
-    state: { ...user.state, favorites }, // спредим — не затираем cart и другие поля
+    formIdentifier: user.formIdentifier, // from user!
+    state: { ...user.state, favorites }, // spread — don't wipe cart and other fields
   });
   return { success: true, newToken: getNewToken() };
 }
 ```
 
-**Типичная структура state:**
+**Typical state structure:**
 
 ```typescript
 user.state = {
   cart: { 42: 2, 17: 1 },      // { productId: quantity }
-  favorites: [42, 17, 88],     // массив productId
-  // любые другие поля...
+  favorites: [42, 17, 88],     // array of productIds
+  // any other fields...
 }
 ```
 
-**Синхронизация после логина:** один `makeUserApi` на загрузку всего state. Для локального хранения без серверной синхронизации — `/create-cart-manager` и `/create-favorites`.
+**Sync after login:** one `makeUserApi` to load all state. For local storage without server sync — `/create-cart-manager` and `/create-favorites`.
 
-### Параллельные запросы
+### Parallel requests
 
 ```typescript
 async function loadPageData(productId: number) {
@@ -1086,7 +1086,7 @@ async function loadPageData(productId: number) {
     getApi().FormData.getFormsDataByMarker("reviews", productId, {}, 1)
   ])
 
-  // Проверка ошибок
+  // Error checking
   if (isError(product)) throw new Error("Product not found")
 
   return {
@@ -1097,48 +1097,48 @@ async function loadPageData(productId: number) {
 }
 ```
 
-## Частые сценарии (расширенные)
+## Extended Common Scenarios
 
-### Форма оформления заказа из OneEntry Forms API
+### Checkout form from OneEntry Forms API
 
-**Форма для оформления заказа (доставка, адрес, дата/время) берётся из OneEntry Forms API**, а не хардкодится.
+**The form for checkout (delivery, address, date/time) comes from the OneEntry Forms API**, not hardcoded.
 
-**Как это работает:**
+**How it works:**
 
-1. `getApi().Orders.getAllOrdersStorage()` возвращает хранилища заказов, у каждого есть `formIdentifier`
-2. `getApi().Forms.getFormByMarker(formIdentifier, locale)` возвращает поля формы доставки
-3. Поля формы рендерятся динамически по типу (`string`, `date`, `timeInterval` и т.д.)
+1. `getApi().Orders.getAllOrdersStorage()` returns order storages, each has a `formIdentifier`
+2. `getApi().Forms.getFormByMarker(formIdentifier, locale)` returns the delivery form fields
+3. Form fields are rendered dynamically by type (`string`, `date`, `timeInterval`, etc.)
 
-**Поле типа `timeInterval` в форме заказа** — это поле со списком доступных слотов доставки. Его `value` содержит массив доступных временных интервалов `[[start, end], ...]`, из которых определяются:
+**The `timeInterval` field type in the order form** is a field with a list of available delivery slots. Its `value` contains an array of available time intervals `[[start, end], ...]`, from which:
 
-- Доступные даты в календаре (уникальные даты из start-значений)
-- Доступное время для выбранной даты (время из start-значений для этой даты)
+- Available calendar dates are determined (unique dates from start values)
+- Available times for the selected date (times from start values for that date)
 
-**⚠️ ВАЖНО:**
+**⚠️ IMPORTANT:**
 
-- Форма доставки (`formIdentifier`) привязана к хранилищу заказов
-- `timeInterval` в форме = список доступных слотов доставки, НЕ введённые данные
-- Все user-auth вызовы в ОДНОМ инстансе
+- The delivery form (`formIdentifier`) is tied to the order storage
+- `timeInterval` in the form = list of available delivery slots, NOT entered data
+- All user-auth calls in ONE instance
 
-Для реализации полного checkout flow используй skill **`/create-checkout`**.
+Use skill **`/create-checkout`** to implement the full checkout flow.
 
-### Каталог товаров с фильтрами и пагинацией
+### Product catalog with filters and pagination
 
-Для создания каталога товаров с URL-фильтрами, бесконечной прокруткой и Server Actions используй skill **`/create-product-list`** — он создаст `lib/filters.ts`, `app/actions/products.ts`, Server Page, `ShopView` и `ProductGrid` с правильной архитектурой.
+Use skill **`/create-product-list`** to create a product catalog with URL filters, infinite scroll, and Server Actions — it will create `lib/filters.ts`, `app/actions/products.ts`, Server Page, `ShopView`, and `ProductGrid` with the correct architecture.
 
-Для создания UI панели фильтров с `FilterContext`, price/color/availability компонентами и кнопками Apply/Reset используй skill **`/create-filter-panel`** — дополняет `/create-product-list`.
+Use skill **`/create-filter-panel`** to create a filter panel UI with `FilterContext`, price/color/availability components, and Apply/Reset buttons — complements `/create-product-list`.
 
-### Поиск
+### Search
 
-Для создания строки поиска (dropdown или отдельная страница) используй skill **`/create-search`**.
+Use skill **`/create-search`** to create a search bar (dropdown or separate page).
 
-Для переключателя языков используй skill **`/create-locale-switcher`**.
+Use skill **`/create-locale-switcher`** for the language switcher.
 
-### FormData — чтение данных из форм
+### FormData — reading form submissions
 
-`FormData.getFormsDataByMarker` позволяет читать сабмишены форм — заявки, контактные сообщения.
+`FormData.getFormsDataByMarker` allows reading form submissions — applications, contact messages.
 
-**⚠️ Требует Server Action** — вызывается только серверно.
+**⚠️ Requires Server Action** — server-side only.
 
 ```typescript
 // app/actions/forms.ts
@@ -1155,50 +1155,50 @@ export async function getFormSubmissions(marker: string) {
 }
 ```
 
-**Структура ответа:** каждый элемент содержит `id`, `time`, `formData: [{ marker, value, type }]`.
+**Response structure:** each element contains `id`, `time`, `formData: [{ marker, value, type }]`.
 
-**Доступ к полям:** `Object.fromEntries(submission.formData.map(f => [f.marker, f.value]))`.
+**Field access:** `Object.fromEntries(submission.formData.map(f => [f.marker, f.value]))`.
 
-**Обновление статуса / удаление:**
+**Status update / delete:**
 
 ```typescript
 await getApi().FormData.updateFormsDataStatusByid(id, { statusIdentifier: 'processed' });
 await getApi().FormData.deleteFormsDataByid(id);
 ```
 
-**Отзывы с иерархией** (`isNested: 1`, `entityIdentifier`, `replayTo`) — skill **`/create-reviews`**.
+**Reviews with hierarchy** (`isNested: 1`, `entityIdentifier`, `replayTo`) — skill **`/create-reviews`**.
 
-**⚠️ Отзывы в OneEntry реализуются через FormData** — используй skill **`/create-reviews`**.
+**⚠️ Reviews in OneEntry are implemented via FormData** — use skill **`/create-reviews`**.
 
-### IntegrationCollections — кастомные коллекции
+### IntegrationCollections — custom collections
 
-IntegrationCollections — произвольные таблицы данных в OneEntry (FAQ, справочники, произвольный контент). Полный CRUD доступен без авторизации.
+IntegrationCollections — arbitrary data tables in OneEntry (FAQ, reference books, custom content). Full CRUD available without authentication.
 
-**⚠️ Маркер коллекции:** получай через `/inspect-api` или `getICollections()` — не угадывай.
+**⚠️ Collection marker:** get via `/inspect-api` or `getICollections()` — don't guess.
 
 ```typescript
-// Чтение строк
+// Read rows
 const rows = await getApi().IntegrationCollections.getICollectionRowsByMarker('faq');
-// rows.data — массив строк, rows.total — количество
+// rows.data — array of rows, rows.total — count
 
-// Чтение одной строки
+// Read one row
 const row = await getApi().IntegrationCollections.getICollectionRowByMarkerAndId('faq', id);
 
-// Создание строки
+// Create a row
 await getApi().IntegrationCollections.createICollectionRow('faq', {
   data: { question: 'How to track my order?', answer: 'Via your profile page.' },
 } as any);
 
-// Обновление
+// Update
 await getApi().IntegrationCollections.updateICollectionRow('faq', id, {
   data: { answer: 'Updated answer.' },
 });
 
-// Удаление
+// Delete
 await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', id);
 ```
 
-**Структура ответа:**
+**Response structure:**
 
 ```typescript
 {
@@ -1206,7 +1206,7 @@ await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', i
     {
       id: 1,
       collectionIdentifier: 'faq',
-      data: { question: '...', answer: '...' }, // произвольные поля схемы
+      data: { question: '...', answer: '...' }, // arbitrary schema fields
       position: 1,
     }
   ],
@@ -1214,107 +1214,107 @@ await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', i
 }
 ```
 
-**Проверка маркера:**
+**Marker validation:**
 
 ```typescript
 const isValid = await getApi().IntegrationCollections.validateICollectionMarker('faq');
 ```
 
-### Навигация по категориям
+### Category navigation
 
-**⚠️ ВАЖНО:** `getRootPages()` и `getPages()` НЕ возвращают `catalog_page` (каталоги товаров).
-Страницы имеют поле `type`: `common_page`, `error_page`, `catalog_page`.
-Для получения каталога используй `getPageByUrl()` — он находит страницы любого типа.
-`getChildPagesByParentUrl()` тоже возвращает `catalog_page` дочерние страницы.
+**⚠️ IMPORTANT:** `getRootPages()` and `getPages()` do NOT return `catalog_page` (product catalogs).
+Pages have a `type` field: `common_page`, `error_page`, `catalog_page`.
+Use `getPageByUrl()` to get catalogs — it finds pages of any type.
+`getChildPagesByParentUrl()` also returns `catalog_page` child pages.
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО - catalog_page не будет в результатах getRootPages/getPages
+// ❌ WRONG - catalog_page won't be in getRootPages/getPages results
 const rootPages = await getApi().Pages.getRootPages()
-// shop, category и другие catalog_page НЕ будут здесь!
+// shop, category and other catalog_page items WON'T be here!
 
-// ✅ ПРАВИЛЬНО - getPageByUrl находит страницы ЛЮБОГО типа
+// ✅ CORRECT - getPageByUrl finds pages of ANY type
 const shop = await getApi().Pages.getPageByUrl('shop', 'en_US')
 if (isError(shop)) return []
 console.log(shop.type) // "catalog_page"
 
-// ✅ getChildPagesByParentUrl тоже возвращает catalog_page
+// ✅ getChildPagesByParentUrl also returns catalog_page
 const categories = await getApi().Pages.getChildPagesByParentUrl('shop', 'en_US')
 if (isError(categories)) return []
-// categories содержит дочерние каталоги (type: "catalog_page") и обычные страницы
+// categories contains child catalogs (type: "catalog_page") and regular pages
 ```
 
 ## Troubleshooting
 
-### Ошибки запросов
+### Request errors
 
-#### 401 Unauthorized — refreshToken сжигается при создании API инстанса
+#### 401 Unauthorized — refreshToken burned when creating API instance
 
-**🚨 КРИТИЧЕСКИ ВАЖНО:** Каждый вызов `defineOneEntry(url, { auth: { refreshToken } })` вызывает `/refresh` и **сжигает** токен. После первого использования токен становится недействительным.
+**🚨 CRITICALLY IMPORTANT:** Each call to `defineOneEntry(url, { auth: { refreshToken } })` calls `/refresh` and **burns** the token. After first use, the token becomes invalid.
 
-**Симптом:** Первый API вызов проходит успешно, все последующие возвращают `401 Unauthorized`.
+**Symptom:** First API call succeeds, all subsequent ones return `401 Unauthorized`.
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО — каждый makeUserApi() вызывает /refresh и сжигает токен
-const storages = await getAllOrdersStorage(refreshToken);    // токен сожжён
+// ❌ WRONG — each makeUserApi() calls /refresh and burns the token
+const storages = await getAllOrdersStorage(refreshToken);    // token burned
 const orders = await getAllOrdersByMarker(marker, refreshToken);  // 401!
 ```
 
-**Правило:** Объединяй все user-authorized вызовы в **одну Server Action** с **одним** `makeUserApi(refreshToken)`.
+**Rule:** Combine all user-authorized calls into **one Server Action** with **one** `makeUserApi(refreshToken)`.
 
-> Паттерн: `.claude/rules/tokens.md` | Skill: **`/create-orders-list`**
+> Pattern: `.claude/rules/tokens.md` | Skill: **`/create-orders-list`**
 
-#### 401 Unauthorized — гонка токенов (token race condition)
+#### 401 Unauthorized — token race condition
 
-**Симптом:** Пользователь залогинен, переходит на страницу профиля/заказов — и оказывается разлогинен.
+**Symptom:** User is logged in, navigates to profile/orders page — and gets logged out.
 
-**Причина:** Параллельная операция (CartContext, FavoritesContext) уже сожгла тот же `refreshToken`. Новая страница читает устаревший токен из localStorage.
+**Cause:** A parallel operation (CartContext, FavoritesContext) already burned the same `refreshToken`. The new page reads a stale token from localStorage.
 
-**Правило для всех account-страниц:**
+**Rule for all account pages:**
 
-1. Server Action ОБЯЗАН возвращать `statusCode` в объекте ошибки
-2. На 401 — retry с `localStorage.getItem('refreshToken')` (токен мог обновиться)
-3. Разлогинивать ТОЛЬКО при 401/403 ПОСЛЕ retry
-4. Никогда не делать `removeItem('refreshToken')` при ошибке загрузки данных
+1. Server Action MUST return `statusCode` in the error object
+2. On 401 — retry with `localStorage.getItem('refreshToken')` (token may have been updated)
+3. Log out ONLY on 401/403 AFTER retry
+4. Never do `removeItem('refreshToken')` on data load error
 
-> Skill: **`/create-profile`** (profile) и **`/create-orders-list`** (orders)
+> Skill: **`/create-profile`** (profile) and **`/create-orders-list`** (orders)
 
-#### 401 Unauthorized — неверный или истекший токен
+#### 401 Unauthorized — invalid or expired token
 
-Обычная просроченная сессия. Перенаправляй на `/login`.
+Normal expired session. Redirect to `/login`.
 
-> ⚠️ Если токен протухает слишком быстро — проверь срок жизни токена в админке OneEntry: `PROJECT_URL/users/auth-providers`.
+> ⚠️ If the token expires too quickly — check the token lifetime in the OneEntry admin panel: `PROJECT_URL/users/auth-providers`.
 
 #### 403 Forbidden
 
-**Причина 1:** недостаточно прав для действия (настройки групп пользователей в админке).
+**Cause 1:** insufficient permissions for the action (user group settings in the admin panel).
 
-**Причина 2:** вызов `AuthProvider.auth/signUp/generateCode` через Server Action → `deviceInfo.browser` в fingerprint будет серверным, не реальным браузером пользователя. Переноси вызов в Client Component.
+**Cause 2:** calling `AuthProvider.auth/signUp/generateCode` via Server Action → `deviceInfo.browser` in fingerprint will be server-side, not the real user's browser. Move the call to a Client Component.
 
-**Распределение методов по контексту:**
+**Method context distribution:**
 
-- Публичные (Pages, Products, Menus, Forms) — любой контекст (server или client)
-- `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **только Client Component** (fingerprint)
-- `AuthProvider.logout()`, `.logoutAll()`, `.getAuthProviders()` — любой контекст
-- `Users.*`, `Orders.*`, `Payments.*` — Server Action с `makeUserApi()` или Client с `reDefine()`
+- Public (Pages, Products, Menus, Forms) — any context (server or client)
+- `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **Client Component only** (fingerprint)
+- `AuthProvider.logout()`, `.logoutAll()`, `.getAuthProviders()` — any context
+- `Users.*`, `Orders.*`, `Payments.*` — Server Action with `makeUserApi()` or Client with `reDefine()`
 
 #### 400 Bad Request — `notificationData.phoneSMS` is not allowed to be empty
 
-Пустая строка `''` отклоняется валидатором. **Не передавай `phoneSMS` вовсе** если у пользователя нет телефона — используй `as any` чтобы обойти TypeScript.
+An empty string `''` is rejected by the validator. **Don't pass `phoneSMS` at all** if the user has no phone — use `as any` to bypass TypeScript.
 
-> Полный паттерн signUp: `.claude/rules/auth-provider.md`
+> Full signUp pattern: `.claude/rules/auth-provider.md`
 
-#### 400 Bad Request — `authData` с лишними полями или пустыми значениями
+#### 400 Bad Request — `authData` with extra fields or empty values
 
-`authData` должен содержать **только** `{ marker, value }`, без метаданных из Forms API. Фильтруй пустые значения перед отправкой.
+`authData` must contain **only** `{ marker, value }`, without metadata from the Forms API. Filter empty values before sending.
 
 ```typescript
-// ✅ ПРАВИЛЬНО
+// ✅ CORRECT
 const authData = formFields
   .filter(f => formValues[f.marker]?.trim())
   .map(f => ({ marker: f.marker, value: formValues[f.marker] }))
 ```
 
-> Полный паттерн auth: `.claude/rules/auth-provider.md` | Skill: **`/create-auth`**
+> Full auth pattern: `.claude/rules/auth-provider.md` | Skill: **`/create-auth`**
 
 #### 404 Not Found
 
@@ -1325,22 +1325,22 @@ if (isError(product) && product.statusCode === 404) return <NotFound />
 
 #### 500 Server Error
 
-**Причина:** вызов `Users.*`, `Orders.*`, `Payments.*` через `getApi()` без пользовательского токена. Эти методы требуют user accessToken.
+**Cause:** calling `Users.*`, `Orders.*`, `Payments.*` via `getApi()` without a user token. These methods require a user accessToken.
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО — getApi() не имеет user accessToken
+// ❌ WRONG — getApi() has no user accessToken
 const user = await getApi().Users.getUser();  // 500!
 
-// ✅ ПРАВИЛЬНО
+// ✅ CORRECT
 const { api } = makeUserApi(refreshToken);
 const user = await api.Users.getUser();
 ```
 
-### Дебаг запросов
+### Debugging requests
 
-Включить логирование: `validation: { enabled: true, logErrors: true }` в конфиге `defineOneEntry`.
+Enable logging: `validation: { enabled: true, logErrors: true }` in the `defineOneEntry` config.
 
-## Модули SDK
+## SDK Modules
 
 ```ts
 const {
@@ -1351,10 +1351,10 @@ const {
 } = defineOneEntry('your-url', { token: 'your-app-token' });
 ```
 
-**Методы, требующие `makeUserApi(refreshToken)` вместо `getApi()`:**
+**Methods requiring `makeUserApi(refreshToken)` instead of `getApi()`:**
 Events, Orders, Payments, Users, WebSocket
 
-**`langCode` — необязательный параметр** большинства методов. Язык по умолчанию задаётся при инициализации SDK. Передавай явно только в мультиязычных приложениях (например `getPageByUrl(url, locale)`). Все интерфейсы и типы возвращаемых значений ищи в `node_modules/oneentry/dist/`.
+**`langCode` is an optional parameter** for most methods. The default language is set at SDK initialization. Pass explicitly only in multilingual apps (e.g. `getPageByUrl(url, locale)`). Find all interfaces and return types in `node_modules/oneentry/dist/`.
 
 ### Admins
 
@@ -1500,7 +1500,7 @@ getAccountById(id): IAccountsEntity
 
 ### Products
 
-`body: IFilterParams[]` — обязательный параметр, но по умолчанию `[]`. Если фильтры не нужны, можно не передавать.
+`body: IFilterParams[]` — required parameter, but defaults to `[]`. Can be omitted if no filters needed.
 
 ```ts
 getProducts(body?: IFilterParams[], langCode?, userQuery?: IProductsQuery): IProductsResponse

@@ -3,15 +3,15 @@ type: skill
 skillConfig: {"name":"create-orders-list"}
 -->
 
-# Страница списка заказов пользователя
+# User Orders List Page
 
-Создаёт Client Component со списком заказов: загрузка через все хранилища, отмена, повтор, пагинация.
+Creates a Client Component with an orders list: loading through all storages, cancellation, repeat, pagination.
 
 ---
 
-## Шаг 1: Создай Server Actions
+## Step 1: Create Server Actions
 
-> Если `app/actions/orders.ts` уже существует — прочитай и дополни, не дублируй.
+> If `app/actions/orders.ts` already exists — read and extend it, don't duplicate.
 
 ```typescript
 // app/actions/orders.ts
@@ -24,8 +24,8 @@ const PROJECT_URL = process.env.NEXT_PUBLIC_ONEENTRY_URL as string;
 const APP_TOKEN = process.env.NEXT_PUBLIC_ONEENTRY_TOKEN as string;
 
 /**
- * ВАЖНО: каждый вызов makeUserApi потребляет refreshToken через /refresh.
- * Объединяй все вызовы в одном инстансе.
+ * IMPORTANT: each makeUserApi call consumes refreshToken via /refresh.
+ * Combine all calls in one instance.
  */
 function makeUserApi(refreshToken: string) {
   let capturedToken = refreshToken;
@@ -41,8 +41,8 @@ function makeUserApi(refreshToken: string) {
 }
 
 /**
- * Загружает ВСЕ заказы пользователя через все хранилища — ОДИН /refresh вызов.
- * storageIdToMarker нужен для cancelOrder (order.storageId → storageMarker).
+ * Loads ALL user orders through all storages — ONE /refresh call.
+ * storageIdToMarker is needed for cancelOrder (order.storageId → storageMarker).
  */
 export async function loadAllOrders(refreshToken: string): Promise<
   | { orders: IOrderByMarkerEntity[]; storageIdToMarker: Record<number, string>; newToken: string }
@@ -64,7 +64,7 @@ export async function loadAllOrders(refreshToken: string): Promise<
           allOrders.push(...(result as any).items);
         }
       } catch {
-        // пропустить недоступное хранилище
+        // skip unavailable storage
       }
     }
 
@@ -75,8 +75,8 @@ export async function loadAllOrders(refreshToken: string): Promise<
 }
 
 /**
- * Отменяет заказ: updateOrderByMarkerAndId с statusMarker: 'canceled'.
- * storageMarker получается из storageIdToMarker[order.storageId].
+ * Cancel an order: updateOrderByMarkerAndId with statusMarker: 'canceled'.
+ * storageMarker is obtained from storageIdToMarker[order.storageId].
  */
 export async function cancelOrder(
   refreshToken: string,
@@ -107,18 +107,18 @@ export async function cancelOrder(
 
 ---
 
-## Шаг 2: Создай компонент страницы заказов
+## Step 2: Create the orders page component
 
-### Ключевые принципы
+### Key principles
 
-- `'use client'` + `useParams()` — НЕ серверный компонент
-- `loadAllOrders` — один инстанс обходит все хранилища
-- **Token race condition:** retry на 401 с актуальным `localStorage.getItem('refreshToken')`
-- **storageIdToMarker** — маппинг `storage.id → storage.identifier` для `cancelOrder`
-- **previewImage** — может быть массив или объект → нормализовать: `Array.isArray(img) ? img[0] : img`
-- **Сортировка** по `createdDate` по убыванию (новые сначала)
-- **Пагинация** — клиентская, через `visibleCount` + кнопка "Load more"
-- **Повтор заказа** — `addToCart` для каждого товара из `order.products`
+- `'use client'` + `useParams()` — NOT a server component
+- `loadAllOrders` — one instance traverses all storages
+- **Token race condition:** retry on 401 with current `localStorage.getItem('refreshToken')`
+- **storageIdToMarker** — mapping `storage.id → storage.identifier` for `cancelOrder`
+- **previewImage** — may be array or object → normalize: `Array.isArray(img) ? img[0] : img`
+- **Sort** by `createdDate` descending (newest first)
+- **Pagination** — client-side, via `visibleCount` + "Load more" button
+- **Repeat order** — `addToCart` for each product from `order.products`
 
 ### app/[locale]/(account)/orders/page.tsx
 
@@ -159,7 +159,7 @@ export default function OrdersPage() {
     try {
       let result = await loadAllOrders(token);
 
-      // Race condition: другая операция могла уже обновить токен
+      // Race condition: another operation may have already updated the token
       if ('error' in result && result.statusCode === 401) {
         const currentToken = localStorage.getItem('refreshToken');
         if (currentToken && currentToken !== token) {
@@ -168,7 +168,7 @@ export default function OrdersPage() {
       }
 
       if ('error' in result) {
-        // Разлогинивать ТОЛЬКО при подтверждённой auth-ошибке
+        // Log out ONLY on confirmed auth error
         if (result.statusCode === 401 || result.statusCode === 403) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
@@ -184,13 +184,13 @@ export default function OrdersPage() {
 
       setStorageIdToMarker(result.storageIdToMarker);
 
-      // Сортируем: новые заказы сначала
+      // Sort: newest orders first
       const sorted = [...result.orders].sort(
         (a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime(),
       );
       setOrders(sorted);
     } catch {
-      // Network error — не разлогинивать
+      // Network error — don't log out
     } finally {
       setLoading(false);
     }
@@ -209,7 +209,7 @@ export default function OrdersPage() {
     const token = localStorage.getItem('refreshToken');
     if (!token) return;
 
-    // storageMarker получается из маппинга по order.storageId
+    // storageMarker obtained from mapping by order.storageId
     const storageMarker = storageIdToMarker[order.storageId];
     if (!storageMarker) return;
 
@@ -224,7 +224,7 @@ export default function OrdersPage() {
 
       if ('newToken' in result) {
         localStorage.setItem('refreshToken', result.newToken);
-        // Обновляем статус локально без перезагрузки
+        // Update status locally without reloading
         setOrders((prev) =>
           prev.map((o) =>
             o.id === order.id ? { ...o, statusIdentifier: 'canceled' } : o,
@@ -240,10 +240,10 @@ export default function OrdersPage() {
     }
   };
 
-  // Добавить товары заказа в корзину (передай addToCart из CartContext)
+  // Add order products to cart (pass addToCart from CartContext)
   const handleRepeat = (order: IOrderByMarkerEntity) => {
     order.products.forEach((p) => {
-      // addToCart(p.id) — подключи CartContext если нужно
+      // addToCart(p.id) — connect CartContext if needed
       console.log('repeat product', p.id);
     });
   };
@@ -254,7 +254,7 @@ export default function OrdersPage() {
     return (
       <div>
         <p>Please log in to view your orders</p>
-        {/* Здесь показать AuthForm в модалке или редирект */}
+        {/* Show AuthForm in modal or redirect here */}
       </div>
     );
   }
@@ -273,17 +273,17 @@ export default function OrdersPage() {
 
         return (
           <div key={`${order.storageId}-${order.id}`}>
-            {/* Строка заказа — клик разворачивает детали */}
+            {/* Order row — click expands details */}
             <button onClick={() => toggleOrder(order.id)}>
               <span>{new Date(order.createdDate).toLocaleDateString()}</span>
               <span>${Number(order.totalSum).toFixed(2)}</span>
               <span>{order.statusIdentifier}</span>
             </button>
 
-            {/* Развёрнутые детали */}
+            {/* Expanded details */}
             {isOpen && (
               <div>
-                {/* Товары */}
+                {/* Products */}
                 {order.products.map((product) => {
                   const imageUrl = getProductImage(product);
                   return (
@@ -295,7 +295,7 @@ export default function OrdersPage() {
                   );
                 })}
 
-                {/* Поля формы заказа */}
+                {/* Order form fields */}
                 {order.formData.map((field) => (
                   <div key={field.marker}>
                     <b>{field.marker}:</b> {String(field.value ?? '')}
@@ -304,7 +304,7 @@ export default function OrdersPage() {
 
                 <div><b>Total:</b> ${Number(order.totalSum).toFixed(2)}</div>
 
-                {/* Кнопки действий */}
+                {/* Action buttons */}
                 {isCanceled && (
                   <button onClick={() => handleRepeat(order)}>Repeat order</button>
                 )}
@@ -329,7 +329,7 @@ export default function OrdersPage() {
         );
       })}
 
-      {/* Клиентская пагинация */}
+      {/* Client-side pagination */}
       {hasMore && (
         <button onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
           Load more
@@ -340,8 +340,8 @@ export default function OrdersPage() {
 }
 
 /**
- * previewImage может быть массивом (тип image) или объектом (тип file).
- * Нормализуем и берём downloadLink.
+ * previewImage may be an array (image type) or object (file type).
+ * Normalize and get downloadLink.
  */
 function getProductImage(product: IOrderProducts): string | null {
   const img = product.previewImage as any;
@@ -353,18 +353,18 @@ function getProductImage(product: IOrderProducts): string | null {
 
 ---
 
-## Шаг 3: Напомни ключевые правила
+## Step 3: Remind of key rules
 
-✅ Страница заказов создана. Ключевые правила:
+✅ Orders page created. Key rules:
 
 ```md
-1. loadAllOrders — ОДИН makeUserApi на все хранилища (один /refresh)
-2. storageIdToMarker: storage.id → identifier — нужен для cancelOrder
-3. Retry на 401 с актуальным localStorage.getItem('refreshToken')
-4. Разлогинивать ТОЛЬКО при 401/403 после retry
-5. previewImage может быть массивом или объектом — нормализуй через Array.isArray()
-6. Сортировка заказов по createdDate по убыванию
-7. Клиентская пагинация через visibleCount — не перезагружать список
-8. cancelOrder обновляет статус локально (setOrders), без reload
-9. Repeat order: addToCart(p.id) для каждого товара из order.products
+1. loadAllOrders — ONE makeUserApi for all storages (one /refresh)
+2. storageIdToMarker: storage.id → identifier — needed for cancelOrder
+3. Retry on 401 with current localStorage.getItem('refreshToken')
+4. Log out ONLY on 401/403 after retry
+5. previewImage may be array or object — normalize via Array.isArray()
+6. Sort orders by createdDate descending
+7. Client-side pagination via visibleCount — don't reload the list
+8. cancelOrder updates status locally (setOrders), no reload
+9. Repeat order: addToCart(p.id) for each product from order.products
 ```

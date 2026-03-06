@@ -5,21 +5,21 @@ skillConfig: {"name":"setup-oneentry"}
 
 ---
 name: setup-oneentry
-description: Инициализировать OneEntry SDK в Next.js проекте — создать lib/oneentry.ts с singleton паттерном, настроить next.config.ts для изображений
+description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with singleton pattern, configure next.config.ts for images
 allowed-tools: Read, Glob, Write, Edit
 ---
 
-# /setup-oneentry - Setup oneentry
+# /setup-oneentry - Setup OneEntry
 
-Инициализируй OneEntry SDK в текущем проекте. Выполни шаги по порядку.
+Initialize the OneEntry SDK in the current project. Follow the steps in order.
 
-## Шаг 1: Проверь существующий файл
+## Step 1: Check for an existing file
 
-Проверь существует ли `lib/oneentry.ts`. Если да — прочитай и покажи текущее содержимое, затем спроси нужно ли перезаписать.
+Check if `lib/oneentry.ts` exists. If yes — read and show the current contents, then ask if it should be overwritten.
 
-## Шаг 2: Создай lib/oneentry.ts
+## Step 2: Create lib/oneentry.ts
 
-Создай `lib/oneentry.ts` со следующим содержимым:
+Create `lib/oneentry.ts` with the following content:
 
 ```typescript
 import { defineOneEntry } from 'oneentry';
@@ -80,9 +80,9 @@ export function isError(result: unknown): result is { statusCode: number; messag
 }
 ```
 
-## Шаг 3: Настрой next.config.ts для изображений
+## Step 3: Configure next.config.ts for images
 
-Прочитай `next.config.ts` (или `next.config.js`). Если нет блока `images.remotePatterns` с `**.oneentry.cloud` — добавь его:
+Read `next.config.ts` (or `next.config.js`). If there is no `images.remotePatterns` block with `**.oneentry.cloud` — add it:
 
 ```typescript
 images: {
@@ -95,42 +95,42 @@ images: {
 },
 ```
 
-## Шаг 4: Проверь и создай .env.local
+## Step 4: Check and create .env.local
 
-Проверь существует ли файл `.env.local` в корне проекта.
+Check if the `.env.local` file exists in the project root.
 
-**Если файл НЕ существует:**
+**If the file does NOT exist:**
 
-Спроси у пользователя:
-1. URL проекта OneEntry (например: `https://your-project.oneentry.cloud`)
-2. App Token (найти в админке OneEntry → Settings → App Token)
+Ask the user for:
+1. OneEntry project URL (e.g.: `https://your-project.oneentry.cloud`)
+2. App Token (find in OneEntry admin → Settings → App Token)
 
-После получения ответов создай `.env.local` с введёнными значениями:
+After receiving the answers, create `.env.local` with the provided values:
 
 ```env
-NEXT_PUBLIC_ONEENTRY_URL=<введённый URL>
-NEXT_PUBLIC_ONEENTRY_TOKEN=<введённый токен>
+NEXT_PUBLIC_ONEENTRY_URL=<entered URL>
+NEXT_PUBLIC_ONEENTRY_TOKEN=<entered token>
 ```
 
-**Если файл существует:**
+**If the file exists:**
 
-Прочитай его и проверь наличие `NEXT_PUBLIC_ONEENTRY_URL` и `NEXT_PUBLIC_ONEENTRY_TOKEN`. Если переменных нет — добавь их (спросив значения у пользователя). Если уже есть — ничего не делай.
+Read it and check for `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the variables are missing — add them (asking the user for values). If they are already present — do nothing.
 
-## Шаг 5: Покажи итог
+## Step 5: Show the result
 
-Выведи сообщение:
+Output the message:
 
 ```
-✅ lib/oneentry.ts создан
-✅ .env.local настроен
+✅ lib/oneentry.ts created
+✅ .env.local configured
 
-Найти токен: в админке OneEntry → Settings → App Token
+Find the token: in OneEntry admin → Settings → App Token
 ```
 
-## Шаг 6: Проверь импорт oneentry
+## Step 6: Check oneentry import
 
-Проверь что пакет `oneentry` установлен в `package.json`. Если нет — сообщи:
+Check that the `oneentry` package is installed in `package.json`. If not — notify:
 
 ```text
-⚠️ Установи пакет: npm install oneentry
+⚠️ Install the package: npm install oneentry
 ```

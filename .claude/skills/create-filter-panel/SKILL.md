@@ -3,32 +3,32 @@ type: skill
 skillConfig: {"name":"create-filter-panel"}
 -->
 
-# Создать панель фильтров товаров
+# Create Product Filter Panel
 
-Создаёт фильтр-панель с ценой, цветом и наличием. Использует FilterContext как буфер между UI и URL — фильтры применяются только по кнопке "Применить", страница не перерендеривается на каждом движении слайдера.
+Creates a filter panel with price, color, and availability. Uses FilterContext as a buffer between UI and URL — filters are applied only on "Apply" click, the page does not re-render on every slider movement.
 
-> ⚠️ Предполагает что каталог товаров использует URL query params (паттерн из `/create-product-list`).
+> ⚠️ Assumes the product catalog uses URL query params (pattern from `/create-product-list`).
 
 ---
 
-## Шаг 1: Проверь реальные маркеры атрибутов
+## Step 1: Check real attribute markers
 
 ```bash
-/inspect-api products          # маркеры price, color и т.д.
-/inspect-api product-statuses  # маркер статуса "в наличии"
+/inspect-api products          # markers for price, color, etc.
+/inspect-api product-statuses  # marker for "in stock" status
 ```
 
-Что смотреть:
-- `items[0].attributeValues` — реальные маркеры (возможно `price`, `sale_price`, `colour`)
-- `ProductStatuses[].identifier` — реальный маркер статуса (возможно `in_stock`, `available`)
+What to look for:
+- `items[0].attributeValues` — real markers (possibly `price`, `sale_price`, `colour`)
+- `ProductStatuses[].identifier` — real status marker (possibly `in_stock`, `available`)
 
-**НЕ угадывай маркеры!**
+**DON'T guess markers!**
 
 ---
 
-## Шаг 2: Создай FilterContext
+## Step 2: Create FilterContext
 
-Файл: `app/store/providers/FilterContext.tsx`
+File: `app/store/providers/FilterContext.tsx`
 
 ```tsx
 'use client';
@@ -36,7 +36,7 @@ skillConfig: {"name":"create-filter-panel"}
 import { createContext, useState } from 'react';
 import type { Dispatch, ReactNode } from 'react';
 
-// Адаптируй под реальные фильтры проекта (добавь/убери поля)
+// Adapt to real project filters (add/remove fields)
 type FilterContextType = {
   priceFrom: number | null;
   priceTo: number | null;
@@ -77,9 +77,9 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 
 ---
 
-## Шаг 3: Создай компонент ценового фильтра
+## Step 3: Create the price filter component
 
-Файл: `components/filter/PriceFilter.tsx`
+File: `components/filter/PriceFilter.tsx`
 
 ```tsx
 'use client';
@@ -105,7 +105,7 @@ export const PriceFilter = memo(({
     searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : max,
   );
 
-  // Синхронизируем с контекстом — НЕ с URL напрямую
+  // Sync with context — NOT with URL directly
   useEffect(() => {
     setCtxFrom(priceFrom !== min ? priceFrom : null);
     setCtxTo(priceTo !== max ? priceTo : null);
@@ -113,7 +113,7 @@ export const PriceFilter = memo(({
 
   return (
     <div>
-      <p>Цена</p>
+      <p>Price</p>
       <div style={{ display: 'flex', gap: 8 }}>
         <input
           type="number"
@@ -138,15 +138,15 @@ export const PriceFilter = memo(({
 PriceFilter.displayName = 'PriceFilter';
 ```
 
-> Если нужен слайдер — установи `react-range` и используй компонент `<Range>`.
+> If a slider is needed — install `react-range` and use the `<Range>` component.
 
 ---
 
-## Шаг 4: Создай фильтр цвета
+## Step 4: Create the color filter
 
-Цвета берутся из атрибута товара через `AttributesSets.getSingleAttributeByMarkerSet`.
+Colors are fetched from the product attribute via `AttributesSets.getSingleAttributeByMarkerSet`.
 
-Файл: `components/filter/ColorFilter.tsx`
+File: `components/filter/ColorFilter.tsx`
 
 ```tsx
 'use client';
@@ -155,11 +155,11 @@ import { memo, useCallback, useContext, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { FilterContext } from '@/app/store/providers/FilterContext';
 
-// Цвета передаются как проп — загружаются в родительском Server Component
+// Colors are passed as a prop — loaded in the parent Server Component
 export const ColorFilter = memo(({
   colors,
 }: {
-  colors: Array<{ value: string; title: string }>; // из attribute.listTitles
+  colors: Array<{ value: string; title: string }>; // from attribute.listTitles
 }) => {
   const searchParams = useSearchParams();
   const { setColor: setCtxColor } = useContext(FilterContext);
@@ -170,12 +170,12 @@ export const ColorFilter = memo(({
   }, [currentColor, setCtxColor]);
 
   const handleChange = useCallback((code: string) => {
-    setCurrentColor((prev) => (prev === code ? '' : code)); // повторный клик = сброс
+    setCurrentColor((prev) => (prev === code ? '' : code)); // click again = reset
   }, []);
 
   return (
     <div>
-      <p>Цвет</p>
+      <p>Color</p>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
         {colors.map((color) => (
           <button
@@ -186,7 +186,7 @@ export const ColorFilter = memo(({
               borderRadius: '50%',
               width: 28,
               height: 28,
-              backgroundColor: color.value, // value = hex/css цвет
+              backgroundColor: color.value, // value = hex/css color
               cursor: 'pointer',
             }}
             title={color.title}
@@ -200,7 +200,7 @@ export const ColorFilter = memo(({
 ColorFilter.displayName = 'ColorFilter';
 ```
 
-Загрузка цветов из API (в Server Component-родителе):
+Loading colors from API (in parent Server Component):
 
 ```ts
 // app/actions/attributes.ts
@@ -208,8 +208,8 @@ ColorFilter.displayName = 'ColorFilter';
 import { getApi, isError } from '@/lib/oneentry';
 
 export async function getColorOptions(locale: string) {
-  // setMarker — маркер набора атрибутов, attributeMarker — маркер атрибута color
-  // Уточни маркеры через /inspect-api
+  // setMarker — attribute set marker, attributeMarker — color attribute marker
+  // Confirm markers via /inspect-api
   const attr = await getApi().AttributesSets.getSingleAttributeByMarkerSet(
     'product', 'color', locale,
   ) as any;
@@ -220,9 +220,9 @@ export async function getColorOptions(locale: string) {
 
 ---
 
-## Шаг 5: Создай фильтр наличия
+## Step 5: Create the availability filter
 
-Файл: `components/filter/AvailabilityFilter.tsx`
+File: `components/filter/AvailabilityFilter.tsx`
 
 ```tsx
 'use client';
@@ -247,7 +247,7 @@ export const AvailabilityFilter = memo(() => {
         checked={available}
         onChange={() => setAvailable((prev) => !prev)}
       />
-      В наличии
+      In stock
     </label>
   );
 });
@@ -257,9 +257,9 @@ AvailabilityFilter.displayName = 'AvailabilityFilter';
 
 ---
 
-## Шаг 6: Кнопки Apply и Reset
+## Step 6: Apply and Reset buttons
 
-Файл: `components/filter/FilterButtons.tsx`
+File: `components/filter/FilterButtons.tsx`
 
 ```tsx
 'use client';
@@ -281,13 +281,13 @@ export function ApplyButton({ onApply }: { onApply?: () => void }) {
     priceTo !== null   ? params.set('maxPrice', String(priceTo))   : params.delete('maxPrice');
     color              ? params.set('color', color)                : params.delete('color');
     inStock            ? params.set('in_stock', 'true')            : params.delete('in_stock');
-    params.delete('page'); // сбрасываем пагинацию
+    params.delete('page'); // reset pagination
 
     replace(`${pathname}?${params.toString()}`);
-    onApply?.(); // закрыть модальное окно
+    onApply?.(); // close modal
   };
 
-  return <button onClick={handleApply}>Применить</button>;
+  return <button onClick={handleApply}>Apply</button>;
 }
 
 export function ResetButton() {
@@ -301,24 +301,24 @@ export function ResetButton() {
     replace(`${pathname}?${params.toString()}`);
   };
 
-  return <button onClick={handleReset}>Сбросить</button>;
+  return <button onClick={handleReset}>Reset</button>;
 }
 ```
 
 ---
 
-## Шаг 7: Собери FilterPanel
+## Step 7: Assemble FilterPanel
 
 ```tsx
-// components/filter/FilterPanel.tsx
+// components/catalog/FilterPanel.tsx
 'use client';
 
 import { useState } from 'react';
 import { FilterProvider } from '@/app/store/providers/FilterContext';
-import { PriceFilter } from './PriceFilter';
-import { ColorFilter } from './ColorFilter';
-import { AvailabilityFilter } from './AvailabilityFilter';
-import { ApplyButton, ResetButton } from './FilterButtons';
+import { PriceFilter } from '@/components/filter/PriceFilter';
+import { ColorFilter } from '@/components/filter/ColorFilter';
+import { AvailabilityFilter } from '@/components/filter/AvailabilityFilter';
+import { ApplyButton, ResetButton } from '@/components/filter/FilterButtons';
 
 export function FilterPanel({
   prices,
@@ -331,7 +331,7 @@ export function FilterPanel({
 
   return (
     <FilterProvider>
-      <button onClick={() => setIsOpen(true)}>Фильтры</button>
+      <button onClick={() => setIsOpen(true)}>Filters</button>
 
       {isOpen && (
         <div>
@@ -347,7 +347,7 @@ export function FilterPanel({
 }
 ```
 
-Загрузка `prices` и `colors` в Server Component-родителе:
+Loading `prices` and `colors` in the parent Server Component:
 
 ```tsx
 // app/[locale]/shop/page.tsx (Server Component)
@@ -372,16 +372,16 @@ export default async function ShopPage({ params, searchParams }) {
 
 ---
 
-## Важные детали
+## Important details
 
 ```md
-✅ Создан filter-panel. Ключевые правила:
+✅ Filter panel created. Key rules:
 
-1. FilterContext = буфер: UI меняет context, Apply пишет в URL
-   → страница не ререндерится на каждое изменение слайдера
-2. Каждый фильтр-компонент инициализирует state из URL (useSearchParams) при монтировании
-3. colors и prices — Server Component загружает из API, передаёт как props
-4. ApplyButton удаляет 'page' из URL — сбрасывает пагинацию при смене фильтров
-5. Уточни маркеры price/color/in_stock через /inspect-api — они уникальны для каждого проекта
-6. Если нужен слайдер цены — установи react-range
+1. FilterContext = buffer: UI changes context, Apply writes to URL
+   → page does not re-render on every slider change
+2. Each filter component initializes state from URL (useSearchParams) on mount
+3. colors and prices — Server Component loads from API, passes as props
+4. ApplyButton deletes 'page' from URL — resets pagination on filter change
+5. Confirm price/color/in_stock markers via /inspect-api — they are unique to each project
+6. If a price slider is needed — install react-range
 ```

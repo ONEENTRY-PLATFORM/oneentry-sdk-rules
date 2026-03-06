@@ -8,12 +8,12 @@ paths:
   - "app/actions/**/*.ts"
 -->
 
-# Локализация — правила OneEntry
+# Localization — OneEntry Rules
 
-## locale из params (Next.js 15+)
+## locale from params (Next.js 15+)
 
 ```typescript
-// ✅ params — это Promise, обязательно await
+// ✅ params is a Promise, always await
 export default async function Page({
   params,
 }: {
@@ -24,34 +24,34 @@ export default async function Page({
 }
 ```
 
-## Не хардкодить locale
+## Don't hardcode locale
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО
+// ❌ WRONG
 getApi().Pages.getPageByUrl('home', 'en_US')
 
-// ✅ ПРАВИЛЬНО — из params
+// ✅ CORRECT — from params
 const { locale } = await params
 getApi().Pages.getPageByUrl('home', locale)
 ```
 
-## langCode — необязательный параметр
+## langCode — optional parameter
 
-`langCode` задаётся при инициализации `defineOneEntry(url, { langCode })` и используется по умолчанию.
-Передавай `locale` явно только в мультиязычном роуте `app/[locale]/`.
+`langCode` is set during `defineOneEntry(url, { langCode })` initialization and used as default.
+Pass `locale` explicitly only in multilingual routes `app/[locale]/`.
 
 ```typescript
-// Однояызычный проект — langCode не нужен явно
+// Single-language project — langCode not needed explicitly
 getApi().Pages.getPageByUrl('home')
 
-// Мультиязычный — передавай locale из params
+// Multilingual — pass locale from params
 getApi().Pages.getPageByUrl('home', locale)
 ```
 
-## locale в Client Component
+## locale in Client Component
 
 ```typescript
-// ✅ Client Component — useParams(), НЕ await params
+// ✅ Client Component — useParams(), NOT await params
 'use client'
 import { useParams } from 'next/navigation'
 
@@ -59,13 +59,13 @@ const params = useParams()
 const locale = params.locale as string || 'en_US'
 ```
 
-## localizeInfos — структура контента
+## localizeInfos — content structure
 
 ```typescript
-page.localizeInfos?.title        // заголовок
-page.localizeInfos?.htmlContent  // HTML-контент (для dangerouslySetInnerHTML)
+page.localizeInfos?.title        // title
+page.localizeInfos?.htmlContent  // HTML content (for dangerouslySetInnerHTML)
 page.localizeInfos?.content      // plain text
 
-// Блоки: localizeInfos как fallback если нет атрибутов
+// Blocks: localizeInfos as fallback if no attributes
 const title = attrs.title?.value || block.localizeInfos?.title || ''
 ```

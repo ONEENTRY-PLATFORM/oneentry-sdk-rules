@@ -3,38 +3,38 @@ type: skill
 skillConfig: {"name":"create-checkout"}
 -->
 
-# Создать страницу оформления заказа OneEntry
+# Create OneEntry Checkout Page
 
-Создаёт Server Action для получения данных формы доставки и полный цикл оформления заказа.
+Creates a Server Action for getting delivery form data and the full order placement flow.
 
 ---
 
-## Шаг 1: Узнай маркер хранилища заказов
+## Step 1: Find out the order storage marker
 
-Форма доставки привязана к хранилищу заказов (`formIdentifier`). Маркер можно не знать заранее — он получается динамически из `getAllOrdersStorage()`.
+The delivery form is tied to the order storage (`formIdentifier`). The marker doesn't need to be known in advance — it's retrieved dynamically from `getAllOrdersStorage()`.
 
-Если нужно знать заранее:
+If you need to know it in advance:
 
 ```bash
 cat .env.local
 curl -s "https://<URL>/api/content/orders/storage" \
   -H "x-app-token: <TOKEN>" | python -m json.tool
-# Смотри поле "identifier" и "formIdentifier"
+# Look at the "identifier" and "formIdentifier" fields
 ```
 
 ---
 
-## Шаг 2: Создай Server Action для получения данных checkout
+## Step 2: Create a Server Action for checkout data
 
-Файл: `app/actions/orders.ts`
+File: `app/actions/orders.ts`
 
 ```typescript
 'use server';
 
 import { getApi, makeUserApi, isError } from '@/lib/oneentry';
 
-// ⚠️ ОДИН makeUserApi на все user-auth вызовы в функции!
-// Каждый вызов сжигает refreshToken через /refresh
+// ⚠️ ONE makeUserApi for all user-auth calls in the function!
+// Each call burns refreshToken via /refresh
 export async function getCheckoutData(refreshToken: string, locale: string) {
   const { api: userApi } = makeUserApi(refreshToken);
 
@@ -46,7 +46,7 @@ export async function getCheckoutData(refreshToken: string, locale: string) {
   const storage = storages[0];
   const formIdentifier = storage.formIdentifier;
 
-  // Форма — публичный API, используем getApi()
+  // Form — public API, use getApi()
   const form = await getApi().Forms.getFormByMarker(formIdentifier, locale);
   if (isError(form)) return { error: form.message };
 
@@ -59,7 +59,7 @@ export async function getCheckoutData(refreshToken: string, locale: string) {
     type: attr.type,
     localizeInfos: attr.localizeInfos,
     position: attr.position,
-    value: attr.value, // нужно для timeInterval: содержит доступные слоты
+    value: attr.value, // needed for timeInterval: contains available slots
   })).sort((a: any, b: any) => a.position - b.position);
 
   return {
@@ -77,7 +77,7 @@ export async function createOrder(
   formData: { marker: string; value: string }[],
   products: { id: number; quantity: number }[],
 ) {
-  // ⚠️ Один инстанс для createOrder + createSession
+  // ⚠️ One instance for createOrder + createSession
   const { api, getNewToken } = makeUserApi(refreshToken);
 
   const order = await api.Orders.createOrder(storageMarker, {
@@ -102,24 +102,24 @@ export async function createOrder(
 
 ---
 
-## Шаг 3: Работа с timeInterval на клиенте
+## Step 3: Working with timeInterval on the client
 
-Поле `timeInterval` в форме = **список доступных слотов доставки** (не введённые данные).
+The `timeInterval` field in the form = **list of available delivery slots** (not entered data).
 
-**Структура value:**
+**Value structure:**
 
 ```typescript
-// value — массив пар [startISO, endISO] в UTC
+// value — array of [startISO, endISO] pairs in UTC
 [
   ["2026-03-15T09:00:00.000Z", "2026-03-15T10:00:00.000Z"],
   ["2026-03-15T11:00:00.000Z", "2026-03-15T12:00:00.000Z"],
 ]
 ```
 
-**Утилиты для работы с интервалами:**
+**Utilities for working with intervals:**
 
 ```typescript
-// Парсинг
+// Parsing
 function parseTimeIntervals(value: any): [string, string][] {
   if (!Array.isArray(value)) return [];
   return value.filter(
@@ -127,7 +127,7 @@ function parseTimeIntervals(value: any): [string, string][] {
   );
 }
 
-// Слоты для выбранной даты — фильтрация через UTC-сравнение
+// Slots for selected date — filter via UTC comparison
 function filterIntervalsByDate(intervals: [string, string][], date: Date): [string, string][] {
   const startOfDay = new Date(date); startOfDay.setUTCHours(0, 0, 0, 0);
   const endOfDay = new Date(date); endOfDay.setUTCHours(23, 59, 59, 999);
@@ -138,7 +138,7 @@ function filterIntervalsByDate(intervals: [string, string][], date: Date): [stri
   });
 }
 
-// Уникальные доступные даты (сравниваем UTC-дату)
+// Unique available dates (compare UTC date)
 function getAvailableDates(intervals: [string, string][]): Set<string> {
   const dates = new Set<string>();
   intervals.forEach(([start]) => {
@@ -148,7 +148,7 @@ function getAvailableDates(intervals: [string, string][]): Set<string> {
   return dates;
 }
 
-// Время слота — из UTC часов/минут
+// Slot time — from UTC hours/minutes
 function formatSlotTime(startISO: string): string {
   const d = new Date(startISO);
   const h = d.getUTCHours();
@@ -157,55 +157,55 @@ function formatSlotTime(startISO: string): string {
 }
 ```
 
-**Использование в компоненте:**
+**Usage in component:**
 
 ```typescript
 const timeIntervalAttr = formAttributes.find((a) => a.type === 'timeInterval');
 const intervals = timeIntervalAttr ? parseTimeIntervals(timeIntervalAttr.value) : [];
 const availableDates = getAvailableDates(intervals);
 
-// Для react-calendar — отключить недоступные даты:
+// For react-calendar — disable unavailable dates:
 function tileDisabled({ date, view }: { date: Date; view: string }) {
   if (view !== 'month') return false;
   const key = `${date.getUTCFullYear()}-${date.getUTCMonth()}-${date.getUTCDate()}`;
   return availableDates.size > 0 ? !availableDates.has(key) : false;
 }
 
-// Слоты для выбранной даты:
+// Slots for selected date:
 const slots = selectedDate
   ? filterIntervalsByDate(intervals, selectedDate).map((interval) => ({
       time: formatSlotTime(interval[0]),
-      interval, // [startISO, endISO] — сохранить для отправки
+      interval, // [startISO, endISO] — save for submission
     }))
   : [];
 ```
 
-**Формат для отправки в форме заказа:**
+**Format for submission in order form:**
 
 ```typescript
-// Выбранный слот оборачивается в массив:
+// Selected slot is wrapped in an array:
 formData.push({
   marker: timeIntervalAttr.marker,
   type: 'timeInterval',
-  value: [selectedInterval], // [[startISO, endISO]] — обёртка обязательна!
+  value: [selectedInterval], // [[startISO, endISO]] — wrapping is required!
 });
 ```
 
-> ⚠️ `value: [selectedInterval]` — не `value: selectedInterval`. Выбранный `[start, end]` всегда оборачивается в массив.
+> ⚠️ `value: [selectedInterval]` — not `value: selectedInterval`. The selected `[start, end]` is always wrapped in an array.
 
 ---
 
-## Шаг 4: Напомни ключевые правила
+## Step 4: Remind of key rules
 
-> Правила работы с токенами (makeUserApi, getNewToken): `.claude/rules/tokens.md`
+> Token rules (makeUserApi, getNewToken): `.claude/rules/tokens.md`
 
 ```md
-✅ Создан checkout flow. Ключевые правила:
+✅ Checkout flow created. Key rules:
 
-1. makeUserApi — ОДИН инстанс на все вызовы (getAllOrdersStorage + createOrder + createSession)
-2. Форма доставки: formIdentifier берётся из storage, НЕ хардкодится
-3. timeInterval.value = доступные слоты [[start, end], ...], НЕ введённые данные
-4. createSession вызывается через тот же api инстанс что и createOrder
-5. Сохрани getNewToken() обратно в localStorage после успешного заказа
-6. paymentAccountIdentifier — спроси у пользователя или получи из /inspect-api
+1. makeUserApi — ONE instance for all calls (getAllOrdersStorage + createOrder + createSession)
+2. Delivery form: formIdentifier comes from storage, NOT hardcoded
+3. timeInterval.value = available slots [[start, end], ...], NOT entered data
+4. createSession is called via the same api instance as createOrder
+5. Save getNewToken() back to localStorage after successful order
+6. paymentAccountIdentifier — ask the user or get from /inspect-api
 ```

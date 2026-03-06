@@ -3,15 +3,15 @@ type: skill
 skillConfig: {"name":"create-profile"}
 -->
 
-# Страница профиля пользователя
+# User Profile Page
 
-Создаёт Client Component с формой профиля: поля из Users API, обновление данных, обработка токена.
+Creates a Client Component with a profile form: fields from Users API, data update, token handling.
 
 ---
 
-## Шаг 1: Создай Server Actions
+## Step 1: Create Server Actions
 
-> Если `app/actions/users.ts` уже существует — прочитай и дополни, не дублируй.
+> If `app/actions/users.ts` already exists — read it and extend, do not duplicate.
 
 ```typescript
 // app/actions/users.ts
@@ -25,9 +25,9 @@ const PROJECT_URL = process.env.NEXT_PUBLIC_ONEENTRY_URL as string;
 const APP_TOKEN = process.env.NEXT_PUBLIC_ONEENTRY_TOKEN as string;
 
 /**
- * ВАЖНО: каждый вызов makeUserApi потребляет refreshToken через /refresh.
- * Никогда не вызывай makeUserApi дважды с одним токеном — объединяй все вызовы
- * в одном инстансе.
+ * IMPORTANT: each makeUserApi call consumes refreshToken via /refresh.
+ * Never call makeUserApi twice with the same token — combine all calls
+ * into a single instance.
  */
 function makeUserApi(refreshToken: string) {
   let capturedToken = refreshToken;
@@ -43,8 +43,8 @@ function makeUserApi(refreshToken: string) {
 }
 
 /**
- * Загружает профиль и форму в ОДНОМ /refresh вызове.
- * Возвращает newToken — клиент обязан обновить localStorage.
+ * Loads profile and form in ONE /refresh call.
+ * Returns newToken — the client must update localStorage.
  */
 export async function getUserProfile(
   refreshToken: string,
@@ -66,7 +66,7 @@ export async function getUserProfile(
     const user = (await api.Users.getUser()) as IUserEntity;
 
     let formAttributes: any[] = [];
-    // Структура формы регистрации — поля профиля (необязательно)
+    // Registration form structure — profile fields (optional)
     const form = await getApi().Forms.getFormByMarker(user.formIdentifier, locale);
     if (!isError(form)) {
       const attrs = Array.isArray((form as any).attributes)
@@ -93,9 +93,9 @@ export async function getUserProfile(
 }
 
 /**
- * Обновляет профиль. ОДИН /refresh: getUser + updateUser в одном инстансе.
- * password-поля → authData (только если заполнены)
- * остальные поля → formData
+ * Updates profile. ONE /refresh: getUser + updateUser in one instance.
+ * password fields → authData (only if filled)
+ * other fields → formData
  */
 export async function updateUserProfile(
   refreshToken: string,
@@ -109,7 +109,7 @@ export async function updateUserProfile(
       formIdentifier: user.formIdentifier,
       formData,
       ...(authData && authData.length > 0 ? { authData } : {}),
-      state: user.state, // сохраняем state (корзина, избранное)
+      state: user.state, // preserve state (cart, favorites)
     });
     return { success: true, newToken: getNewToken() };
   } catch (err: any) {
@@ -120,20 +120,20 @@ export async function updateUserProfile(
 
 ---
 
-## Шаг 2: Создай компонент страницы профиля
+## Step 2: Create the profile page component
 
-### Ключевые принципы
+### Key principles
 
-- `'use client'` — страница использует `localStorage` и `useParams`
-- `useParams()` для `locale` — НЕ `params` как Promise (это Client Component!)
-- **Token race condition:** на 401 — retry с актуальным `localStorage.getItem('refreshToken')`,
-  разлогинивать ТОЛЬКО при 401/403 после retry
-- **Разделение полей:** поля с `password` в имени → `authData` (только если заполнены),
-  остальные → `formData`
-- **newToken:** после каждого ответа обновлять `localStorage.setItem('refreshToken', newToken)`
-- Сортировать поля по `position`
+- `'use client'` — the page uses `localStorage` and `useParams`
+- `useParams()` for `locale` — NOT `params` as a Promise (this is a Client Component!)
+- **Token race condition:** on 401 — retry with the current `localStorage.getItem('refreshToken')`,
+  log out ONLY on 401/403 after retry
+- **Field separation:** fields with `password` in the name → `authData` (only if filled),
+  others → `formData`
+- **newToken:** update `localStorage.setItem('refreshToken', newToken)` after every response
+- Sort fields by `position`
 
-### Определение типа input по marker
+### Determining input type by marker
 
 ```typescript
 function getInputType(marker: string): string {
@@ -190,7 +190,7 @@ export default function ProfilePage() {
     try {
       let result = await getUserProfile(token, locale);
 
-      // Race condition: другая операция могла уже обновить токен
+      // Race condition: another operation may have already updated the token
       if ('error' in result && result.statusCode === 401) {
         const currentToken = localStorage.getItem('refreshToken');
         if (currentToken && currentToken !== token) {
@@ -199,7 +199,7 @@ export default function ProfilePage() {
       }
 
       if ('error' in result) {
-        // Разлогинивать ТОЛЬКО при подтверждённой auth-ошибке
+        // Log out ONLY on confirmed auth error
         if (result.statusCode === 401 || result.statusCode === 403) {
           localStorage.removeItem('accessToken');
           localStorage.removeItem('refreshToken');
@@ -243,7 +243,7 @@ export default function ProfilePage() {
         const isPasswordField = attr.marker.toLowerCase().includes('password');
 
         if (isPasswordField) {
-          // Пароль — только если заполнен
+          // Password — only if filled
           if (value.trim()) {
             authData.push({ marker: attr.marker, value });
           }
@@ -268,7 +268,7 @@ export default function ProfilePage() {
       }
 
       setSuccess('Profile updated successfully');
-      // Очистить поля пароля после сохранения
+      // Clear password fields after saving
       setFormValues((prev) => {
         const next = { ...prev };
         for (const attr of formAttributes) {
@@ -289,7 +289,7 @@ export default function ProfilePage() {
     return (
       <div>
         <p>Please log in to view your profile</p>
-        {/* Здесь показать AuthForm в модалке или редирект */}
+        {/* Show AuthForm in modal or redirect here */}
       </div>
     );
   }
@@ -343,19 +343,19 @@ function getInputType(marker: string): string {
 
 ---
 
-## Шаг 3: Напомни ключевые правила
+## Step 3: Reminder — key rules
 
-> Правила работы с токенами (makeUserApi, getNewToken, race condition): `.claude/rules/tokens.md`
+> Token rules (makeUserApi, getNewToken, race condition): `.claude/rules/tokens.md`
 
-✅ Страница профиля создана. Ключевые правила:
+✅ Profile page created. Key rules:
 
 ```md
-1. 'use client' + useParams() — НЕ серверный компонент с await params
-2. getUserProfile и updateUserProfile — Server Actions через makeUserApi
-3. ОДИН makeUserApi на функцию — все вызовы через один инстанс
-4. Retry на 401 с актуальным localStorage.getItem('refreshToken')
-5. Разлогинивать ТОЛЬКО при 401/403 после retry
-6. password-поля → authData (только если заполнены), остальные → formData
-7. Всегда обновлять localStorage.setItem('refreshToken', result.newToken)
-8. Никогда не делать removeItem('refreshToken') при ошибке загрузки данных
+1. 'use client' + useParams() — NOT a server component with await params
+2. getUserProfile and updateUserProfile — Server Actions via makeUserApi
+3. ONE makeUserApi per function — all calls through one instance
+4. Retry on 401 with current localStorage.getItem('refreshToken')
+5. Log out ONLY on 401/403 after retry
+6. password fields → authData (only if filled), others → formData
+7. Always update localStorage.setItem('refreshToken', result.newToken)
+8. Never do removeItem('refreshToken') on data loading error
 ```

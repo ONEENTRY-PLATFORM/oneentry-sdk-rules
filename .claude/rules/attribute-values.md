@@ -7,70 +7,70 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# Работа с attributeValues — правила OneEntry
+# Working with attributeValues — OneEntry rules
 
-## Доступ к атрибутам
+## Accessing attributes
 
 ```typescript
 const attrs = entity.attributeValues || {};
 
-// Если знаешь маркер — обращайся напрямую (предпочтительно):
+// If you know the marker — access directly (preferred):
 const title = attrs.title?.value
 const price = attrs.price?.value
 
-// Если не знаешь маркер — ищи по типу:
+// If you don't know the marker — search by type:
 const imgAttr = Object.values(attrs).find((a: any) => a?.type === 'image')
 const imgUrl = imgAttr?.value?.[0]?.downloadLink || ''
 
-// Найти все атрибуты определённого типа:
+// Find all attributes of a specific type:
 const allImages = Object.values(attrs)
   .filter((a: any) => a?.type === 'image')
   .map((a: any) => a?.value?.[0]?.downloadLink)
   .filter(Boolean)
 ```
 
-## Типы значений (критически важно!)
+## Value types (critically important!)
 
-| Тип                                   | Доступ к value                                            |
+| Type                                  | Accessing value                                           |
 |---------------------------------------|-----------------------------------------------------------|
-| `string`, `integer`, `float`, `real`  | `attrs.marker?.value` (примитив)                          |
-| `text`                                | `attrs.marker?.value?.htmlValue` или `value.plainValue`   |
+| `string`, `integer`, `float`, `real`  | `attrs.marker?.value` (primitive)                         |
+| `text`                                | `attrs.marker?.value?.htmlValue` or `value.plainValue`    |
 | `textWithHeader`                      | `attrs.marker?.value?.header`, `value.htmlValue`          |
-| `image`, `groupOfImages`              | `attrs.marker?.value?.[0]?.downloadLink` **(МАССИВ!)**    |
-| `file`                                | `attrs.marker?.value?.downloadLink` (объект)              |
-| `date`, `dateTime`, `time`            | `attrs.marker?.value?.fullDate` или `value.formattedValue`|
-| `list`                                | `attrs.marker?.value` (массив id или объектов с extended) |
-| `radioButton`                         | `attrs.marker?.value` (строка-id)                         |
-| `entity`                              | `attrs.marker?.value` (массив маркеров)                   |
+| `image`, `groupOfImages`              | `attrs.marker?.value?.[0]?.downloadLink` **(ARRAY!)**     |
+| `file`                                | `attrs.marker?.value?.downloadLink` (object)              |
+| `date`, `dateTime`, `time`            | `attrs.marker?.value?.fullDate` or `value.formattedValue` |
+| `list`                                | `attrs.marker?.value` (array of ids or objects with extended) |
+| `radioButton`                         | `attrs.marker?.value` (string id)                         |
+| `entity`                              | `attrs.marker?.value` (array of markers)                  |
 | `json`                                | `JSON.parse(attrs.marker?.value \|\| '{}')`               |
 | `timeInterval`                        | `attrs.marker?.value` → `[[ISO, ISO], ...]`               |
-| `spam`                                | капча — рендерить `<FormReCaptcha>`, НЕ `<input>`         |
+| `spam`                                | captcha — render `<FormReCaptcha>`, NOT `<input>`         |
 
-## ⚠️ image, groupOfImages — value это МАССИВ
+## ⚠️ image, groupOfImages — value is an ARRAY
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО
+// ❌ WRONG
 const url = attrs.photo?.value?.downloadLink
 
-// ✅ ПРАВИЛЬНО
+// ✅ CORRECT
 const url = attrs.photo?.value?.[0]?.downloadLink
 const preview = attrs.photo?.value?.[0]?.previewLink
 
-// Галерея
+// Gallery
 const gallery = attrs.gallery?.value || []
 const urls = gallery.map((img: any) => img.downloadLink)
 ```
 
-## text — объект с тремя форматами
+## text — object with three formats
 
 ```typescript
-// value всегда объект с htmlValue, plainValue, mdValue
+// value is always an object with htmlValue, plainValue, mdValue
 const html = attrs.description?.value?.htmlValue || ''
 const plain = attrs.description?.value?.plainValue || ''
 // params.editorMode: "html" | "md" | "plain"
 ```
 
-## textWithHeader — заголовок + тело
+## textWithHeader — header + body
 
 ```typescript
 const header = attrs.specs?.value?.header || ''
@@ -80,7 +80,7 @@ const content = attrs.specs?.value?.htmlValue || ''
 ## date / dateTime / time
 
 ```typescript
-// fullDate — ISO строка, formattedValue — отформатированная
+// fullDate — ISO string, formattedValue — formatted string
 const iso = attrs.releaseDate?.value?.fullDate || ''
 const formatted = attrs.releaseDate?.value?.formattedValue || ''
 // formatString: "DD-MM-YYYY", "DD-MM-YYYY HH:mm", "HH:mm"
@@ -89,26 +89,26 @@ const formatted = attrs.releaseDate?.value?.formattedValue || ''
 ## radioButton
 
 ```typescript
-// value — строка-id выбранного элемента из listTitles
+// value — string id of the selected element from listTitles
 const selectedId = attrs.color?.value || ''
 // listTitles[locale]: [{ title: "Red", value: "1", extended: { type: "string", value: "#FF0000" } }]
 ```
 
-## list с extended данными (иконки, значки)
+## list with extended data (icons, badges)
 
 ```typescript
 const badges = attrs.badges?.value || []
 const iconUrl = badges[0]?.extended?.value?.downloadLink || ''
 const badgeTitle = badges[0]?.title || ''
 
-// Простой list (массив строк-id):
+// Simple list (array of string ids):
 const selectedTags = attrs.tags?.value || []  // ["1", "3", "5"]
 ```
 
 ## entity
 
 ```typescript
-// value — массив маркеров связанных сущностей
+// value — array of related entity markers
 const related = attrs.relatedProducts?.value || []  // ["mouse", "cable"]
 ```
 
@@ -122,51 +122,51 @@ const width = data.dimensions?.width
 ## timeInterval
 
 ```typescript
-// value — массив пар [startISO, endISO] в UTC
+// value — array of [startISO, endISO] pairs in UTC
 const intervals = attrs.workingHours?.value || []
 // [[ISO, ISO], [ISO, ISO], ...]
 const start = intervals[0]?.[0]  // "2026-03-15T09:00:00.000Z"
 const end = intervals[0]?.[1]    // "2026-03-15T10:00:00.000Z"
 ```
 
-**В форме заказа/бронирования** — `value` содержит доступные слоты. Паттерн для календаря:
+**In order/booking forms** — `value` contains available slots. Pattern for calendar:
 
 ```typescript
-// Слоты для выбранной даты (UTC-сравнение!)
+// Slots for the selected date (UTC comparison!)
 function filterIntervalsByDate(intervals: [string, string][], date: Date) {
   const startOfDay = new Date(date); startOfDay.setUTCHours(0, 0, 0, 0);
   const endOfDay = new Date(date); endOfDay.setUTCHours(23, 59, 59, 999);
   return intervals.filter(([s, e]) => new Date(s) < endOfDay && new Date(e) > startOfDay);
 }
 
-// Форматирование времени — из UTC часов!
+// Time formatting — from UTC hours!
 const h = new Date(startISO).getUTCHours();
 const m = new Date(startISO).getUTCMinutes();
 const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
 
-// Отправка выбранного слота — оборачивать в массив:
+// Sending the selected slot — wrap in array:
 { marker: field.marker, type: 'timeInterval', value: [[startISO, endISO]] }
-//                                                   ^^^^ не [startISO, endISO]!
+//                                                   ^^^^ not [startISO, endISO]!
 ```
 
-> Полный паттерн с calendar picker → skill **`/create-checkout`** (Шаг 3).
+> Full pattern with calendar picker → skill **`/create-checkout`** (Step 3).
 
-## additionalFields — вложенные атрибуты
+## additionalFields — nested attributes
 
 ```typescript
-// Цена с валютой
+// Price with currency
 // { type: "float", value: "1299.99", additionalFields: { currency: { type: "string", value: "USD" } } }
 const price = attrs.price?.value
 const currency = attrs.price?.additionalFields?.currency?.value || 'USD'
 const oldPrice = attrs.price?.additionalFields?.oldPrice?.value
 ```
 
-**Специальные флаги:**
+**Special flags:**
 
-- `isProductPreview: true` — изображение-превью товара
-- `isIcon: true` — атрибут является иконкой
+- `isProductPreview: true` — product preview image
+- `isIcon: true` — attribute is an icon
 
-## Для блоков страниц — localizeInfos как fallback
+## For page blocks — localizeInfos as fallback
 
 ```typescript
 const attrs = block.attributeValues || {}

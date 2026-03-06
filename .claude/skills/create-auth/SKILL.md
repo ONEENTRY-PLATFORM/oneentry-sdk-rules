@@ -3,50 +3,50 @@ type: skill
 skillConfig: {"name":"create-auth"}
 -->
 
-# /create-auth - Создать форму авторизации/регистрации с OneEntry AuthProvider
+# /create-auth - Create Auth/Registration Form with OneEntry AuthProvider
 
 ---
 
-## Шаг 1: Получи реальные маркеры из API
+## Step 1: Get real markers from the API
 
-**НЕ угадывай маркеры.** Сначала получи список провайдеров и форм:
+**DON'T guess markers.** First get the list of providers and forms:
 
 ```bash
 cat .env.local
 
-# Провайдеры авторизации (поле identifier — маркер для auth/signUp/logout)
+# Auth providers (identifier field — marker for auth/signUp/logout)
 curl -s "https://<URL>/api/auth-providers?langCode=en_US" \
   -H "x-app-token: <TOKEN>" | python -m json.tool
 
-# Список форм (поле identifier — маркер для getFormByMarker)
+# Forms list (identifier field — marker for getFormByMarker)
 curl -s "https://<URL>/api/forms?langCode=en_US" \
   -H "x-app-token: <TOKEN>" | python -m json.tool
 ```
 
-Или используй `/inspect-api auth-providers` и `/inspect-api forms`.
-Что смотреть в ответе:
+Or use `/inspect-api auth-providers` and `/inspect-api forms`.
+What to look at in the response:
 
-- `AuthProviders[].identifier` — маркер провайдера (передаётся в `auth()`, `signUp()`, `logout()`)
-- `AuthProviders[].formIdentifier` — маркер формы регистрации для этого провайдера
-- `Forms[].identifier` — маркер формы для `getFormByMarker()`
-
----
-
-## Шаг 2: Уточни у пользователя
-
-1. **Какие режимы нужны?** (вход / регистрация / сброс пароля)
-1. **Нужна ли синхронизация корзины/избранного** после логина?
-   - Если да — потребуется `getUserState` Server Action (читает `user.state`)
-1. **Где показывать форму?** (модальное окно, отдельная страница, drawer?)
-1. **Есть ли верстка?** — если да, копируй точно, меняй только данные
+- `AuthProviders[].identifier` — provider marker (passed to `auth()`, `signUp()`, `logout()`)
+- `AuthProviders[].formIdentifier` — registration form marker for this provider
+- `Forms[].identifier` — form marker for `getFormByMarker()`
 
 ---
 
-## Шаг 3: Создай Server Actions
+## Step 2: Clarify with the user
 
-> **Важно:** `auth()`, `signUp()`, `generateCode()` — вызывай **напрямую из Client Component** (не через Server Action).
-> SDK передаёт fingerprint устройства пользователя — если вызвать на сервере, `deviceInfo.browser` в fingerprint будет серверным, а не реальным браузером пользователя.
-> Через Server Action — только методы без fingerprint: `getAuthProviders`, `logout`, `logoutAll`.
+1. **What modes are needed?** (sign in / sign up / password reset)
+1. **Is cart/favorites sync needed** after login?
+   - If yes — a `getUserState` Server Action will be needed (reads `user.state`)
+1. **Where to display the form?** (modal, separate page, drawer?)
+1. **Is there a layout?** — if yes, copy it exactly, only change data
+
+---
+
+## Step 3: Create Server Actions
+
+> **Important:** `auth()`, `signUp()`, `generateCode()` — call **directly from Client Component** (not via Server Action).
+> The SDK transmits the user's device fingerprint — if called on the server, `deviceInfo.browser` in the fingerprint will be server-side, not the real user's browser.
+> Via Server Action — only methods without fingerprint: `getAuthProviders`, `logout`, `logoutAll`.
 
 ### app/actions/auth.ts
 
@@ -72,10 +72,10 @@ export async function logout(authProviderMarker: string, token: string) {
 }
 ```
 
-### app/actions/users.ts (getUserState — синхронизация после логина)
+### app/actions/users.ts (getUserState — sync after login)
 
-> Нужен только если приложение хранит cart/favorites и другие данные в `user.state`.
-> Если синхронизация не нужна — пропусти этот файл.
+> Only needed if the app stores cart/favorites and other data in `user.state`.
+> If sync is not needed — skip this file.
 
 ```typescript
 'use server';
@@ -83,8 +83,8 @@ export async function logout(authProviderMarker: string, token: string) {
 import { makeUserApi, isError } from '@/lib/oneentry';
 import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
-// getUserState — ОДИН makeUserApi на оба вызова (getUser)
-// Возвращает newToken — клиент ОБЯЗАН сохранить его в localStorage
+// getUserState — ONE makeUserApi for both calls (getUser)
+// Returns newToken — client MUST save it to localStorage
 export async function getUserState(refreshToken: string): Promise<
   { cart: Record<number, number>; favorites: number[]; newToken: string } | { error: string }
 > {
@@ -101,16 +101,16 @@ export async function getUserState(refreshToken: string): Promise<
 
 ---
 
-## Шаг 4: Создай компонент формы
+## Step 4: Create the form component
 
-### Ключевые принципы компонента
+### Key component principles
 
-- Форма загружается через Server Action `getFormByMarker(formIdentifier, locale)`
-- Поля рендерятся **динамически** из `form.attributes` — не хардкодить поля!
-- `authData` — только `{ marker, value }`, фильтровать пустые значения
-- `notificationData` — **НЕ передавать `phoneSMS`** (пустая строка → 400 ошибка)
-- После логина сохранить `accessToken`, `refreshToken`, `authProviderMarker` в localStorage
-- После логина вызвать `getUserState` и диспатчить `auth-state` событие (если нужна синхронизация)
+- Form is loaded via Server Action `getFormByMarker(formIdentifier, locale)`
+- Fields are rendered **dynamically** from `form.attributes` — don't hardcode fields!
+- `authData` — only `{ marker, value }`, filter out empty values
+- `notificationData` — **do NOT pass `phoneSMS`** (empty string → 400 error)
+- After login save `accessToken`, `refreshToken`, `authProviderMarker` to localStorage
+- After login call `getUserState` and dispatch `auth-state` event (if sync is needed)
 
 ### components/AuthForm.tsx
 
@@ -124,8 +124,8 @@ import { getApi, isError } from '@/lib/oneentry';
 import type { IAttributesSetsEntity } from 'oneentry/dist/attribute-sets/attributeSetsInterfaces';
 
 interface AuthFormProps {
-  authProviderMarker: string;  // маркер провайдера — получи из getAuthProviders()
-  formIdentifier: string;      // маркер формы — из provider.formIdentifier
+  authProviderMarker: string;  // provider marker — get from getAuthProviders()
+  formIdentifier: string;      // form marker — from provider.formIdentifier
   locale?: string;
   onSuccess?: () => void;
 }
@@ -149,10 +149,10 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
     });
   }, [formIdentifier, locale]);
 
-  // Показываемые поля зависят от режима
+  // Visible fields depend on mode
   const visibleFields = (): IAttributesSetsEntity[] => {
     if (mode === 'signup') return fields;
-    // signin / reset — только login + password (или только login для reset)
+    // signin / reset — only login + password (or only login for reset)
     const loginField = fields.find(f =>
       f.marker.includes('email') || f.marker.includes('login') || f.marker.includes('phone')
     );
@@ -161,7 +161,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
     return [loginField, passwordField].filter(Boolean) as IAttributesSetsEntity[];
   };
 
-  // authData — только { marker, value }, только непустые
+  // authData — only { marker, value }, only non-empty
   const buildAuthData = () =>
     fields
       .filter(f => {
@@ -171,7 +171,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
       })
       .map(f => ({ marker: f.marker, value: values[f.marker] }));
 
-  // Email для notificationData — ищем динамически
+  // Email for notificationData — find dynamically
   const getEmail = () => {
     const f = fields.find(f => f.marker.includes('email') || f.marker.includes('login'));
     return f ? values[f.marker] || '' : '';
@@ -183,7 +183,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
 
     try {
       if (mode === 'signin') {
-        // ✅ Вызываем напрямую (fingerprint = браузер пользователя)
+        // ✅ Call directly (fingerprint = user's browser)
         const result = await getApi().AuthProvider.auth(authProviderMarker, { authData: buildAuthData() });
         if (isError(result)) { setError((result as any).message || 'Auth failed'); return; }
 
@@ -191,7 +191,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
         localStorage.setItem('refreshToken', (result as any).refreshToken);
         localStorage.setItem('authProviderMarker', authProviderMarker);
 
-        // Синхронизация user.state (cart, favorites) — если нужна
+        // Sync user.state (cart, favorites) — if needed
         // const stateResult = await getUserState((result as any).refreshToken);
         // if (!('error' in stateResult)) {
         //   localStorage.setItem('refreshToken', stateResult.newToken);
@@ -204,12 +204,12 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
         setTimeout(() => onSuccess?.(), 1000);
 
       } else if (mode === 'signup') {
-        // ✅ Вызываем напрямую (fingerprint = браузер пользователя)
+        // ✅ Call directly (fingerprint = user's browser)
         const result = await getApi().AuthProvider.signUp(authProviderMarker, {
           formIdentifier,
           authData: buildAuthData(),
           formData: [],
-          // ⚠️ НЕ передавать phoneSMS — пустая строка вызывает 400
+          // ⚠️ do NOT pass phoneSMS — empty string causes 400
           notificationData: { email: getEmail(), phonePush: [] },
         } as any);
         if (isError(result)) { setError((result as any).message || 'Registration failed'); return; }
@@ -217,7 +217,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
         setTimeout(() => { setMode('signin'); setSuccess(''); }, 2000);
 
       } else if (mode === 'reset') {
-        // ✅ generateCode — тоже с fingerprint, вызываем напрямую
+        // ✅ generateCode — also with fingerprint, call directly
         const result = await getApi().AuthProvider.generateCode(authProviderMarker, getEmail(), 'password_reset');
         if (isError(result)) { setError((result as any).message || 'Reset failed'); return; }
         setSuccess('Reset code sent!');
@@ -240,7 +240,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
         {mode === 'reset' && 'Reset password'}
       </h2>
 
-      {/* Поля — динамически из Forms API */}
+      {/* Fields — dynamically from Forms API */}
       {visibleFields().map((field) => {
         const isPassword = field.marker.includes('password');
         const isEmail = field.marker.includes('email') || field.marker.includes('login');
@@ -267,7 +267,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
         {loading ? 'Loading...' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send code'}
       </button>
 
-      {/* Переключение режимов */}
+      {/* Mode switching */}
       {mode === 'signin' && (
         <>
           <button type="button" onClick={() => setMode('signup')}>Create account</button>
@@ -282,7 +282,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
 }
 ```
 
-### Logout (вызов из любого компонента)
+### Logout (call from any component)
 
 ```tsx
 'use client';
@@ -299,26 +299,26 @@ async function handleLogout() {
   localStorage.removeItem('refreshToken');
   localStorage.removeItem('authProviderMarker');
 
-  // Уведомить остальные компоненты (CartContext, FavoritesContext и т.д.)
+  // Notify other components (CartContext, FavoritesContext, etc.)
   window.dispatchEvent(new Event('auth-change'));
 }
 ```
 
 ---
 
-## Шаг 5: Напомни ключевые правила
+## Step 5: Remind of key rules
 
-> Правила хранения и обновления токенов: `.claude/rules/tokens.md`
+> Token storage and update rules: `.claude/rules/tokens.md`
 
 ```md
-✅ Компонент создан. Ключевые правила:
+✅ Component created. Key rules:
 
-1. authData — только { marker, value }, фильтровать пустые строки
-1. notificationData — НЕ передавать phoneSMS (пустая строка → 400)
-1. formIdentifier берётся из provider.formIdentifier, не хардкодится
-1. Поля рендерятся динамически из Forms API — не хардкодить <input>
-1. После логина сохранить accessToken + refreshToken + authProviderMarker в localStorage
-1. getUserState сжигает refreshToken — вызывать один раз, сразу обновлять localStorage
-1. Logout: сохранять authProviderMarker при логине, передавать в logout()
-1. auth/signUp/generateCode — ТОЛЬКО напрямую из Client Component (fingerprint устройства!), не через Server Action
+1. authData — only { marker, value }, filter out empty strings
+1. notificationData — do NOT pass phoneSMS (empty string → 400)
+1. formIdentifier comes from provider.formIdentifier, not hardcoded
+1. Fields are rendered dynamically from Forms API — don't hardcode <input>
+1. After login save accessToken + refreshToken + authProviderMarker to localStorage
+1. getUserState burns refreshToken — call once, immediately update localStorage
+1. Logout: save authProviderMarker at login, pass it to logout()
+1. auth/signUp/generateCode — ONLY directly from Client Component (device fingerprint!), not via Server Action
 ```

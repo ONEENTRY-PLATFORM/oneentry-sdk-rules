@@ -7,17 +7,17 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# Orders & Payments — правила OneEntry
+# Orders & Payments — OneEntry Rules
 
-## Структуры ответов (критично — они разные!)
+## Response structures (critical — they differ!)
 
 ### getAllOrdersStorage → plain array
 
 ```ts
-// Возвращает IOrdersEntity[] — массив напрямую, НЕ { items, total }
+// Returns IOrdersEntity[] — array directly, NOT { items, total }
 const storages = await api.Orders.getAllOrdersStorage()
-// storages[0].identifier  — маркер хранилища (нужен для getAllOrdersByMarker)
-// storages[0].formIdentifier — маркер формы доставки (нужен для getFormByMarker)
+// storages[0].identifier  — storage marker (needed for getAllOrdersByMarker)
+// storages[0].formIdentifier — delivery form marker (needed for getFormByMarker)
 // storages[0].paymentAccountIdentifiers — [{ identifier: "stripe" }, ...]
 ```
 
@@ -38,13 +38,13 @@ const storages = await api.Orders.getAllOrdersStorage()
 ### getAllOrdersByMarker → { items, total }
 
 ```ts
-// Возвращает { items: IOrderByMarkerEntity[], total: number }
+// Returns { items: IOrderByMarkerEntity[], total: number }
 const result = await api.Orders.getAllOrdersByMarker(storage.identifier)
-const orders = result.items  // ← НЕ result напрямую!
+const orders = result.items  // ← NOT result directly!
 const total = result.total
 ```
 
-**Поля каждого order item:**
+**Fields of each order item:**
 
 ```json
 {
@@ -66,18 +66,18 @@ const total = result.total
 }
 ```
 
-⚠️ `totalSum` — **строка** `"300.00"`, не число. Для отображения: `Number(order.totalSum).toFixed(2)`.
+⚠️ `totalSum` is a **string** `"300.00"`, not a number. For display: `Number(order.totalSum).toFixed(2)`.
 
 ---
 
-## createOrder — структура body
+## createOrder — body structure
 
 ```ts
-// formData принимает ONE объект ИЛИ массив объектов
+// formData accepts ONE object OR array of objects
 await api.Orders.createOrder(storage.identifier, {
-  formIdentifier: storage.formIdentifier,        // из getAllOrdersStorage!
-  paymentAccountIdentifier: 'stripe',            // из storage.paymentAccountIdentifiers[].identifier
-  formData: [                                    // поля формы доставки
+  formIdentifier: storage.formIdentifier,        // from getAllOrdersStorage!
+  paymentAccountIdentifier: 'stripe',            // from storage.paymentAccountIdentifiers[].identifier
+  formData: [                                    // delivery form fields
     { marker: 'name', value: 'Ivan', type: 'string' }
   ],
   products: [
@@ -91,9 +91,9 @@ await api.Orders.createOrder(storage.identifier, {
 ## Payments — createSession → paymentUrl
 
 ```ts
-// После createOrder получи paymentUrl для редиректа на Stripe
+// After createOrder get paymentUrl for redirect to Stripe
 const session = await api.Payments.createSession(order.id, 'session', false)
-// session.paymentUrl — ссылка на оплату (Stripe Checkout URL)
+// session.paymentUrl — payment link (Stripe Checkout URL)
 ```
 
 ```json
@@ -106,7 +106,7 @@ const session = await api.Payments.createSession(order.id, 'session', false)
 }
 ```
 
-**Полный flow заказ + оплата (один makeUserApi!):**
+**Full order + payment flow (one makeUserApi!):**
 
 ```ts
 export async function createOrderAndSession(refreshToken: string, orderData: any) {
@@ -129,7 +129,7 @@ export async function createOrderAndSession(refreshToken: string, orderData: any
 
 ---
 
-## Загрузка всех заказов (все хранилища, один makeUserApi)
+## Loading all orders (all storages, one makeUserApi)
 
 ```ts
 export async function loadAllOrders(refreshToken: string) {

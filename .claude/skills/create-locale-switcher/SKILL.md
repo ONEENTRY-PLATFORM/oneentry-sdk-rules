@@ -3,23 +3,23 @@ type: skill
 skillConfig: {"name":"create-locale-switcher"}
 -->
 
-# /create-locale-switcher — Переключатель языков
+# /create-locale-switcher — Language Switcher
 
-Создаёт компонент для смены языка на основе данных из `Locales API`.
-
----
-
-## Шаг 1: Уточни у пользователя
-
-1. **Где размещается переключатель?** (Header, Footer, отдельный компонент)
-2. **Как отображать языки?** — код (`en_US`), название (`English`), флаг?
-3. **Есть ли верстка?** — если да, копируй точно
+Creates a language switcher component based on data from `Locales API`.
 
 ---
 
-## Шаг 2: Создай Server Action
+## Step 1: Clarify with the user
 
-> Если `app/actions/locales.ts` уже существует — прочитай и дополни, не дублируй.
+1. **Where is the switcher placed?** (Header, Footer, separate component)
+2. **How to display languages?** — code (`en_US`), name (`English`), flag?
+3. **Is there a layout?** — if yes, copy it exactly
+
+---
+
+## Step 2: Create Server Action
+
+> If `app/actions/locales.ts` already exists — read and extend it, don't duplicate.
 
 ```typescript
 // app/actions/locales.ts
@@ -30,7 +30,7 @@ import { getApi, isError } from '@/lib/oneentry';
 export interface LocaleItem {
   code: string;
   title: string;
-  shortCode: string; // первые два символа кода, напр. 'en' из 'en_US'
+  shortCode: string; // first two characters of the code, e.g. 'en' from 'en_US'
 }
 
 export async function getLocales(): Promise<LocaleItem[]> {
@@ -38,7 +38,7 @@ export async function getLocales(): Promise<LocaleItem[]> {
   if (isError(locales)) return [];
   return (locales as any[]).map((locale: any) => ({
     code: locale.code,                            // 'en_US', 'ru_RU'
-    title: locale.localizeInfos?.title || locale.code, // 'English', 'Русский'
+    title: locale.localizeInfos?.title || locale.code, // 'English', 'Russian'
     shortCode: locale.code?.split('_')[0] || locale.code, // 'en', 'ru'
   }));
 }
@@ -46,20 +46,20 @@ export async function getLocales(): Promise<LocaleItem[]> {
 
 ---
 
-## Шаг 3: Создай компонент переключателя
+## Step 3: Create the switcher component
 
-### Ключевые принципы
+### Key principles
 
-- Текущий locale берётся из URL (сегмент `[locale]` в маршруте)
-- При смене языка заменяем сегмент locale в `pathname` и навигируем туда
-- `usePathname()` + `useRouter()` из `next/navigation`
-- Можно делать как Server Component (получает locale как prop) или Client Component
-- Локали загружаются **один раз** — либо передаются как prop от серверного родителя, либо кэшируются
+- Current locale is taken from URL (`[locale]` segment in the route)
+- When switching language, replace the locale segment in `pathname` and navigate there
+- `usePathname()` + `useRouter()` from `next/navigation`
+- Can be a Server Component (receives locale as prop) or Client Component
+- Locales are loaded **once** — either passed as prop from a server parent, or cached
 
-### Вариант A: Серверный родитель передаёт локали как prop (предпочтительно)
+### Option A: Server parent passes locales as prop (preferred)
 
 ```tsx
-// В Header (Server Component):
+// In Header (Server Component):
 import { getLocales } from '@/app/actions/locales';
 import { LocaleSwitcher } from '@/components/LocaleSwitcher';
 
@@ -93,7 +93,7 @@ export function LocaleSwitcher({ locale, locales }: LocaleSwitcherProps) {
   const switchLocale = (newLocale: string) => {
     if (newLocale === locale) return;
 
-    // Заменяем текущий locale-сегмент в URL:
+    // Replace current locale segment in URL:
     // /en_US/shop/product/123 → /ru_RU/shop/product/123
     const newPath = pathname.replace(`/${locale}`, `/${newLocale}`);
     router.push(newPath);
@@ -109,7 +109,7 @@ export function LocaleSwitcher({ locale, locales }: LocaleSwitcherProps) {
           aria-current={loc.code === locale ? 'true' : undefined}
         >
           {loc.shortCode.toUpperCase()} {/* EN / RU */}
-          {/* или loc.title для полного названия */}
+          {/* or loc.title for full name */}
         </button>
       ))}
     </div>
@@ -117,7 +117,7 @@ export function LocaleSwitcher({ locale, locales }: LocaleSwitcherProps) {
 }
 ```
 
-### Вариант B: Клиентский компонент загружает локали сам
+### Option B: Client component loads locales itself
 
 ```tsx
 // components/LocaleSwitcher.tsx
@@ -165,12 +165,12 @@ export function LocaleSwitcher({ locale }: LocaleSwitcherProps) {
 }
 ```
 
-### Вариант C: Ссылки вместо router.push (SEO-friendly)
+### Option C: Links instead of router.push (SEO-friendly)
 
 ```tsx
 import Link from 'next/link';
 
-// Заменяем locale-сегмент и делаем <Link> вместо кнопки
+// Replace locale segment and make <Link> instead of button
 {locales.map((loc) => {
   const href = pathname.replace(`/${locale}`, `/${loc.code}`);
   return (
@@ -187,20 +187,20 @@ import Link from 'next/link';
 
 ---
 
-## Шаг 4: Настрой routing (если ещё не настроен)
+## Step 4: Configure routing (if not yet configured)
 
-Переключатель предполагает, что приложение использует `[locale]` сегмент в маршруте:
+The switcher assumes the app uses the `[locale]` segment in routes:
 
 ```
 app/
   [locale]/
-    layout.tsx   ← получает locale из params
+    layout.tsx   ← receives locale from params
     page.tsx
     shop/
       page.tsx
 ```
 
-В `[locale]/layout.tsx` locale передаётся дочерним компонентам:
+In `[locale]/layout.tsx` locale is passed to child components:
 
 ```tsx
 // app/[locale]/layout.tsx
@@ -223,15 +223,15 @@ export default async function LocaleLayout({
 
 ---
 
-## Шаг 5: Напомни ключевые правила
+## Step 5: Remind of key rules
 
 ```md
-✅ Переключатель языков создан. Ключевые правила:
+✅ Language switcher created. Key rules:
 
-1. getLocales() возвращает code ('en_US'), title ('English'), shortCode ('en')
-2. Смена locale — заменяем pathname.replace(`/${locale}`, `/${newLocale}`)
-3. Серверный родитель передаёт locales как prop — лучше для производительности
-4. Текущий locale определяется из params/useParams, НЕ хардкодится
-5. locale.localizeInfos?.title — локализованное название языка ('Русский', 'English')
-6. Для SEO-friendly: используй <Link href={newPath}> вместо router.push
+1. getLocales() returns code ('en_US'), title ('English'), shortCode ('en')
+2. Switching locale — replace pathname.replace(`/${locale}`, `/${newLocale}`)
+3. Server parent passes locales as prop — better for performance
+4. Current locale is determined from params/useParams, NOT hardcoded
+5. locale.localizeInfos?.title — localized language name ('Russian', 'English')
+6. For SEO-friendly: use <Link href={newPath}> instead of router.push
 ```

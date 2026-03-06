@@ -3,45 +3,45 @@ type: skill
 skillConfig: {"name":"create-product-list"}
 -->
 
-# Каталог товаров с фильтрами и пагинацией
+# Product Catalog with Filters and Pagination
 
 ---
 
-## Шаг 1: Проверь реальные данные через API
+## Step 1: Check real data via API
 
-**ПЕРЕД написанием кода** — узнай реальные маркеры атрибутов:
+**BEFORE writing code** — get the real attribute markers:
 
 ```bash
-/inspect-api products        # маркеры атрибутов (price, color и т.д.)
-/inspect-api product-statuses  # реальный statusMarker для "в наличии"
+/inspect-api products          # attribute markers (price, color, etc.)
+/inspect-api product-statuses  # real statusMarker for "in stock"
 ```
 
-Что смотреть:
-- `items[0].attributeValues` — реальные маркеры атрибутов (`price`, `color` и т.д.)
-- `items[0].statusIdentifier` — реальный статус товара
-- `ProductStatuses[].identifier` — маркер статуса для фильтра `inStockOnly`
+What to look for:
+- `items[0].attributeValues` — real attribute markers (`price`, `color`, etc.)
+- `items[0].statusIdentifier` — real product status
+- `ProductStatuses[].identifier` — status marker for `inStockOnly` filter
 
-**⚠️ НЕ угадывай** маркеры `price`, `color`, `in_stock` — они могут отличаться в каждом проекте.
-
----
-
-## Шаг 2: Уточни у пользователя
-
-1. **Откуда товары?** (все товары `getProducts` или по категории `getProductsByPageUrl`)
-   - Если по категории — какой `pageUrl` у страницы категории?
-2. **Нужны ли фильтры?** (цена, статус, атрибуты)
-3. **Нужна ли бесконечная прокрутка или кнопка "Загрузить ещё"?**
-4. **Маркеры фильтруемых атрибутов** (цена, цвет, размер и т.д.) — уточни после `/inspect-api`
-5. **Есть ли верстка карточки/сетки?** — если да, копируй точно
+**⚠️ Do NOT guess** markers `price`, `color`, `in_stock` — they may differ per project.
 
 ---
 
-## Шаг 3: Создай необходимые файлы
+## Step 2: Clarify with the user
 
-### 3.1 lib/filters.ts — типы и парсинг URL-параметров
+1. **Where do products come from?** (all products `getProducts` or by category `getProductsByPageUrl`)
+   - If by category — what is the `pageUrl` of the category page?
+2. **Are filters needed?** (price, status, attributes)
+3. **Infinite scroll or "Load more" button?**
+4. **Markers for filterable attributes** (price, color, size, etc.) — verify after `/inspect-api`
+5. **Is there existing card/grid markup?** — if yes, copy it exactly
 
-> Адаптируй `FilterParams` под реальные фильтры проекта.
-> Пример с ценой, цветом и наличием. Добавь/убери поля по необходимости.
+---
+
+## Step 3: Create the required files
+
+### 3.1 lib/filters.ts — types and URL param parsing
+
+> Adapt `FilterParams` to the project's real filters.
+> Example with price, color, and availability. Add/remove fields as needed.
 
 ```typescript
 // lib/filters.ts
@@ -50,7 +50,7 @@ export interface FilterParams {
   maxPrice?: number;
   inStockOnly?: boolean;
   colors?: string[];
-  // Добавь другие фильтры по необходимости
+  // Add other filters as needed
 }
 
 export function parseFilterParams(
@@ -68,7 +68,7 @@ export function parseFilterParams(
 
 ### 3.2 app/actions/products.ts — Server Actions
 
-> Замени маркеры атрибутов (`'price'`, `'color'`, `'in_stock'`) на реальные из `/inspect-api`.
+> Replace attribute markers (`'price'`, `'color'`, `'in_stock'`) with real ones from `/inspect-api`.
 
 ```typescript
 // app/actions/products.ts
@@ -82,7 +82,7 @@ export type { FilterParams } from '@/lib/filters';
 
 function buildFilterBody(filters?: FilterParams): any[] {
   const body: any[] = [];
-  // ⚠️ Замени 'price' и 'color' на реальные маркеры атрибутов из /inspect-api!
+  // ⚠️ Replace 'price' and 'color' with real attribute markers from /inspect-api!
   if (filters?.minPrice != null)
     body.push({ attributeMarker: 'price', conditionMarker: 'mth', conditionValue: filters.minPrice - 0.01 });
   if (filters?.maxPrice != null)
@@ -94,12 +94,12 @@ function buildFilterBody(filters?: FilterParams): any[] {
 
 function buildQuery(offset: number, limit: number, filters?: FilterParams): IProductsQuery {
   const query: IProductsQuery = { offset, limit, sortOrder: 'ASC', sortKey: 'position' };
-  // ⚠️ Замени 'in_stock' на реальный statusMarker из /inspect-api product-statuses!
+  // ⚠️ Replace 'in_stock' with real statusMarker from /inspect-api product-statuses!
   if (filters?.inStockOnly) query.statusMarker = 'in_stock';
   return query;
 }
 
-// Все товары (без категории)
+// All products (no category)
 export async function getProducts(
   locale = 'en_US',
   offset = 0,
@@ -115,7 +115,7 @@ export async function getProducts(
   return { items: result.items as IProductsEntity[], total: result.total as number };
 }
 
-// Товары по pageUrl категории
+// Products by category pageUrl
 export async function getProductsByCategory(
   categoryUrl: string,
   locale = 'en_US',
@@ -133,8 +133,8 @@ export async function getProductsByCategory(
   return { items: result.items as IProductsEntity[], total: result.total as number };
 }
 
-// Опции фильтра — диапазон цен и список цветов из реальных данных
-// ⚠️ Замени маркеры 'price' и 'color' на реальные!
+// Filter options — price range and color list from real data
+// ⚠️ Replace markers 'price' and 'color' with real ones!
 export async function getProductFilterOptions(locale = 'en_US', categoryUrl?: string) {
   const result = categoryUrl
     ? await getApi().Products.getProductsByPageUrl(categoryUrl, [], locale, { limit: 1, offset: 0, sortOrder: null, sortKey: null })
@@ -142,13 +142,13 @@ export async function getProductFilterOptions(locale = 'en_US', categoryUrl?: st
 
   if (isError(result)) return { prices: { min: 0, max: 9999 }, colors: [] };
 
-  // Диапазон цен из поля additional.prices (если доступно)
+  // Price range from additional.prices field (if available)
   const additional = (result as any).additional;
   const prices = additional?.prices
     ? { min: Number(additional.prices.min ?? 0), max: Number(additional.prices.max ?? 9999) }
     : { min: 0, max: 9999 };
 
-  // Цвета из listTitles атрибута цвета первого товара
+  // Colors from listTitles of the color attribute on the first product
   const colorAttr = result.items?.[0]?.attributeValues?.color as any;
   const rawTitles = colorAttr?.listTitles?.[locale] ?? colorAttr?.listTitles ?? [];
   const colors = Array.isArray(rawTitles)
@@ -163,11 +163,11 @@ export async function getProductFilterOptions(locale = 'en_US', categoryUrl?: st
 }
 ```
 
-### 3.3 Server Page — читает searchParams, рендерит ShopView
+### 3.3 Server Page — reads searchParams, renders ShopView
 
 ```tsx
 // app/[locale]/shop/page.tsx
-import { ShopView } from '@/components/ShopView';
+import { ShopView } from '@/components/catalog/ShopView';
 import { getProducts } from '@/app/actions/products';
 import { parseFilterParams } from '@/lib/filters';
 
@@ -189,20 +189,20 @@ export default async function ShopPage({
       initialProducts={initialData.items}
       totalProducts={initialData.total}
       locale={locale}
-      // categoryUrl передавай только для страниц категорий
+      // categoryUrl — pass only for category pages
     />
   );
 }
 ```
 
-### 3.4 ShopView — Client Component, читает фильтры из URL
+### 3.4 ShopView — Client Component, reads filters from URL
 
-> **⚠️ КРИТИЧЕСКИ ВАЖНО:** ShopView ОБЯЗАН читать `activeFilters` и `gridKey`
-> из `useSearchParams`, а НЕ получать как props от серверного компонента.
-> Иначе `loadMore` в ProductGrid будет использовать устаревшие фильтры.
+> **⚠️ CRITICAL:** ShopView MUST read `activeFilters` and `gridKey`
+> from `useSearchParams`, NOT receive them as props from the server component.
+> Otherwise `loadMore` in ProductGrid will use stale filters.
 
 ```tsx
-// components/ShopView.tsx
+// components/catalog/ShopView.tsx
 'use client';
 
 import { useState } from 'react';
@@ -221,16 +221,16 @@ interface ShopViewProps {
 export function ShopView({ initialProducts, totalProducts, locale, categoryUrl }: ShopViewProps) {
   const searchParams = useSearchParams();
 
-  // Фильтры и ключ — всегда из URL, не из props
+  // Filters and key — always from URL, not from props
   const activeFilters = parseFilterParams(Object.fromEntries(searchParams.entries()));
-  const gridKey = searchParams.toString(); // key для ремаунта ProductGrid при смене фильтров
+  const gridKey = searchParams.toString(); // key to remount ProductGrid when filters change
 
   return (
     <div>
-      {/* Кнопка фильтров — опционально */}
+      {/* Filter button — optional */}
       {/* <FilterPanel locale={locale} categoryUrl={categoryUrl} /> */}
 
-      {/* key={gridKey} — ProductGrid ремаунтится при изменении URL-параметров */}
+      {/* key={gridKey} — ProductGrid remounts when URL params change */}
       <ProductGrid
         key={gridKey}
         initialProducts={initialProducts}
@@ -244,10 +244,10 @@ export function ShopView({ initialProducts, totalProducts, locale, categoryUrl }
 }
 ```
 
-### 3.5 ProductGrid — бесконечная прокрутка через IntersectionObserver
+### 3.5 ProductGrid — infinite scroll via IntersectionObserver
 
 ```tsx
-// components/ProductGrid.tsx
+// components/catalog/ProductGrid.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -325,14 +325,14 @@ export function ProductGrid({
     <>
       <div className="grid grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-5">
         {products.map((product) => (
-          // Замени на реальный компонент карточки товара
+          // Replace with real product card component
           <div key={product.id}>
             <p>{product.localizeInfos?.title}</p>
           </div>
         ))}
       </div>
 
-      {/* Sentinel для IntersectionObserver */}
+      {/* Sentinel for IntersectionObserver */}
       {hasMore && <div ref={loaderRef} className="mt-5 flex justify-center">Loading...</div>}
     </>
   );
@@ -341,17 +341,17 @@ export function ProductGrid({
 
 ---
 
-## Шаг 4: Напомни ключевые правила
+## Step 4: Reminder — key rules
 
-✅ Каталог создан. Ключевые правила:
+✅ Catalog created. Key rules:
 
 ```md
-1. ShopView читает activeFilters и gridKey из useSearchParams — НЕ из props от сервера
-2. key={gridKey} на ProductGrid — ремаунт при смене фильтров вместо useEffect
-3. statusMarker (inStockOnly) — в query, НЕ в body фильтров
-4. conditionMarker 'mth'/'lth' для цены — используй -0.01/+0.01 для включения границ
-5. params и searchParams в Next.js 15+ — это Promise, обязателен await
-6. Маркеры атрибутов (price, color) и statusMarker — проверить через /inspect-api
-7. isLoadingRef вместо useState(loading) — предотвращает дублирование запросов
-8. pageUrl категории — это маркер ("shoes"), не путь роута ("/shop/category/shoes")
+1. ShopView reads activeFilters and gridKey from useSearchParams — NOT from server props
+2. key={gridKey} on ProductGrid — remount on filter change instead of useEffect
+3. statusMarker (inStockOnly) — in query, NOT in filter body
+4. conditionMarker 'mth'/'lth' for price — use -0.01/+0.01 to include boundaries
+5. params and searchParams in Next.js 15+ are Promises — await required
+6. Attribute markers (price, color) and statusMarker — verify via /inspect-api
+7. isLoadingRef instead of useState(loading) — prevents duplicate requests
+8. Category pageUrl is a marker ("shoes"), not a route path ("/shop/category/shoes")
 ```

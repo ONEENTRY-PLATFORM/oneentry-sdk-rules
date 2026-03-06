@@ -3,31 +3,31 @@ type: skill
 skillConfig: {"name":"create-search"}
 -->
 
-# /create-search — Поиск по сайту
+# /create-search — Site Search
 
-Аргумент: что искать — `products` (товары), `pages` (страницы), `all` (всё).
+Argument: what to search — `products` (products), `pages` (pages), `all` (everything).
 
 ---
 
-## Шаг 1: Уточни у пользователя
+## Step 1: Clarify with the user
 
-1. **По чему искать?**
+1. **What to search?**
    - `products` — `searchProduct(query, locale)`
    - `pages` — `searchPage(name, url)`
    - `blocks` — `searchBlock(name)`
-   - несколько сразу — параллельные запросы через `Promise.all`
+   - multiple at once — parallel requests via `Promise.all`
 
-2. **Где отображается?**
-   - Выпадающий список (dropdown) прямо в строке поиска — наиболее частый случай
-   - Отдельная страница результатов
+2. **Where to display results?**
+   - Dropdown list directly in the search bar — most common case
+   - Separate results page
 
-3. **Есть ли верстка?** — если да, копируй точно
+3. **Is there a layout?** — if yes, copy it exactly
 
 ---
 
-## Шаг 2: Создай Server Action
+## Step 2: Create Server Action
 
-> Если `app/actions/products.ts` / `app/actions/pages.ts` уже существует — прочитай и дополни, не дублируй.
+> If `app/actions/products.ts` / `app/actions/pages.ts` already exists — read and extend it, don't duplicate.
 
 ```typescript
 // app/actions/search.ts
@@ -37,7 +37,7 @@ import { getApi, isError } from '@/lib/oneentry';
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces';
 import type { IPagesEntity } from 'oneentry/dist/pages/pagesInterfaces';
 
-// Поиск товаров по названию
+// Search products by name
 export async function searchProducts(
   query: string,
   locale: string = 'en_US',
@@ -47,7 +47,7 @@ export async function searchProducts(
   return result as IProductsEntity[];
 }
 
-// Поиск страниц по названию (опционально)
+// Search pages by name (optional)
 export async function searchPages(
   query: string,
   locale: string = 'en_US',
@@ -57,7 +57,7 @@ export async function searchPages(
   return result as IPagesEntity[];
 }
 
-// Поиск всего сразу
+// Search everything at once
 export async function searchAll(query: string, locale: string = 'en_US') {
   const [products, pages] = await Promise.all([
     searchProducts(query, locale),
@@ -69,19 +69,19 @@ export async function searchAll(query: string, locale: string = 'en_US') {
 
 ---
 
-## Шаг 3: Создай компонент
+## Step 3: Create the component
 
-### Ключевые принципы
+### Key principles
 
-- `'use client'` — поиск интерактивный
-- **Дебаунс 300ms** через `setTimeout` в `useEffect` — не вызывать Server Action на каждый символ
-- **Dropdown** закрывается по клику вне компонента (mousedown listener)
-- **Escape** закрывает dropdown
-- При пустом запросе — не делать запрос, очистить результаты
-- Результат `searchProduct` — массив `IProductsEntity[]`, доступ к названию: `product.localizeInfos?.title`
-- Результат `searchPage` — массив `IPagesEntity[]`, доступ к названию: `page.localizeInfos?.title || page.localizeInfos?.menuTitle`
+- `'use client'` — search is interactive
+- **300ms debounce** via `setTimeout` in `useEffect` — don't call Server Action on every keystroke
+- **Dropdown** closes on click outside the component (mousedown listener)
+- **Escape** closes the dropdown
+- On empty query — don't make a request, clear results
+- Result of `searchProduct` — array `IProductsEntity[]`, access name via: `product.localizeInfos?.title`
+- Result of `searchPage` — array `IPagesEntity[]`, access name via: `page.localizeInfos?.title || page.localizeInfos?.menuTitle`
 
-### components/SearchBar.tsx
+### components/search/SearchBar.tsx
 
 ```tsx
 'use client';
@@ -101,7 +101,7 @@ export function SearchBar({ locale }: SearchBarProps) {
   const [open, setOpen] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  // Дебаунс 300ms — не вызываем Action на каждый символ
+  // 300ms debounce — don't call Action on every keystroke
   useEffect(() => {
     const timer = setTimeout(async () => {
       if (!query.trim()) {
@@ -117,7 +117,7 @@ export function SearchBar({ locale }: SearchBarProps) {
     return () => clearTimeout(timer);
   }, [query, locale]);
 
-  // Закрыть по клику вне компонента
+  // Close on click outside component
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
@@ -168,7 +168,7 @@ export function SearchBar({ locale }: SearchBarProps) {
 }
 ```
 
-### Если нужна отдельная страница результатов
+### If a separate results page is needed
 
 ```tsx
 // app/[locale]/search/page.tsx
@@ -193,7 +193,7 @@ export default async function SearchPage({
     <div>
       <h1>Results for: {q}</h1>
 
-      {/* Товары */}
+      {/* Products */}
       <section>
         <h2>Products ({(products as any[]).length})</h2>
         {(products as any[]).map((p: any) => (
@@ -203,7 +203,7 @@ export default async function SearchPage({
         ))}
       </section>
 
-      {/* Страницы */}
+      {/* Pages */}
       <section>
         <h2>Pages ({(pages as any[]).length})</h2>
         {(pages as any[]).map((p: any) => (
@@ -219,16 +219,16 @@ export default async function SearchPage({
 
 ---
 
-## Шаг 4: Напомни ключевые правила
+## Step 4: Remind of key rules
 
-✅ Поиск создан. Ключевые правила:
+✅ Search created. Key rules:
 
 ```md
-1. searchProduct/searchPage ищут по НАЗВАНИЮ, не по атрибутам
-2. Дебаунс 300ms — НЕ вызывать Action на каждый символ
-3. При пустом запросе — очистить результаты, не делать запрос
-4. Dropdown закрывается по mousedown вне компонента и по Escape
-5. Для продуктов: product.localizeInfos?.title
-6. Для страниц: page.localizeInfos?.title || page.localizeInfos?.menuTitle
-7. Server Action возвращает [] при ошибке — не крашится
+1. searchProduct/searchPage search by NAME, not by attributes
+2. 300ms debounce — do NOT call Action on every keystroke
+3. On empty query — clear results, don't make a request
+4. Dropdown closes on mousedown outside the component and on Escape
+5. For products: product.localizeInfos?.title
+6. For pages: page.localizeInfos?.title || page.localizeInfos?.menuTitle
+7. Server Action returns [] on error — doesn't crash
 ```

@@ -3,33 +3,33 @@ type: skill
 skillConfig: {"name":"create-server-action"}
 -->
 
-# Создание серверного действия
+# Create a Server Action
 
-## Шаг 1: Определи модуль и целевой файл
+## Step 1: Identify the module and target file
 
-Разбери аргумент на `Module` и `method`. Определи файл:
-| Модуль                                  | Файл                      | Тип                     |
+Parse the argument into `Module` and `method`. Determine the file:
+| Module                                  | File                      | Type                    |
 |-----------------------------------------|---------------------------|-------------------------|
 | `Forms`                                 | `app/actions/forms.ts`    | public (getApi)         |
 | `AuthProvider`                          | `app/actions/auth.ts`     | public (getApi)         |
 | `Pages`, `Products`, `Menus`, `Blocks`  | `app/actions/<module>.ts` | public (getApi)         |
 | `Orders`, `Users`, `Payments`           | `app/actions/user.ts`     | user-auth (makeUserApi) |
 
-## Шаг 2: Прочитай существующий файл
+## Step 2: Read the existing file
 
-Если файл уже существует — прочитай его, чтобы не дублировать импорты и `isError`.
+If the file already exists — read it to avoid duplicating imports and `isError`.
 
-## Шаг 3: Найди TypeScript интерфейс в SDK
+## Step 3: Find the TypeScript interface in the SDK
 
-Выполни поиск в `node_modules/oneentry/dist/` чтобы найти правильный тип возвращаемого значения:
+Search in `node_modules/oneentry/dist/` to find the correct return type:
 
 ```bash
 grep -r "interface I" node_modules/oneentry/dist/<module>/ --include="*.d.ts" -l
 ```
 
-## Шаг 4: Создай или дополни файл
+## Step 4: Create or extend the file
 
-### Для public методов (Forms, AuthProvider, Pages, Products и т.д.)
+### For public methods (Forms, AuthProvider, Pages, Products, etc.)
 
 ```typescript
 'use server';
@@ -49,7 +49,7 @@ export async function getFormByMarker(marker: string, locale?: string) {
 }
 ```
 
-### Для user-authorized методов (Orders, Users, Payments)
+### For user-authorized methods (Orders, Users, Payments)
 
 ```typescript
 'use server';
@@ -57,8 +57,8 @@ export async function getFormByMarker(marker: string, locale?: string) {
 import { makeUserApi, isError } from '@/lib/oneentry';
 import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
-// ⚠️ ОДИН инстанс makeUserApi на все связанные вызовы в одной функции!
-// Каждый вызов makeUserApi сжигает refreshToken через /refresh
+// ⚠️ ONE makeUserApi instance for all related calls in one function!
+// Each makeUserApi call burns refreshToken via /refresh
 export async function getUserProfile(refreshToken: string) {
   const { api, getNewToken } = makeUserApi(refreshToken);
 
@@ -72,9 +72,9 @@ export async function getUserProfile(refreshToken: string) {
 }
 ```
 
-## Шаг 5: Выведи инструкцию по использованию
+## Step 5: Show usage instructions
 
-После создания файла покажи пример использования из Client Component:
+After creating the file, show an example of usage from a Client Component:
 
 ```typescript
 // components/MyComponent.tsx
@@ -90,14 +90,14 @@ export function MyComponent() {
         console.error(result.error);
         return;
       }
-      // result — это IFormsEntity
+      // result — this is IFormsEntity
     }
     load();
   }, []);
 }
 ```
 
-Для user-auth методов напомни:
+For user-auth methods remind:
 
-⚠️ Сохрани newToken обратно в localStorage после каждого вызова:
+⚠️ Save newToken back to localStorage after each call:
 localStorage.setItem('refresh-token', result.newToken)

@@ -7,71 +7,71 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# Работа с attributeSets — правила OneEntry
+# Working with attributeSets — OneEntry rules
 
-## Что возвращают методы AttributesSets
+## What AttributesSets methods return
 
-`getAttributes`, `getAttributesByMarker`, `getAttributeSetByMarker`, `getSingleAttributeByMarkerSet` возвращают **схему атрибутов** — структуру полей (marker, type, listTitles, validators). **Это НЕ значения атрибутов сущностей.**
+`getAttributes`, `getAttributesByMarker`, `getAttributeSetByMarker`, `getSingleAttributeByMarkerSet` return the **attribute schema** — the structure of fields (marker, type, listTitles, validators). **This is NOT the attribute values of entities.**
 
 ```ts
-// ❌ НЕПРАВИЛЬНО — attributeSet не содержит реальных значений товаров/страниц
+// ❌ WRONG — attributeSet does not contain real values of products/pages
 const attrs = await getApi().AttributesSets.getAttributesByMarker('products')
-const price = attrs[0].value // {} — пусто!
+const price = attrs[0].value // {} — empty!
 
-// ✅ ПРАВИЛЬНО — значения берутся из самой сущности
+// ✅ CORRECT — values come from the entity itself
 const product = await getApi().Products.getProductById(id)
-const price = product.attributeValues.price?.value // реальное значение
+const price = product.attributeValues.price?.value // real value
 ```
 
-**Исключение:** `timeInterval` — если в админке включена опция "Receive values", поле `value` будет содержать данные расписания.
+**Exception:** `timeInterval` — if the "Receive values" option is enabled in the admin panel, the `value` field will contain schedule data.
 
 ---
 
-## Структура объекта атрибута (схема)
+## Attribute object structure (schema)
 
 ```ts
 {
-  type: "string" | "text" | "image" | "list" | ..., // тип атрибута
-  value: {},              // всегда пусто в схеме (кроме timeInterval с включённым Receive values)
-  marker: "product_name", // уникальный идентификатор — используется в attributeValues сущности
-  position: 1,            // порядок отображения
-  listTitles: [...],      // варианты выбора для radioButton и list
-  validators: {...},      // правила валидации
-  localizeInfos: { title: "Product Name" }, // человекочитаемое название
-  additionalFields: [...] // вложенные атрибуты
+  type: "string" | "text" | "image" | "list" | ..., // attribute type
+  value: {},              // always empty in schema (except timeInterval with Receive values enabled)
+  marker: "product_name", // unique identifier — used in entity's attributeValues
+  position: 1,            // display order
+  listTitles: [...],      // options for radioButton and list
+  validators: {...},      // validation rules
+  localizeInfos: { title: "Product Name" }, // human-readable label
+  additionalFields: [...] // nested attributes
 }
 ```
 
 ---
 
-## listTitles — варианты выбора (radioButton, list)
+## listTitles — selection options (radioButton, list)
 
-Используй `listTitles` для отображения опций фильтра или формы:
+Use `listTitles` to render filter or form options:
 
 ```ts
 const attrs = await getApi().AttributesSets.getAttributesByMarker('products')
 const colorAttr = attrs.find((a: any) => a.marker === 'color')
 
-// listTitles содержит варианты для radioButton и list
+// listTitles contains options for radioButton and list
 const options = colorAttr?.listTitles ?? []
 // [{ title: "Red", value: "1", extended: { type: "string", value: "#FF0000" }, position: 1 }]
 
-// extended — дополнительное значение (например CSS-цвет для свотча)
+// extended — additional value (e.g. CSS color for a swatch)
 const swatches = options.map((opt: any) => ({
   label: opt.title,
   value: opt.value,
-  color: opt.extended?.value ?? opt.value, // цвет или fallback на id
+  color: opt.extended?.value ?? opt.value, // color or fallback to id
 }))
 ```
 
-**Важно:** `value` в listTitles — это ID опции (строка). Именно это значение хранится в `attributeValues` сущности при выборе `radioButton` или `list`.
+**Important:** `value` in listTitles is the option ID (string). This is exactly the value stored in entity's `attributeValues` when `radioButton` or `list` is selected.
 
 ---
 
-## additionalFields — вложенные атрибуты
+## additionalFields — nested attributes
 
 ```ts
-// additionalFields — массив вложенных атрибутов (например, валюта к цене)
+// additionalFields — array of nested attributes (e.g. currency for price)
 {
   type: "float",
   marker: "price",
@@ -80,58 +80,58 @@ const swatches = options.map((opt: any) => ({
   ]
 }
 
-// Доступ в attributeValues сущности:
+// Access in entity's attributeValues:
 const currency = product.attributeValues.price?.additionalFields?.currency?.value
 ```
 
 ---
 
-## validators — структура
+## validators — structure
 
 ```ts
-// requiredValidator — обязательное поле
+// requiredValidator — required field
 { requiredValidator: { strict: true } }
 
-// defaultValueValidator — значение по умолчанию
+// defaultValueValidator — default value
 { defaultValueValidator: { fieldDefaultValue: "usd" } }
 
-// checkingFilesValidator — ограничения файла
+// checkingFilesValidator — file restrictions
 { checkingFilesValidator: { maxUnits: "kb", maxValue: "2000", extensions: [] } }
 
-// sizeInPixelsValidator — размер изображения
+// sizeInPixelsValidator — image size
 { sizeInPixelsValidator: { maxX: "500", maxY: "500" } }
 ```
 
-Используй `validators` при динамической генерации форм (например, поле обязательно если `strict: true`).
+Use `validators` when dynamically generating forms (e.g. a field is required if `strict: true`).
 
 ---
 
-## Правила именования маркеров
+## Marker naming rules
 
-- Только строчные буквы и `_` (нет пробелов)
-- Не начинается с цифры
-- Уникален в рамках проекта
-- Описательный: `product_price`, а не `pp`
+- Lowercase letters and `_` only (no spaces)
+- Must not start with a digit
+- Unique within the project
+- Descriptive: `product_price`, not `pp`
 
 ```ts
-// ✅ Правильно
+// ✅ Correct
 attrs.product_name?.value
 attrs.main_image?.value?.[0]?.downloadLink
 
-// ❌ Неправильно — пробелы, заглавные буквы
+// ❌ Wrong — spaces, uppercase letters
 attrs['Product Name']?.value
 attrs['2nd_price']?.value
 ```
 
 ---
 
-## Когда использовать AttributesSets
+## When to use AttributesSets
 
-| Сценарий                                       | Метод                                                  |
-|------------------------------------------------|--------------------------------------------------------|
-| Получить список полей для формы                | `getAttributesByMarker(setMarker)`                     |
-| Получить варианты для фильтра (цвета, размеры) | `getAttributesByMarker` → `listTitles`                 |
-| Получить один атрибут по маркеру               | `getSingleAttributeByMarkerSet(setMarker, attrMarker)` |
-| Получить все наборы атрибутов                  | `getAttributes()`                                      |
+| Scenario                                    | Method                                                 |
+|---------------------------------------------|--------------------------------------------------------|
+| Get list of fields for a form               | `getAttributesByMarker(setMarker)`                     |
+| Get options for a filter (colors, sizes)    | `getAttributesByMarker` → `listTitles`                 |
+| Get one attribute by marker                 | `getSingleAttributeByMarkerSet(setMarker, attrMarker)` |
+| Get all attribute sets                      | `getAttributes()`                                      |
 
-**НЕ используй AttributesSets для получения значений товаров/страниц.** Для этого используй `Products.getProducts()`, `Pages.getPageByUrl()` и т.д. — у них есть `attributeValues` с реальными данными.
+**DO NOT use AttributesSets to get product/page values.** Use `Products.getProducts()`, `Pages.getPageByUrl()`, etc. — they have `attributeValues` with real data.

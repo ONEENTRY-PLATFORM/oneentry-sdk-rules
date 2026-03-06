@@ -3,13 +3,13 @@ type: skill
 skillConfig: {"name":"create-cart-manager"}
 -->
 
-# Создать менеджер корзины (Redux + persist)
+# Create Cart Manager (Redux + persist)
 
-Создаёт Redux slice корзины с персистентностью, store и типами. Корзина хранит список товаров с количеством и переживает перезагрузку страницы.
+Creates a Redux cart slice with persistence, store, and types. The cart stores items with quantities and survives page reloads.
 
 ---
 
-## Шаг 1: Установи зависимости
+## Step 1: Install dependencies
 
 ```bash
 npm install @reduxjs/toolkit react-redux redux-persist next-redux-wrapper
@@ -17,9 +17,9 @@ npm install @reduxjs/toolkit react-redux redux-persist next-redux-wrapper
 
 ---
 
-## Шаг 2: Создай тип продукта в корзине
+## Step 2: Create the cart product type
 
-Файл: `app/types/cart.ts`
+File: `app/types/cart.ts`
 
 ```typescript
 export interface ICartProduct {
@@ -31,9 +31,9 @@ export interface ICartProduct {
 
 ---
 
-## Шаг 3: Создай cart slice
+## Step 3: Create the cart slice
 
-Файл: `app/store/reducers/CartSlice.ts`
+File: `app/store/reducers/CartSlice.ts`
 
 ```typescript
 'use client';
@@ -44,8 +44,8 @@ import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
 import type { ICartProduct } from '@/app/types/cart';
 
 type CartState = {
-  products: IProductsEntity[];       // полные данные товаров (загружаются из API)
-  productsData: ICartProduct[];      // id + quantity + selected (персистируется)
+  products: IProductsEntity[];       // full product data (loaded from API)
+  productsData: ICartProduct[];      // id + quantity + selected (persisted)
   total: number;
   version: number;
 };
@@ -174,7 +174,7 @@ export const selectCartItemQty = (
 export const selectCartVersion = (state: { cartReducer: CartState }) =>
   state.cartReducer.version;
 
-// Total считается по атрибутам — уточни маркеры price/sale у пользователя!
+// Total is calculated from attributes — confirm price/sale markers with the user!
 export const selectCartTotal = createSelector(
   (state: { cartReducer: CartState }) => state.cartReducer.productsData,
   (state: { cartReducer: CartState }) => state.cartReducer.products,
@@ -209,9 +209,9 @@ export default cartSlice.reducer;
 
 ---
 
-## Шаг 4: Создай Redux store с персистентностью
+## Step 4: Create Redux store with persistence
 
-Файл: `app/store/store.ts`
+File: `app/store/store.ts`
 
 ```typescript
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
@@ -220,7 +220,7 @@ import { persistReducer } from 'redux-persist';
 import createWebStorage from 'redux-persist/lib/storage/createWebStorage';
 import cartSlice from './reducers/CartSlice';
 
-// SSR-совместимое хранилище (noop на сервере)
+// SSR-compatible storage (noop on server)
 const createNoopStorage = () => ({
   getItem: () => Promise.resolve(null),
   setItem: (_key: string, value: unknown) => Promise.resolve(value),
@@ -237,7 +237,7 @@ const cartReducer = persistReducer(
     key: 'cart-slice',
     storage,
     version: 1,
-    whitelist: ['productsData', 'total'], // products НЕ персистируем — загружаем из API
+    whitelist: ['productsData', 'total'], // products are NOT persisted — loaded from API
   },
   cartSlice,
 );
@@ -260,9 +260,9 @@ export const wrapper = createWrapper<AppStore>(setupStore, { debug: false });
 
 ---
 
-## Шаг 5: Оберни приложение в Provider
+## Step 5: Wrap the app in Provider
 
-Файл: `app/store/providers/StoreProvider.tsx`
+File: `app/store/providers/StoreProvider.tsx`
 
 ```tsx
 'use client';
@@ -290,7 +290,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 }
 ```
 
-В `app/layout.tsx`:
+In `app/layout.tsx`:
 
 ```tsx
 import { StoreProvider } from '@/app/store/providers/StoreProvider';
@@ -308,7 +308,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ---
 
-## Шаг 6: Использование в компонентах
+## Step 6: Usage in components
 
 ```tsx
 'use client';
@@ -334,11 +334,11 @@ export function AddToCartButton({ product }: { product: any }) {
 
   return isInCart ? (
     <button onClick={() => dispatch(removeProduct(product.id))}>
-      В корзине ({qty})
+      In cart ({qty})
     </button>
   ) : (
     <button onClick={() => dispatch(addProductToCart({ id: product.id, quantity: 1 }))}>
-      В корзину
+      Add to cart
     </button>
   );
 }
@@ -346,15 +346,15 @@ export function AddToCartButton({ product }: { product: any }) {
 
 ---
 
-## Важные детали
+## Important details
 
 ```md
-✅ Создан cart-manager. Ключевые правила:
+✅ Cart manager created. Key rules:
 
-1. productsData (id + qty) персистируется — products (полные данные) НЕ персистируются
-2. products загружай из API при монтировании CartPage по id из productsData
-3. selectCartTotal — уточни маркеры атрибутов price/sale у пользователя!
-4. На сервере storage = noop (без localStorage) — PersistGate решает гидратацию
-5. serializableCheck: false — нужно для redux-persist
-6. Если нужны favorites — добавь FavoritesSlice аналогично (whitelist: ['products'])
+1. productsData (id + qty) is persisted — products (full data) are NOT persisted
+2. Load products from API on CartPage mount using ids from productsData
+3. selectCartTotal — confirm price/sale attribute markers with the user!
+4. On server storage = noop (no localStorage) — PersistGate handles hydration
+5. serializableCheck: false — required for redux-persist
+6. If favorites are needed — add FavoritesSlice similarly (whitelist: ['products'])
 ```

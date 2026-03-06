@@ -4,30 +4,30 @@ fileName: server-actions.md
 rulePaths: ["app/actions/**/*.ts"]
 -->
 
-# Server Actions — правила OneEntry
+# Server Actions — OneEntry Rules
 
-## Когда использовать Server Actions
+## When to use Server Actions
 
-Server Actions — **один из паттернов**, а не единственный способ вызова SDK. Выбор зависит от типа операции:
+Server Actions are **one of the patterns**, not the only way to call the SDK. The choice depends on the operation type:
 
-| Операция | Рекомендуемый подход | Причина |
+| Operation | Recommended approach | Reason |
 | --- | --- | --- |
-| Публичные данные (Pages, Products, Menus) | Server Component напрямую / Server Action / Client Component | Зависит от стратегии рендеринга (SSR/SSG/CSR) |
-| Авторизация (auth, signUp, generateCode) | **Client Component напрямую** | ⚠️ SDK передаёт fingerprint устройства — на клиенте fingerprint уникален для каждого устройства пользователя |
-| Пользовательские данные (Orders, Users) | Server Action с `makeUserApi()` | Безопасность токена, серверная логика |
-| Мутации (отправка форм, создание заказов) | Server Action | Серверная валидация |
+| Public data (Pages, Products, Menus) | Server Component directly / Server Action / Client Component | Depends on rendering strategy (SSR/SSG/CSR) |
+| Authentication (auth, signUp, generateCode) | **Client Component directly** | ⚠️ SDK transmits device fingerprint — on the client it's unique to the user's device |
+| User data (Orders, Users) | Server Action with `makeUserApi()` | Token security, server-side logic |
+| Mutations (form submission, order creation) | Server Action | Server-side validation |
 
-## Обязательно (для Server Actions)
+## Required (for Server Actions)
 
-- Директива `'use server'` в начале файла
-- **Только `async function` экспорты** — Next.js запрещает экспортировать константы, типы и обычные функции из `'use server'` файлов. Выноси их в отдельный файл (например `src/lib/constants.ts`)
+- `'use server'` directive at the top of the file
+- **Only `async function` exports** — Next.js forbids exporting constants, types, and regular functions from `'use server'` files. Move them to a separate file (e.g. `src/lib/constants.ts`)
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО — ошибка: Only async functions are allowed to be exported
+// ❌ WRONG — error: Only async functions are allowed to be exported
 'use server';
 export const PAGE_SIZE = 10;
 
-// ✅ ПРАВИЛЬНО — константа в отдельном файле
+// ✅ CORRECT — constant in a separate file
 // src/lib/constants.ts
 export const PAGE_SIZE = 10;
 
@@ -37,12 +37,12 @@ import { PAGE_SIZE } from '@/lib/constants';
 export async function loadProducts(...) { ... }
 ```
 
-- Всегда проверяй результат через `isError(result)`
-- Возвращай `{ error: string; statusCode?: number }` при ошибке (нужно для retry-логики на клиенте)
+- Always check the result via `isError(result)`
+- Return `{ error: string; statusCode?: number }` on error (needed for retry logic on the client)
 
-## Публичные методы (Forms, Pages, Products, Menus, Blocks)
+## Public methods (Forms, Pages, Products, Menus, Blocks)
 
-> Эти методы можно вызывать и из Server Component напрямую, и из Client Component. Server Action — удобный прокси, но не обязательный.
+> These methods can be called from Server Components directly, Client Components, or Server Actions. A Server Action is a convenient proxy, but not required.
 
 ```typescript
 import { getApi, isError } from '@/lib/oneentry';
@@ -54,70 +54,70 @@ export async function myAction(...) {
 }
 ```
 
-## ⚠️ AuthProvider — НЕ через Server Action
+## ⚠️ AuthProvider — NOT via Server Action
 
-Методы `auth`, `signUp`, `generateCode`, `checkCode` **вызывать из Client Component напрямую** — SDK передаёт fingerprint устройства. На сервере в `deviceInfo.browser` будет `"Node.js/..."` вместо реального браузера пользователя.
+Methods `auth`, `signUp`, `generateCode`, `checkCode` **must be called from Client Component directly** — the SDK transmits device fingerprint. On the server `deviceInfo.browser` will be `"Node.js/..."` instead of the real user's browser.
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО — auth в Server Action
+// ❌ WRONG — auth in Server Action
 'use server';
 export async function signIn(authData) {
-  return await getApi().AuthProvider.auth('email', { authData }); // browser в fingerprint = Node.js
+  return await getApi().AuthProvider.auth('email', { authData }); // browser in fingerprint = Node.js
 }
 
-// ✅ ПРАВИЛЬНО — auth из Client Component
+// ✅ CORRECT — auth from Client Component
 'use client';
 import { getApi, isError } from '@/lib/oneentry';
-const result = await getApi().AuthProvider.auth('email', { authData }); // fingerprint = браузер
+const result = await getApi().AuthProvider.auth('email', { authData }); // fingerprint = browser
 ```
 
-> Подробные правила: `.claude/rules/auth-provider.md`
+> Detailed rules: `.claude/rules/auth-provider.md`
 
-## User-authorized методы (Orders, Users, Payments, etc.)
+## User-authorized methods (Orders, Users, Payments, etc.)
 
 ```typescript
 import { makeUserApi, isError } from '@/lib/oneentry';
 
-// ⚠️ ОДИН makeUserApi на все вызовы в функции!
-// Каждый вызов сжигает refreshToken через /refresh → второй вызов → 401
+// ⚠️ ONE makeUserApi for all calls in the function!
+// Each call burns refreshToken via /refresh → second call → 401
 export async function myUserAction(refreshToken: string, ...) {
   const { api, getNewToken } = makeUserApi(refreshToken);
 
   const result = await api.Users.getUser();
   if (isError(result)) return { error: result.message, statusCode: result.statusCode };
 
-  // Если нужен второй вызов — используй тот же api, не создавай новый makeUserApi!
+  // If a second call is needed — use the same api, don't create a new makeUserApi!
   const orders = await api.Orders.getAllOrdersByMarker('storage');
   if (isError(orders)) return { error: orders.message, statusCode: orders.statusCode };
 
-  return { ...result, newToken: getNewToken() }; // ← всегда возвращай новый токен!
+  return { ...result, newToken: getNewToken() }; // ← always return the new token!
 }
 ```
 
-## Методы и их рекомендуемые подходы
+## Methods and their recommended approaches
 
-| Методы | Подход | Тип |
+| Methods | Approach | Type |
 | --- | --- | --- |
-| AuthProvider (auth, signUp, generateCode, checkCode) | **Client Component напрямую** | `getApi()` на клиенте |
+| AuthProvider (auth, signUp, generateCode, checkCode) | **Client Component directly** | `getApi()` on client |
 | AuthProvider (getAuthProviders, getAuthProviderByMarker) | Server Component / Server Action / Client | `getApi()` |
 | Pages, Products, Menus, Blocks | Server Component / Server Action / Client | `getApi()` |
 | Forms (getFormByMarker) | Server Component / Server Action / Client | `getApi()` |
-| FormData (postFormsData) | Server Action или Client Component | `getApi()` |
+| FormData (postFormsData) | Server Action or Client Component | `getApi()` |
 | Orders, Users, Payments, Events | Server Action | `makeUserApi()` |
 
-## Прямой вызов SDK из Client Component
+## Direct SDK call from Client Component
 
-SDK доступен на клиенте благодаря `NEXT_PUBLIC_*` переменным окружения. Допустимые случаи:
+The SDK is available on the client thanks to `NEXT_PUBLIC_*` environment variables. Valid use cases:
 
-- **Авторизация** — обязательно на клиенте (fingerprint)
-- **Динамические данные** — поиск, фильтрация, загрузка по действию пользователя
-- **CSR-стратегия** — когда SSR не нужен
+- **Authentication** — must be on the client (fingerprint)
+- **Dynamic data** — search, filtering, loading on user action
+- **CSR strategy** — when SSR is not needed
 
 ```tsx
 'use client';
 import { getApi, isError } from '@/lib/oneentry';
 
-// Поиск — клиентский вызов
+// Search — client-side call
 async function handleSearch(query: string) {
   const results = await getApi().Products.searchProducts({ name: query });
   if (isError(results)) return [];

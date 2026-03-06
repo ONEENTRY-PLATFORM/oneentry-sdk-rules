@@ -3,32 +3,32 @@ type: skill
 skillConfig: {"name":"create-reviews"}
 -->
 
-# Создать раздел отзывов (FormData)
+# Create a Reviews Section (FormData)
 
-Аргументы: страница/товар для отзывов, нужны ли ответы на отзывы.
+Arguments: page/product for reviews, whether replies to reviews are needed.
 
 ---
 
-## Шаг 1: Получи маркер формы и formModuleConfigId
+## Step 1: Get the form marker and formModuleConfigId
 
 ```bash
 /inspect-api forms
 ```
 
-Найди форму отзывов. Поле `identifier` — маркер формы, `id` — `formModuleConfigId`.
+Find the reviews form. The `identifier` field is the form marker, `id` is the `formModuleConfigId`.
 
-Или через API:
+Or via API:
 
 ```typescript
 const forms = await getApi().Forms.getAllForms();
-// forms[].identifier — маркер, forms[].id — formModuleConfigId
+// forms[].identifier — marker, forms[].id — formModuleConfigId
 ```
 
-**⚠️ НЕ угадывай маркер и ID.** Спроси у пользователя если нет доступа к bash.
+**⚠️ Do NOT guess the marker and ID.** Ask the user if you don't have bash access.
 
 ---
 
-## Шаг 2: Создай Server Actions
+## Step 2: Create Server Actions
 
 ### app/actions/reviews.ts
 
@@ -37,9 +37,9 @@ const forms = await getApi().Forms.getAllForms();
 
 import { getApi, isError } from '@/lib/oneentry';
 
-// Чтение отзывов товара
-// isNested: 1 → возвращает parent-child структуру (отзывы + ответы)
-// entityIdentifier → фильтр по ID товара
+// Read product reviews
+// isNested: 1 → returns parent-child structure (reviews + replies)
+// entityIdentifier → filter by product ID
 export async function getProductReviews(
   formMarker: string,
   formModuleConfigId: number,
@@ -50,7 +50,7 @@ export async function getProductReviews(
     formMarker,
     formModuleConfigId,
     { entityIdentifier: productId, status: ['approved'] },
-    1,        // isNested: 1 — parent-child структура
+    1,        // isNested: 1 — parent-child structure
     locale,
     0,
     500,
@@ -59,7 +59,7 @@ export async function getProductReviews(
   return { data: (result as any).data || [], total: (result as any).total || 0 };
 }
 
-// Отправка отзыва (top-level)
+// Submit a review (top-level)
 export async function submitReview(
   formMarker: string,
   formModuleConfigId: number,
@@ -70,7 +70,7 @@ export async function submitReview(
     formIdentifier: formMarker,
     formModuleConfigId,
     moduleEntityIdentifier: String(productId),
-    replayTo: null,        // null = top-level отзыв (не ответ)
+    replayTo: null,        // null = top-level review (not a reply)
     status: 'approved',
     formData,
   });
@@ -78,20 +78,20 @@ export async function submitReview(
   return { success: true };
 }
 
-// Ответ на отзыв
+// Reply to a review
 export async function submitComment(
   formMarker: string,
   formModuleConfigId: number,
   productId: number,
   parentReviewId: number,
-  commentMarker: string,  // маркер текстового поля (из схемы формы)
+  commentMarker: string,  // text field marker (from form schema)
   text: string,
 ) {
   const result = await (getApi().FormData as any).postFormsData({
     formIdentifier: formMarker,
     formModuleConfigId,
     moduleEntityIdentifier: String(productId),
-    replayTo: String(parentReviewId),  // ID родительского отзыва
+    replayTo: String(parentReviewId),  // parent review ID
     status: 'approved',
     formData: [{ marker: commentMarker, type: 'string', value: text }],
   });
@@ -102,10 +102,10 @@ export async function submitComment(
 
 ---
 
-## Шаг 3: Структура данных ответа
+## Step 3: Response data structure
 
 ```typescript
-// Разделение parent / child reviews
+// Splitting parent / child reviews
 const parentReviews = data.filter((r: any) => r.parentId === null);
 
 const replyMap: Record<number, any[]> = data.reduce((acc: any, r: any) => {
@@ -115,17 +115,17 @@ const replyMap: Record<number, any[]> = data.reduce((acc: any, r: any) => {
   return acc;
 }, {});
 
-// Поля отзыва из formData
+// Review fields from formData
 const rating = review.formData.find((f: any) => f.marker === 'rating')?.value;
-// ⚠️ rating хранится как строка: '5', конвертируй через Number(rating)
+// ⚠️ rating is stored as a string: '5', convert via Number(rating)
 
-// Метаданные
-review.parentId         // null = отзыв, number = ответ
-review.time             // дата
-review.userIdentifier   // email пользователя
-review.entityIdentifier // ID товара
+// Metadata
+review.parentId         // null = review, number = reply
+review.time             // date
+review.userIdentifier   // user email
+review.entityIdentifier // product ID
 
-// Средний рейтинг
+// Average rating
 const avg = parentReviews.length
   ? parentReviews.reduce((sum: number, r: any) => {
       const val = r.formData.find((f: any) => f.marker === 'rating')?.value;
@@ -136,9 +136,9 @@ const avg = parentReviews.length
 
 ---
 
-## Шаг 4: Создай компоненты
+## Step 4: Create components
 
-### components/ReviewsList.tsx
+### components/product/ReviewsList.tsx
 
 ```tsx
 'use client';
@@ -227,18 +227,18 @@ export function ReviewsList({
 
 ---
 
-## Шаг 5: Напомни ключевые правила
+## Step 5: Reminder — key rules
 
 ```
-✅ Отзывы созданы. Ключевые правила:
+✅ Reviews created. Key rules:
 
-1. formMarker и formModuleConfigId — из /inspect-api forms или Forms.getAllForms(), НЕ угадывать
-2. isNested: 1 — обязательно для parent-child структуры (отзывы + ответы)
-3. entityIdentifier в body — фильтр по товару
-4. replayTo: null → отзыв, replayTo: String(id) → ответ
-   ⚠️ Опечатка в SDK: поле называется replayTo, не replyTo
-5. rating хранится как строка ('5'), конвертируй через Number()
-6. parentId === null → отзыв, parentId !== null → ответ
-7. FormData.postFormsData требует Server Action
-8. Маркеры полей (rating, text и т.д.) — зависят от схемы формы в OneEntry
+1. formMarker and formModuleConfigId — from /inspect-api forms or Forms.getAllForms(), do NOT guess
+2. isNested: 1 — required for parent-child structure (reviews + replies)
+3. entityIdentifier in body — filter by product
+4. replayTo: null → review, replayTo: String(id) → reply
+   ⚠️ Typo in SDK: field is named replayTo, not replyTo
+5. rating is stored as a string ('5'), convert via Number()
+6. parentId === null → review, parentId !== null → reply
+7. FormData.postFormsData requires Server Action
+8. Field markers (rating, text, etc.) — depend on the form schema in OneEntry
 ```

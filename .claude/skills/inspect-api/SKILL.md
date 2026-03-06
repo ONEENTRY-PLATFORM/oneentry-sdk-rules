@@ -5,42 +5,42 @@ skillConfig: {"name":"inspect-api"}
 
 ---
 name: inspect-api
-description: Прочитать .env.local и выполнить curl-запросы к OneEntry API для получения реальных маркеров, атрибутов и структур данных перед написанием кода
+description: Read .env.local and execute curl requests to OneEntry API to get real markers, attributes, and data structures before writing code
 argument-hint: "pages|menus|forms|products|product-statuses|auth-providers|all"
 allowed-tools: Read, Bash
 ---
 
-# Inspect api
+# Inspect API
 
-Прочитай `.env.local` чтобы найти `NEXT_PUBLIC_ONEENTRY_URL` и `NEXT_PUBLIC_ONEENTRY_TOKEN`. Если файл не найден — попробуй `.env`.
+Read `.env.local` to find `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the file is not found — try `.env`.
 
-Затем выполни curl-запросы в зависимости от аргумента `$ARGUMENTS`.
-Если аргумент не указан или `all` — выполни все запросы ниже.
+Then execute curl requests depending on the `$ARGUMENTS` argument.
+If no argument is specified or `all` — execute all requests below.
 
-## Запросы
+## Requests
 
-**pages** — маркеры страниц для `getPageByUrl()`:
+**pages** — page markers for `getPageByUrl()`:
 ```bash
 curl -s "https://YOUR_URL/api/content/pages?langCode=en_US" \
   -H "x-app-token: YOUR_TOKEN" | python -m json.tool
 ```
-Смотри поле `pageUrl` у каждой страницы.
+Look at the `pageUrl` field of each page.
 
-**menus** — маркеры меню для `getMenusByMarker()`:
+**menus** — menu markers for `getMenusByMarker()`:
 ```bash
 curl -s "https://YOUR_URL/api/content/menus?langCode=en_US" \
   -H "x-app-token: YOUR_TOKEN" | python -m json.tool
 ```
-Смотри поле `identifier`.
+Look at the `identifier` field.
 
-**forms** — маркеры форм для `getFormByMarker()`:
+**forms** — form markers for `getFormByMarker()`:
 ```bash
 curl -s "https://YOUR_URL/api/content/forms?langCode=en_US" \
   -H "x-app-token: YOUR_TOKEN" | python -m json.tool
 ```
-Смотри поле `identifier`.
+Look at the `identifier` field.
 
-**products** — структура товара, `statusIdentifier`, атрибуты:
+**products** — product structure, `statusIdentifier`, attributes:
 ```bash
 curl -s -X POST \
   "https://YOUR_URL/api/content/products/all?langCode=en_US&limit=1" \
@@ -48,59 +48,59 @@ curl -s -X POST \
   -H "Content-Type: application/json" \
   -d "[]" | python -m json.tool
 ```
-Смотри `items[0].statusIdentifier` и `items[0].attributeValues` (все маркеры и типы атрибутов).
+Look at `items[0].statusIdentifier` and `items[0].attributeValues` (all attribute markers and types).
 
-**product-statuses** — маркеры статусов для фильтрации по `statusMarker`:
+**product-statuses** — status markers for filtering by `statusMarker`:
 ```bash
 curl -s "https://YOUR_URL/api/content/product-statuses?langCode=en_US" \
   -H "x-app-token: YOUR_TOKEN" | python -m json.tool
 ```
-Смотри поле `identifier`.
+Look at the `identifier` field.
 
-**auth-providers** — маркеры провайдеров для `AuthProvider.auth()`:
+**auth-providers** — provider markers for `AuthProvider.auth()`:
 ```bash
 curl -s "https://YOUR_URL/api/auth-providers" \
   -H "x-app-token: YOUR_TOKEN" | python -m json.tool
 ```
-Смотри поле `identifier`.
+Look at the `identifier` field.
 
-## Вывод
+## Output
 
-После выполнения запросов выведи структурированный отчёт:
+After executing the requests, output a structured report:
 
 ```md
-## Результаты inspect-api
+## inspect-api Results
 
-### Pages (маркеры для getPageByUrl)
-- "home" — Главная
-- "about" — О нас
+### Pages (markers for getPageByUrl)
+- "home" — Home
+- "about" — About Us
 ...
 
-### Menus (маркеры для getMenusByMarker)
-- "main_web" — Основное меню
+### Menus (markers for getMenusByMarker)
+- "main_web" — Main Menu
 ...
 
-### Forms (маркеры для getFormByMarker)
-- "reg" — Регистрация
-- "login" — Вход
+### Forms (markers for getFormByMarker)
+- "reg" — Registration
+- "login" — Login
 ...
 
-### Products (пример атрибутов первого товара)
+### Products (first product attribute example)
 statusIdentifier: "in_stock"
 attributeValues:
   - title (string)
   - price (float)
-  - image (image) ← value это МАССИВ, использовать value[0].downloadLink
+  - image (image) ← value is an ARRAY, use value[0].downloadLink
 ...
 
-### Product Statuses (маркеры для statusMarker)
+### Product Statuses (markers for statusMarker)
 - "in_stock"
 - "out_of_stock"
 ...
 
-### Auth Providers (маркеры для AuthProvider.auth)
+### Auth Providers (markers for AuthProvider.auth)
 - "email"
 ...
 ```
 
-Если `python` недоступен — используй `python3 -m json.tool` или просто вывести raw JSON.
+If `python` is unavailable — use `python3 -m json.tool` or just output raw JSON.

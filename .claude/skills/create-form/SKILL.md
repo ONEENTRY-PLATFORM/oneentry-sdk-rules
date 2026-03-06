@@ -3,49 +3,49 @@ type: skill
 skillConfig: {"name":"create-form"}
 -->
 
-# Создать динамическую форму из OneEntry Forms API
+# Create a Dynamic Form from OneEntry Forms API
 
-Аргумент: `marker` (маркер формы в OneEntry)
+Argument: `marker` (form marker in OneEntry)
 
 ---
 
-## Шаг 1: Получи маркер формы
+## Step 1: Get the form marker
 
-Если маркер не передан:
+If the marker is not passed:
 
 ```bash
 /inspect-api forms
 ```
 
-Смотри поле `identifier` — это маркер для `getFormByMarker()`.
+Look at the `identifier` field — this is the marker for `getFormByMarker()`.
 
-Или через API напрямую:
+Or directly via API:
 
 ```typescript
 const forms = await getApi().Forms.getAllForms();
-// forms[].identifier — маркер формы
+// forms[].identifier — form marker
 ```
 
-**⚠️ НЕ угадывай маркер** (`contact`, `feedback` и т.д.).
+**⚠️ DON'T guess the marker** (`contact`, `feedback`, etc.).
 
 ---
 
-## Шаг 2: Уточни у пользователя
+## Step 2: Clarify with the user
 
-1. **Куда отправляются данные?**
-   - В OneEntry через `postFormsData` — стандартный сценарий
-   - В другой эндпоинт — нужна другая логика
-2. **Нужна ли капча?** — форма может содержать поле типа `spam` (reCAPTCHA v3)
-3. **Где отображается форма?** (страница, модалка, drawer?)
-4. **Есть ли верстка?** — если да, копируй точно
+1. **Where is the data sent?**
+   - To OneEntry via `postFormsData` — standard scenario
+   - To another endpoint — different logic required
+2. **Is a captcha needed?** — the form may contain a field of type `spam` (reCAPTCHA v3)
+3. **Where is the form displayed?** (page, modal, drawer?)
+4. **Is there a layout?** — if yes, copy it exactly
 
 ---
 
-## Шаг 3: Создай Server Actions
+## Step 3: Create Server Actions
 
 ### app/actions/forms.ts
 
-> Если файл уже существует — прочитай и дополни, не дублируй.
+> If the file already exists — read and extend it, don't duplicate.
 
 ```typescript
 // app/actions/forms.ts
@@ -53,7 +53,7 @@ const forms = await getApi().Forms.getAllForms();
 
 import { getApi, isError } from '@/lib/oneentry';
 
-// Получение структуры формы
+// Get form structure
 export async function getFormByMarker(marker: string, locale = 'en_US') {
   const form = await getApi().Forms.getFormByMarker(marker, locale);
   if (isError(form)) return { error: form.message, statusCode: form.statusCode };
@@ -74,7 +74,7 @@ export async function getFormByMarker(marker: string, locale = 'en_US') {
   };
 }
 
-// Отправка данных формы
+// Submit form data
 export async function submitForm(
   formIdentifier: string,
   formData: Array<{ marker: string; value: string | number | boolean }>,
@@ -90,18 +90,18 @@ export async function submitForm(
 
 ---
 
-## Шаг 4: Создай компонент формы
+## Step 4: Create the form component
 
-### Ключевые принципы
+### Key principles
 
-- Поля рендерятся **динамически** по `field.type` — не хардкодить `<input>`
-- Поле `spam` — это **невидимая капча** (reCAPTCHA v3), рендерить `<FormReCaptcha>`, НЕ `<input>`
-- Тип `'spam'`, не `'captcha'` — распространённая ошибка!
-- `formData` для отправки — только `{ marker, value }`, только непустые значения
+- Fields are rendered **dynamically** by `field.type` — don't hardcode `<input>`
+- The `spam` field is an **invisible captcha** (reCAPTCHA v3), render `<FormReCaptcha>`, NOT `<input>`
+- Type is `'spam'`, not `'captcha'` — a common mistake!
+- `formData` for submission — only `{ marker, value }`, only non-empty values
 
-### Таблица типов полей → HTML
+### Field types → HTML table
 
-| `field.type`                | Рендер                                            |
+| `field.type`                | Render                                            |
 |-----------------------------|---------------------------------------------------|
 | `string`                    | `<input type="text">`                             |
 | `integer`, `real`, `float`  | `<input type="number">`                           |
@@ -109,10 +109,10 @@ export async function submitForm(
 | `date`                      | `<input type="date">`                             |
 | `dateTime`                  | `<input type="datetime-local">`                   |
 | `time`                      | `<input type="time">`                             |
-| `list`                      | `<select>`, `<select multiple>` или `<checkbox>`  |
+| `list`                      | `<select>`, `<select multiple>` or `<checkbox>`   |
 | `radioButton`               | `<input type="radio">`                            |
 | `file`                      | `<input type="file">`                             |
-| `spam`                      | `<FormReCaptcha>` — НЕ `<input>`!                 |
+| `spam`                      | `<FormReCaptcha>` — NOT `<input>`!                |
 
 #### components/DynamicForm.tsx
 
@@ -124,7 +124,7 @@ import { useState, useEffect } from 'react';
 import { getFormByMarker, submitForm } from '@/app/actions/forms';
 
 interface DynamicFormProps {
-  marker: string;      // маркер формы в OneEntry
+  marker: string;      // form marker in OneEntry
   locale?: string;
   onSuccess?: () => void;
 }
@@ -138,7 +138,7 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Состояние капчи (нужно если форма содержит поле spam)
+  // Captcha state (needed if form contains spam field)
   const [captchaToken, setCaptchaToken] = useState('');
   const [isCaptcha, setIsCaptcha] = useState(false);
   const [isCaptchaValid, setIsCaptchaValid] = useState(false);
@@ -147,7 +147,7 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
     getFormByMarker(marker, locale).then((result) => {
       if ('error' in result) { setError(result.error || ''); return; }
       setFormId(result.identifier);
-      // Сортировка полей по position
+      // Sort fields by position
       const sorted = [...result.attributes].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
       setFields(sorted);
       setFormLoading(false);
@@ -168,7 +168,7 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
       .filter(f => f.type !== 'spam' && values[f.marker] !== undefined && values[f.marker] !== '')
       .map(f => ({ marker: f.marker, value: values[f.marker] }));
 
-    // Добавляем токен капчи если есть
+    // Add captcha token if present
     if (captchaToken) {
       formData.push({ marker: 'spam', value: captchaToken });
     }
@@ -211,7 +211,7 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
   );
 }
 
-// Рендер поля по типу
+// Render field by type
 function renderField(
   field: any,
   values: Record<string, string>,
@@ -226,11 +226,11 @@ function renderField(
   const value = values[field.marker] || '';
   const onChange = (val: string) => setValues(prev => ({ ...prev, [field.marker]: val }));
 
-  // ⚠️ spam = reCAPTCHA v3, НЕ input!
+  // ⚠️ spam = reCAPTCHA v3, NOT input!
   if (field.type === 'spam') {
     const siteKey = field.validators?.siteKey || '';
     if (!siteKey) return null;
-    // Импортируй FormReCaptcha и используй здесь:
+    // Import FormReCaptcha and use here:
     // return (
     //   <FormReCaptcha
     //     key={field.marker}
@@ -241,7 +241,7 @@ function renderField(
     //     setIsValid={captchaHandlers.setIsCaptchaValid}
     //   />
     // );
-    return null; // Замени на FormReCaptcha
+    return null; // Replace with FormReCaptcha
   }
 
   if (field.type === 'text') {
@@ -297,7 +297,7 @@ function renderField(
     );
   }
 
-  // date, dateTime, time → соответствующий type
+  // date, dateTime, time → corresponding type
   const inputType: Record<string, string> = {
     date: 'date',
     dateTime: 'datetime-local',
@@ -323,9 +323,9 @@ function renderField(
 }
 ```
 
-### Компонент FormReCaptcha (если нужна капча)
+### FormReCaptcha component (if captcha is needed)
 
-> Копируй этот компонент в `components/FormReCaptcha.tsx` если форма содержит поле `spam`.
+> Copy this component to `components/FormReCaptcha.tsx` if the form contains a `spam` field.
 
 ```tsx
 // components/FormReCaptcha.tsx
@@ -401,16 +401,16 @@ export function FormReCaptcha({
 
 ---
 
-## Шаг 5: Напомни ключевые правила
+## Step 5: Remind of key rules
 
 ```md
-✅ Форма создана. Ключевые правила:
+✅ Form created. Key rules:
 
-1. Тип капчи — 'spam', НЕ 'captcha'. Рендерить FormReCaptcha, НЕ <input>!
-2. Поля рендерятся динамически по field.type — не хардкодить
-3. formData для отправки — только { marker, value }, только непустые
-4. Forms API требует Server Action — нельзя вызывать из 'use client' напрямую
-5. Сортируй поля по field.position перед рендером
-6. submitForm через FormData.postFormData, не через Forms API
-7. Маркер формы — получать через /inspect-api forms, НЕ угадывать
+1. Captcha type — 'spam', NOT 'captcha'. Render FormReCaptcha, NOT <input>!
+2. Fields are rendered dynamically by field.type — don't hardcode
+3. formData for submission — only { marker, value }, only non-empty
+4. Forms API requires Server Action — cannot be called from 'use client' directly
+5. Sort fields by field.position before rendering
+6. submitForm via FormData.postFormData, not via Forms API
+7. Form marker — get via /inspect-api forms, DO NOT guess
 ```

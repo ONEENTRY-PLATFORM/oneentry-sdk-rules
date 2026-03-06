@@ -7,29 +7,29 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# AuthProvider — правила OneEntry
+# AuthProvider — OneEntry rules
 
-## auth — авторизация пользователя
+## auth — user authentication
 
 ```ts
 AuthProvider.auth(marker, body): Promise<IAuthEntity | IError>
 ```
 
-**Параметры:**
+**Parameters:**
 
-- `marker` — текстовый идентификатор провайдера авторизации (например `"email"`)
-- `body` — объект `IAuthPostBody`
+- `marker` — text identifier of the auth provider (e.g. `"email"`)
+- `body` — `IAuthPostBody` object
 
-**Структура body — только `authData`:**
+**Body structure — only `authData`:**
 
 ```ts
-// ❌ НЕПРАВИЛЬНО — лишние поля, пустые значения
+// ❌ WRONG — extra fields, empty values
 const body = {
-  ...formField,           // лишние поля из Forms API (type, localizeInfos и т.д.)
-  value: values[marker] || '' // пустая строка → 400
+  ...formField,           // extra fields from Forms API (type, localizeInfos, etc.)
+  value: values[marker] || '' // empty string → 400
 }
 
-// ✅ ПРАВИЛЬНО — только { marker, value }, фильтровать пустые
+// ✅ CORRECT — only { marker, value }, filter out empty
 const body: IAuthPostBody = {
   authData: formFields
     .filter(f => values[f.marker]?.trim())
@@ -37,7 +37,7 @@ const body: IAuthPostBody = {
 }
 ```
 
-**Пример запроса:**
+**Example request:**
 
 ```json
 {
@@ -48,7 +48,7 @@ const body: IAuthPostBody = {
 }
 ```
 
-**Ответ `IAuthEntity`:**
+**Response `IAuthEntity`:**
 
 ```json
 {
@@ -59,7 +59,7 @@ const body: IAuthPostBody = {
 }
 ```
 
-После успешного `auth` — сохрани токены:
+After successful `auth` — save tokens:
 
 ```ts
 localStorage.setItem('accessToken', result.accessToken)
@@ -69,49 +69,49 @@ localStorage.setItem('authProviderMarker', marker)
 
 ---
 
-## auth и signUp — ТОЛЬКО из Client Component (fingerprint)
+## auth and signUp — ONLY from Client Component (fingerprint)
 
-`auth()`, `signUp()`, `generateCode()`, `checkCode()`, `activateUser()`, `changePassword()` передают **fingerprint устройства** пользователя. На сервере SDK тоже генерирует fingerprint, но в `deviceInfo.browser` будет `"Node.js/..."` вместо реального браузера пользователя. На клиенте fingerprint строится из реальных характеристик браузера и устройства.
+`auth()`, `signUp()`, `generateCode()`, `checkCode()`, `activateUser()`, `changePassword()` send the user's **device fingerprint**. On the server the SDK also generates a fingerprint, but `deviceInfo.browser` will be `"Node.js/..."` instead of the real user browser. On the client the fingerprint is built from real browser and device characteristics.
 
 ```ts
-// ❌ НЕЖЕЛАТЕЛЬНО — через Server Action (deviceInfo.browser = "Node.js/...", не реальный браузер)
+// ❌ NOT RECOMMENDED — via Server Action (deviceInfo.browser = "Node.js/...", not real browser)
 // app/actions/auth.ts → 'use server'
 export async function signIn(marker, authData) {
-  return await getApi().AuthProvider.auth(marker, { authData }) // browser в fingerprint = Node.js
+  return await getApi().AuthProvider.auth(marker, { authData }) // browser in fingerprint = Node.js
 }
 
-// ✅ ПРАВИЛЬНО — напрямую из Client Component
+// ✅ CORRECT — directly from Client Component
 // components/AuthForm.tsx → 'use client'
 import { getApi, isError } from '@/lib/oneentry'
 
 const result = await getApi().AuthProvider.auth(marker, { authData })
-if (isError(result)) { /* обработка ошибки */ return }
+if (isError(result)) { /* handle error */ return }
 localStorage.setItem('accessToken', result.accessToken)
 localStorage.setItem('refreshToken', result.refreshToken)
 ```
 
-**Можно через Server Action (fingerprint не нужен):**
+**Can be called via Server Action (no fingerprint needed):**
 
 - `getAuthProviders()` / `getAuthProviderByMarker(marker)`
-- `logout(marker, token)` — refreshToken передаётся параметром
+- `logout(marker, token)` — refreshToken passed as parameter
 - `logoutAll(marker)`
 
 ---
 
-## signUp — регистрация
+## signUp — registration
 
 ```ts
 AuthProvider.signUp(marker, body: ISignUpData, langCode?): Promise<ISignUpEntity | IError>
 ```
 
-**Критичные правила:**
+**Critical rules:**
 
-- `authData` — только `{ marker, value }`, без пустых строк
-- `notificationData.phoneSMS` — не передавать если нет значения (пустая строка → 400)
-- `formData` — дополнительные поля профиля (не authData!)
+- `authData` — only `{ marker, value }`, no empty strings
+- `notificationData.phoneSMS` — do not pass if no value (empty string → 400)
+- `formData` — additional profile fields (not authData!)
 
 ```ts
-// ✅ Правильная структура
+// ✅ Correct structure
 await getApi().AuthProvider.signUp(marker, {
   formIdentifier: 'reg',
   authData: authFields.filter(f => values[f.marker]?.trim()).map(f => ({ marker: f.marker, value: values[f.marker] })),
@@ -119,24 +119,24 @@ await getApi().AuthProvider.signUp(marker, {
   notificationData: {
     email: userEmail,
     phonePush: [],
-    // phoneSMS НЕ передаём — пустая строка вызовет 400
+    // phoneSMS NOT passed — empty string causes 400
   } as any
 })
 ```
 
 ---
 
-## Получение маркеров провайдеров и formIdentifier
+## Getting provider markers and formIdentifier
 
-Не угадывай маркеры (`"email"`, `"phone"` и т.д.) — получи список из API:
+Don't guess markers (`"email"`, `"phone"`, etc.) — get the list from the API:
 
 ```ts
 const providers = await getApi().AuthProvider.getAuthProviders()
-// providers[0].identifier       — маркер провайдера для auth()
-// providers[0].formIdentifier   — маркер формы с полями для этого провайдера
+// providers[0].identifier       — provider marker for auth()
+// providers[0].formIdentifier   — form marker with fields for this provider
 ```
 
-**Полная структура ответа провайдера:**
+**Full provider response structure:**
 
 ```json
 {
@@ -150,26 +150,26 @@ const providers = await getApi().AuthProvider.getAuthProviders()
 
 ---
 
-## Динамические поля формы авторизации — ОБЯЗАТЕЛЬНЫЙ ПАТТЕРН
+## Dynamic auth form fields — REQUIRED PATTERN
 
-**НИКОГДА** не хардкодь `<input name="email_reg">` или `<input name="password_reg">`. Всегда загружай поля через `getFormByMarker(formIdentifier)`.
+**NEVER** hardcode `<input name="email_reg">` or `<input name="password_reg">`. Always load fields via `getFormByMarker(formIdentifier)`.
 
-**Алгоритм:**
+**Algorithm:**
 
-1. Получи провайдеры → возьми `formIdentifier` нужного провайдера
-2. Вызови `getFormByMarker(formIdentifier)` → получи `attributes[]`
-3. Отфильтруй поля по назначению (sign-in vs sign-up)
-4. Рендери динамически по `attribute.type` и `attribute.marker`
+1. Get providers → take `formIdentifier` of the needed provider
+2. Call `getFormByMarker(formIdentifier)` → get `attributes[]`
+3. Filter fields by purpose (sign-in vs sign-up)
+4. Render dynamically by `attribute.type` and `attribute.marker`
 
 ```ts
 // app/actions/auth.ts — 'use server'
-// getSignInFields можно через Server Action — Forms API, fingerprint не нужен
+// getSignInFields can be a Server Action — Forms API, no fingerprint needed
 
-// Маркеры auth-полей (не угадывай — получи из реального API через /inspect-api)
+// Auth field markers (don't guess — get from real API via /inspect-api)
 const AUTH_FIELD_MARKERS = ['email_reg', 'password_reg']
 
 export async function getSignInFields() {
-  const form = await getApi().Forms.getFormByMarker('reg') // formIdentifier из провайдера
+  const form = await getApi().Forms.getFormByMarker('reg') // formIdentifier from provider
   if (isError(form)) return { error: form.message }
 
   const fields = (form as any).attributes
@@ -185,33 +185,33 @@ export async function getSignInFields() {
   return { fields }
 }
 
-// ⚠️ auth — НЕ через Server Action, вызывать напрямую из Client Component (fingerprint)
+// ⚠️ auth — NOT via Server Action, call directly from Client Component (fingerprint)
 ```
 
-**Вызов auth в Client Component:**
+**Calling auth in Client Component:**
 
 ```ts
 // 'use client'
 import { getApi, isError } from '@/lib/oneentry'
 
-// authData при сабмите — строить из реальных полей, фильтровать пустые
+// authData on submit — build from real fields, filter empty
 const result = await getApi().AuthProvider.auth('email', { authData })
 if (isError(result)) return { error: result.message }
 localStorage.setItem('accessToken', result.accessToken)
 localStorage.setItem('refreshToken', result.refreshToken)
 ```
 
-**Динамический рендер в Client Component:**
+**Dynamic render in Client Component:**
 
 ```tsx
-// Определение типа <input> по маркеру (не по type из API — все поля имеют type: "string")
+// Determine <input> type by marker (not by type from API — all fields have type: "string")
 function getInputType(marker: string) {
   if (marker.includes('password') || marker.includes('pass')) return 'password'
   if (marker.includes('email')) return 'email'
   return 'text'
 }
 
-// Рендер поля
+// Field render
 {fields.map((field) => (
   <div key={field.marker} className="input-group">
     <label htmlFor={field.marker}>{field.label}</label>
@@ -225,7 +225,7 @@ function getInputType(marker: string) {
 ))}
 ```
 
-**authData при сабмите — строить из реальных полей, фильтровать пустые:**
+**authData on submit — build from real fields, filter empty:**
 
 ```ts
 const authData = fields
@@ -238,18 +238,18 @@ const authData = fields
 const result = await getApi().AuthProvider.auth('email', { authData })
 ```
 
-**Откуда взять `AUTH_FIELD_MARKERS`:**
+**Where to get `AUTH_FIELD_MARKERS`:**
 
-- Запусти `/inspect-api auth-providers` → смотри `formIdentifier` провайдера
-- Запусти `/inspect-api forms` → смотри поля формы с этим `identifier`
-- Выбери маркеры, которые являются auth-credentials (email + password), а не профильными данными (имя, телефон, адрес)
+- Run `/inspect-api auth-providers` → check `formIdentifier` of the provider
+- Run `/inspect-api forms` → check form fields with that `identifier`
+- Select markers that are auth-credentials (email + password), not profile fields (name, phone, address)
 
 ---
 
 ## logout
 
 ```ts
-// marker берётся из localStorage (сохранён при логине)
+// marker is taken from localStorage (saved on login)
 export async function logout(marker: string, token: string) {
   const result = await getApi().AuthProvider.logout(marker, token)
   if (isError(result)) return { error: result.message, statusCode: result.statusCode }

@@ -3,60 +3,60 @@ type: skill
 skillConfig: {"name":"create-product-card"}
 -->
 
-# Создать карточку товара
+# Create a Product Card
 
 ---
 
-## Шаг 1: Проверь реальные атрибуты товара
+## Step 1: Check real product attributes
 
-**ПЕРЕД написанием кода** — узнай реальные маркеры атрибутов:
+**BEFORE writing code** — get the real attribute markers:
 
 ```bash
 /inspect-api products
 ```
 
-Что смотреть в `items[0].attributeValues`:
-- Маркер изображения (тип `image` или `groupOfImages`) — например `pic`, `photo`, `image`
-- Маркер цены (тип `float`/`real`/`integer`) — например `price`
-- Маркер старой цены / скидки — например `sale`, `old_price`
-- Маркер стикеров/бейджей (тип `list` с `extended`) — например `stickers`
-- Маркер количества на складе (тип `integer`) — например `units_product`, `stock`
-- `statusIdentifier` — реальный идентификатор статуса "в наличии"
+What to look for in `items[0].attributeValues`:
+- Image marker (type `image` or `groupOfImages`) — e.g. `pic`, `photo`, `image`
+- Price marker (type `float`/`real`/`integer`) — e.g. `price`
+- Old price / discount marker — e.g. `sale`, `old_price`
+- Stickers/badges marker (type `list` with `extended`) — e.g. `stickers`
+- Stock quantity marker (type `integer`) — e.g. `units_product`, `stock`
+- `statusIdentifier` — real "in stock" status identifier
 
-**⚠️ НЕ угадывай маркеры** — они уникальны для каждого проекта.
-
----
-
-## Шаг 2: Уточни у пользователя
-
-1. **Есть ли верстка карточки?** — если да, копируй точно, меняй только данные
-2. **Куда ведёт ссылка с карточки?** — например `/shop/product/[id]` или `/${locale}/product/[id]`
-3. **Нужна ли кнопка "В корзину"?** — если да, уточни как реализована корзина
-4. **Нужна ли кнопка "Избранное"?** — если да, уточни как реализовано
+**⚠️ Do NOT guess markers** — they are unique per project.
 
 ---
 
-## Шаг 3: Проверь тип атрибута изображения в SDK
+## Step 2: Clarify with the user
 
-Для `image` тип — `value` это **МАССИВ**:
+1. **Is there existing markup?** — if yes, copy it exactly, only replace data
+2. **Where does the card link to?** — e.g. `/shop/product/[id]` or `/${locale}/product/[id]`
+3. **Is an "Add to cart" button needed?** — if yes, clarify how the cart is implemented
+4. **Is a "Favorites" button needed?** — if yes, clarify how favorites are implemented
+
+---
+
+## Step 3: Check the image attribute type in the SDK
+
+For `image` type — `value` is an **ARRAY**:
 
 ```typescript
 // ✅ image → value[0].downloadLink
 const imageUrl = attrs.pic?.value?.[0]?.downloadLink || '';
 
-// ❌ НЕ attrs.pic?.value?.downloadLink (без [0])
+// ❌ NOT attrs.pic?.value?.downloadLink (missing [0])
 ```
 
-Для `groupOfImages` — аналогично, `value` это массив.
+For `groupOfImages` — same, `value` is an array.
 
 ---
 
-## Шаг 4: Создай компонент карточки
+## Step 4: Create the card component
 
-### Базовый шаблон
+### Basic template
 
 ```tsx
-// components/ProductCard.tsx
+// components/product/ProductCard.tsx
 import Image from 'next/image';
 import Link from 'next/link';
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces';
@@ -69,21 +69,21 @@ interface ProductCardProps {
 export function ProductCard({ product, locale }: ProductCardProps) {
   const attrs = product.attributeValues || {};
 
-  // ⚠️ Замени маркеры на реальные из /inspect-api!
-  // image тип — value это МАССИВ, берём [0]
+  // ⚠️ Replace markers with real ones from /inspect-api!
+  // image type — value is an ARRAY, take [0]
   const imageUrl = attrs.pic?.value?.[0]?.downloadLink || '';
 
   const title = product.localizeInfos?.title || '';
   const price = attrs.price?.value || 0;
   const oldPrice = attrs.sale?.value || 0;
 
-  // Статус: замени 'in_stock' на реальный statusIdentifier из /inspect-api
+  // Status: replace 'in_stock' with real statusIdentifier from /inspect-api
   const inStock = product.statusIdentifier === 'in_stock';
 
   return (
     <article>
       <Link href={`/${locale}/shop/product/${product.id}`}>
-        {/* Изображение */}
+        {/* Image */}
         {imageUrl ? (
           <Image
             src={imageUrl}
@@ -96,16 +96,16 @@ export function ProductCard({ product, locale }: ProductCardProps) {
           <div>No image</div>
         )}
 
-        {/* Название */}
+        {/* Title */}
         <h2>{title}</h2>
 
-        {/* Цена */}
+        {/* Price */}
         <div>
           <span>{price}</span>
           {oldPrice > 0 && <span className="line-through">{oldPrice}</span>}
         </div>
 
-        {/* Статус */}
+        {/* Status */}
         {!inStock && <div>Out of stock</div>}
       </Link>
     </article>
@@ -113,38 +113,38 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 }
 ```
 
-### Со стикерами (list с extended)
+### With stickers (list with extended)
 
 ```tsx
-// Стикеры/бейджи — тип list, value это массив объектов с extended
-// extended.value.downloadLink — URL иконки стикера
+// Stickers/badges — type list, value is an array of objects with extended
+// extended.value.downloadLink — sticker icon URL
 const stickers = attrs.stickers?.value || [];
 const stickerIconUrl = stickers[0]?.extended?.value?.downloadLink || '';
 
-// В JSX:
+// In JSX:
 {stickerIconUrl && (
   <Image src={stickerIconUrl} alt="" width={24} height={24} />
 )}
 ```
 
-### С количеством на складе
+### With stock quantity
 
 ```tsx
-// Количество на складе — тип integer
+// Stock quantity — type integer
 const stockQty = Number(attrs.units_product?.value) || 0;
 const isOutOfStock = !inStock || stockQty === 0;
 
-// В JSX:
+// In JSX:
 {isOutOfStock
   ? <div>Out of stock</div>
   : <button>Add to cart</button>
 }
 ```
 
-### С кнопкой избранного (через контекст)
+### With favorites button (via context)
 
 ```tsx
-// Если есть FavoritesContext
+// If FavoritesContext exists
 'use client';
 
 import { useFavorites } from '@/lib/FavoritesContext';
@@ -162,7 +162,7 @@ export function ProductCard({ product, locale }: ProductCardProps) {
       >
         {favorited ? '♥' : '♡'}
       </button>
-      {/* ... остальная карточка */}
+      {/* ... rest of card */}
     </article>
   );
 }
@@ -170,15 +170,15 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 
 ---
 
-## Шаг 5: Напомни ключевые правила
+## Step 5: Reminder — key rules
 
-✅ Компонент создан. Ключевые правила:
+✅ Component created. Key rules:
 
 ```md
-1. image/groupOfImages → value это МАССИВ → attrs.pic?.value?.[0]?.downloadLink
-2. Маркеры атрибутов уникальны для проекта — проверяй через /inspect-api
-3. statusIdentifier — реальный статус из /inspect-api, не угадывай 'in_stock'
-4. Стикеры (list с extended) → stickers[0]?.extended?.value?.downloadLink
-5. next/image требует remotePatterns в next.config.ts для *.oneentry.cloud
-6. Если есть верстка — копируй классы точно, меняй только данные
+1. image/groupOfImages → value is an ARRAY → attrs.pic?.value?.[0]?.downloadLink
+2. Attribute markers are project-specific — verify via /inspect-api
+3. statusIdentifier — real status from /inspect-api, don't guess 'in_stock'
+4. Stickers (list with extended) → stickers[0]?.extended?.value?.downloadLink
+5. next/image requires remotePatterns in next.config.ts for *.oneentry.cloud
+6. If markup exists — copy classes exactly, only replace data
 ```

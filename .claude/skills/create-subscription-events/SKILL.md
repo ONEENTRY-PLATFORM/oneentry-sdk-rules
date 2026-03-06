@@ -3,43 +3,43 @@ type: skill
 skillConfig: {"name":"create-subscription-events"}
 -->
 
-# Создать подписку на события товара
+# Create Product Event Subscriptions
 
-Создаёт подписку на изменение цены и статуса наличия товара через Events API OneEntry. Пользователь получает уведомление когда товар снова появится в наличии или изменится цена.
+Creates subscriptions for product price and availability changes via OneEntry Events API. Users receive notifications when a product comes back in stock or the price changes.
 
-> ⚠️ Требует авторизованного пользователя. Events API работает только после логина (через `reDefine()` в Client Components или через `makeUserApi()` в Server Actions).
-
----
-
-## Шаг 1: Узнай маркеры событий
-
-Маркеры событий настраиваются в OneEntry Admin → Events. Стандартные маркеры из реального проекта:
-
-- `status_out_of_stock` — товар кончился / появился
-- `product_price` — изменилась цена
-
-Уточни реальные маркеры у пользователя или проверь в админке.
+> ⚠️ Requires an authenticated user. Events API only works after login (via `reDefine()` in Client Components or via `makeUserApi()` in Server Actions).
 
 ---
 
-## Шаг 2: Создай хук для подписки
+## Step 1: Find out event markers
 
-Файл: `app/api/hooks/useEvents.ts`
+Event markers are configured in OneEntry Admin → Events. Standard markers from a real project:
+
+- `status_out_of_stock` — product went out of / came back in stock
+- `product_price` — price changed
+
+Confirm the real markers with the user or check in the admin panel.
+
+---
+
+## Step 2: Create the subscription hook
+
+File: `app/api/hooks/useEvents.ts`
 
 ```typescript
 'use client';
 
 import { getApi, isError } from '@/lib/oneentry';
 
-// Маркеры событий — уточни у пользователя!
+// Event markers — confirm with the user!
 const EVENT_MARKERS = {
   stockStatus: 'status_out_of_stock',
   priceChange: 'product_price',
 };
 
 /**
- * Подписаться на события товара (изменение цены и наличия).
- * Вызывать ТОЛЬКО из Client Component после logIn + reDefine().
+ * Subscribe to product events (price and availability changes).
+ * Call ONLY from Client Component after logIn + reDefine().
  */
 export async function subscribeToProductEvents(productId: number): Promise<{
   stockSubscribed: boolean;
@@ -57,7 +57,7 @@ export async function subscribeToProductEvents(productId: number): Promise<{
 }
 
 /**
- * Отписаться от событий товара.
+ * Unsubscribe from product events.
  */
 export async function unsubscribeFromProductEvents(productId: number): Promise<{
   stockUnsubscribed: boolean;
@@ -75,7 +75,7 @@ export async function unsubscribeFromProductEvents(productId: number): Promise<{
 }
 
 /**
- * Получить все активные подписки пользователя.
+ * Get all active user subscriptions.
  */
 export async function getUserSubscriptions(offset = 0, limit = 30) {
   const result = await getApi().Events.getAllSubscriptions(offset, limit);
@@ -86,14 +86,14 @@ export async function getUserSubscriptions(offset = 0, limit = 30) {
 
 ---
 
-## Шаг 3: Кнопка подписки на карточке товара
+## Step 3: Subscribe button on product card
 
 ```tsx
 // components/product/SubscribeButton.tsx
 'use client';
 
 import { useCallback, useContext, useState } from 'react';
-import { AuthContext } from '@/app/store/providers/AuthContext'; // твой auth контекст
+import { AuthContext } from '@/app/store/providers/AuthContext'; // your auth context
 import {
   subscribeToProductEvents,
   unsubscribeFromProductEvents,
@@ -106,7 +106,7 @@ export function SubscribeButton({ productId }: { productId: number }) {
 
   const handleToggle = useCallback(async () => {
     if (!isAuth) {
-      // перенаправить на логин или показать диалог
+      // redirect to login or show dialog
       return;
     }
 
@@ -128,15 +128,15 @@ export function SubscribeButton({ productId }: { productId: number }) {
     }
   }, [isAuth, subscribed, productId]);
 
-  if (!isAuth) return null; // показывать только авторизованным
+  if (!isAuth) return null; // show only to authenticated users
 
   return (
     <button onClick={handleToggle} disabled={loading}>
       {loading
-        ? 'Загрузка...'
+        ? 'Loading...'
         : subscribed
-          ? 'Отписаться от уведомлений'
-          : 'Уведомить о появлении'}
+          ? 'Unsubscribe from notifications'
+          : 'Notify when available'}
     </button>
   );
 }
@@ -144,25 +144,25 @@ export function SubscribeButton({ productId }: { productId: number }) {
 
 ---
 
-## Шаг 4: Интеграция с кнопкой избранного (опционально)
+## Step 4: Integration with favorites button (optional)
 
-В реальном проекте подписка на события срабатывает при добавлении в избранное:
+In a real project, event subscriptions are triggered when adding to favorites:
 
 ```tsx
-// При добавлении в избранное — подписываемся на события
+// When adding to favorites — subscribe to events
 const handleAddToFavorites = async (product: IProductsEntity) => {
   dispatch(addFavorites(product.id));
 
   if (isAuth) {
-    // Events работают через getApi() т.к. после логина вызван reDefine()
+    // Events work via getApi() since reDefine() was called after login
     const result = await subscribeToProductEvents(product.id);
     if (result.stockSubscribed) {
-      toast('Уведомим когда появится в наличии');
+      toast('We will notify you when it is back in stock');
     }
   }
 };
 
-// При удалении из избранного — отписываемся
+// When removing from favorites — unsubscribe
 const handleRemoveFromFavorites = async (productId: number) => {
   dispatch(removeFavorites(productId));
 
@@ -174,9 +174,9 @@ const handleRemoveFromFavorites = async (productId: number) => {
 
 ---
 
-## Шаг 5: Server Action для получения подписок (опционально)
+## Step 5: Server Action for getting subscriptions (optional)
 
-Если нужно показать список подписок на странице профиля — используй `makeUserApi`:
+If you need to show a list of subscriptions on the profile page — use `makeUserApi`:
 
 ```typescript
 // app/actions/events.ts
@@ -200,16 +200,16 @@ export async function getUserEventSubscriptions(refreshToken: string) {
 
 ---
 
-## Важные детали
+## Important details
 
 ```md
-✅ Созданы Events подписки. Ключевые правила:
+✅ Event subscriptions created. Key rules:
 
-1. Events требуют авторизации — вызывай только после логина
-2. В Client Component: работает через getApi() ПОСЛЕ reDefine(refreshToken)
-   В Server Action: нужен makeUserApi(refreshToken)
-3. subscribeByMarker/unsubscribeByMarker возвращают boolean (true = успех)
-4. Маркеры событий ('status_out_of_stock', 'product_price') — уточни в OneEntry Admin
-5. Можно подписаться на несколько маркеров для одного товара — они независимы
-6. getAllSubscriptions — для отображения списка подписок пользователя в профиле
+1. Events require authentication — call only after login
+2. In Client Component: works via getApi() AFTER reDefine(refreshToken)
+   In Server Action: use makeUserApi(refreshToken)
+3. subscribeByMarker/unsubscribeByMarker return boolean (true = success)
+4. Event markers ('status_out_of_stock', 'product_price') — confirm in OneEntry Admin
+5. Multiple markers can be subscribed for one product — they are independent
+6. getAllSubscriptions — for displaying the user's subscription list in profile
 ```

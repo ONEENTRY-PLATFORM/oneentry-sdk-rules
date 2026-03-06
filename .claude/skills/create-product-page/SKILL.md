@@ -3,40 +3,40 @@ type: skill
 skillConfig: {"name":"create-product-page"}
 -->
 
-# Создать страницу товара
+# Create a Product Page
 
 ---
 
-## Шаг 1: Проверь реальные атрибуты через API
+## Step 1: Check real attributes via API
 
 ```bash
 /inspect-api products
 ```
 
-Что смотреть в `items[0].attributeValues`:
-- Маркер изображения (тип `image`) — например `pic`, `photo`
-- Маркер описания (тип `text`) — например `description`
-- Маркер цены (тип `float`/`integer`) — например `price`
-- Маркер старой цены — например `sale`, `old_price`
-- Маркер количества на складе — например `units_product`, `stock`
-- `statusIdentifier` — реальный статус "в наличии"
+What to look for in `items[0].attributeValues`:
+- Image marker (type `image`) — e.g. `pic`, `photo`
+- Description marker (type `text`) — e.g. `description`
+- Price marker (type `float`/`integer`) — e.g. `price`
+- Old price marker — e.g. `sale`, `old_price`
+- Stock quantity marker — e.g. `units_product`, `stock`
+- `statusIdentifier` — real "in stock" status
 
-**⚠️ НЕ угадывай маркеры** — проверяй через `/inspect-api`.
-
----
-
-## Шаг 2: Уточни у пользователя
-
-1. **Роут страницы** — например `app/[locale]/shop/product/[id]/page.tsx`
-2. **Нужны ли похожие товары?** (`getRelatedProductsById`)
-3. **Нужна ли галерея изображений или одно изображение?**
-4. **Есть ли верстка?** — если да, копируй точно
+**⚠️ Do NOT guess markers** — verify via `/inspect-api`.
 
 ---
 
-## Шаг 3: Создай Server Action (если ещё нет)
+## Step 2: Clarify with the user
 
-> Если `app/actions/products.ts` уже существует — прочитай его и дополни, не дублируй.
+1. **Page route** — e.g. `app/[locale]/shop/product/[id]/page.tsx`
+2. **Are related products needed?** (`getRelatedProductsById`)
+3. **Image gallery or single image?**
+4. **Is there existing markup?** — if yes, copy it exactly
+
+---
+
+## Step 3: Create Server Action (if not yet created)
+
+> If `app/actions/products.ts` already exists — read it and extend, do not duplicate.
 
 ```typescript
 // app/actions/products.ts
@@ -65,9 +65,9 @@ export async function getRelatedProducts(id: number, locale = 'en_US', limit = 6
 
 ---
 
-## Шаг 4: Создай страницу товара
+## Step 4: Create the product page
 
-### Базовый шаблон
+### Basic template
 
 ```tsx
 // app/[locale]/shop/product/[id]/page.tsx
@@ -89,19 +89,19 @@ export default async function ProductPage({
   const product = productData.item;
   const attrs = product.attributeValues || {};
 
-  // ⚠️ Замени маркеры на реальные из /inspect-api!
-  // image тип — value это МАССИВ
+  // ⚠️ Replace markers with real ones from /inspect-api!
+  // image type — value is an ARRAY
   const imageUrl = attrs.pic?.value?.[0]?.downloadLink || '';
   const title = product.localizeInfos?.title || '';
   const price = attrs.price?.value || 0;
   const oldPrice = attrs.sale?.value || 0;
 
-  // text тип — value это объект с htmlValue/plainValue
+  // text type — value is an object with htmlValue/plainValue
   const description = attrs.description?.value?.htmlValue
     || attrs.description?.value?.plainValue
     || '';
 
-  // Статус: замени 'in_stock' на реальный из /inspect-api
+  // Status: replace 'in_stock' with real value from /inspect-api
   const inStock = product.statusIdentifier === 'in_stock';
   const stockQty = Number(attrs.units_product?.value) || 0;
   const isOutOfStock = !inStock || stockQty === 0;
@@ -109,7 +109,7 @@ export default async function ProductPage({
   return (
     <main>
       <div>
-        {/* Изображение */}
+        {/* Image */}
         {imageUrl ? (
           <Image
             src={imageUrl}
@@ -123,7 +123,7 @@ export default async function ProductPage({
           <div>No image</div>
         )}
 
-        {/* Информация */}
+        {/* Info */}
         <div>
           <h1>{title}</h1>
 
@@ -132,12 +132,12 @@ export default async function ProductPage({
             {oldPrice > 0 && <span className="line-through">{oldPrice}</span>}
           </div>
 
-          {/* Описание */}
+          {/* Description */}
           {description && (
             <div dangerouslySetInnerHTML={{ __html: description }} />
           )}
 
-          {/* Кнопка */}
+          {/* Button */}
           {isOutOfStock
             ? <div>Out of stock</div>
             : <button type="button">Add to cart</button>
@@ -149,7 +149,7 @@ export default async function ProductPage({
 }
 ```
 
-### С параллельными запросами (товар + похожие)
+### With parallel requests (product + related)
 
 ```tsx
 export default async function ProductPage({
@@ -160,7 +160,7 @@ export default async function ProductPage({
   const { locale, id } = await params;
   const productId = Number(id);
 
-  // Параллельно — товар и похожие
+  // Parallel — product and related
   const [productData, relatedData] = await Promise.all([
     getProductById(productId, locale),
     getRelatedProducts(productId, locale),
@@ -179,9 +179,9 @@ export default async function ProductPage({
 
   return (
     <main>
-      {/* ... основной контент ... */}
+      {/* ... main content ... */}
 
-      {/* Похожие товары */}
+      {/* Related products */}
       {relatedProducts.length > 0 && (
         <section>
           <h2>Related products</h2>
@@ -204,10 +204,10 @@ export default async function ProductPage({
 }
 ```
 
-### С галереей изображений (groupOfImages)
+### With image gallery (groupOfImages)
 
 ```tsx
-// groupOfImages — value это массив нескольких изображений
+// groupOfImages — value is an array of multiple images
 const gallery = attrs.gallery?.value || [];
 
 {gallery.length > 0 && (
@@ -228,16 +228,16 @@ const gallery = attrs.gallery?.value || [];
 
 ---
 
-## Шаг 5: Напомни ключевые правила
+## Step 5: Reminder — key rules
 
-✅ Страница создана. Ключевые правила:
+✅ Page created. Key rules:
 
 ```md
-1. params в Next.js 15+ — это Promise, обязателен await
-2. image → value[0].downloadLink (МАССИВ, даже для одного изображения!)
-3. text → value.htmlValue или value.plainValue (объект, не строка)
-4. statusIdentifier — проверяй через /inspect-api, не хардкодь 'in_stock'
-5. Promise.all для параллельных запросов (товар + похожие + блоки)
-6. notFound() при ошибке — не рендерить пустую страницу
-7. next/image требует remotePatterns в next.config.ts для *.oneentry.cloud
+1. params in Next.js 15+ is a Promise — await required
+2. image → value[0].downloadLink (ARRAY, even for a single image!)
+3. text → value.htmlValue or value.plainValue (object, not string)
+4. statusIdentifier — verify via /inspect-api, don't hardcode 'in_stock'
+5. Promise.all for parallel requests (product + related + blocks)
+6. notFound() on error — don't render an empty page
+7. next/image requires remotePatterns in next.config.ts for *.oneentry.cloud
 ```

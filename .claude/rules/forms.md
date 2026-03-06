@@ -7,9 +7,9 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# Forms & FormsData — правила OneEntry
+# Forms & FormsData — OneEntry rules
 
-## getFormByMarker → структура ответа
+## getFormByMarker → response structure
 
 ```ts
 const form = await getApi().Forms.getFormByMarker('contact_us', locale)
@@ -41,11 +41,11 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 }
 ```
 
-**Ключевые поля:**
+**Key fields:**
 
-- `attributes[]` — поля формы для рендера. Сортировать по `position`
-- `moduleFormConfigs[0].id` — это `formModuleConfigId` для `postFormsData`
-- `moduleFormConfigs[0].entityIdentifiers[0].id` — это `moduleEntityIdentifier` для `postFormsData`
+- `attributes[]` — form fields for rendering. Sort by `position`
+- `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`
+- `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`
 
 ```ts
 const form = await getApi().Forms.getFormByMarker('contact_us')
@@ -56,27 +56,27 @@ const formModuleConfigId = formModuleConfig?.id ?? 0
 const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? ''
 ```
 
-**Специальные типы полей формы:**
+**Special form field types:**
 
-- `spam` — капча (reCAPTCHA v3). НЕ рендерить как `<input>`, использовать `<FormReCaptcha>`
-- `button` — кнопка отправки. Рендерить как `<button type="submit">`
+- `spam` — captcha (reCAPTCHA v3). DO NOT render as `<input>`, use `<FormReCaptcha>`
+- `button` — submit button. Render as `<button type="submit">`
 
 ---
 
-## postFormsData — три обязательных идентификатора
+## postFormsData — three required identifiers
 
 ```ts
 await getApi().FormData.postFormsData({
-  formIdentifier: 'contact_us',           // маркер формы (из form.identifier)
-  formModuleConfigId: 2,                  // из form.moduleFormConfigs[0].id
-  moduleEntityIdentifier: 'blog',         // из form.moduleFormConfigs[0].entityIdentifiers[0].id
-  replayTo: null,                         // email для ответа или null
+  formIdentifier: 'contact_us',           // form marker (from form.identifier)
+  formModuleConfigId: 2,                  // from form.moduleFormConfigs[0].id
+  moduleEntityIdentifier: 'blog',         // from form.moduleFormConfigs[0].entityIdentifiers[0].id
+  replayTo: null,                         // reply-to email or null
   status: 'sent',                         // 'sent' | 'draft'
-  formData: [...]                         // данные полей формы
+  formData: [...]                         // form field data
 })
 ```
 
-**Все три идентификатора обязательны.** Получай их из `getFormByMarker`:
+**All three identifiers are required.** Get them from `getFormByMarker`:
 
 ```ts
 const formModuleConfigId = form.moduleFormConfigs?.[0]?.id ?? 0
@@ -85,9 +85,9 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 
 ---
 
-## formData — значения по типам полей
+## formData — values by field type
 
-Каждый элемент formData: `{ marker, type, value }`. `type` берётся из `attributes[].type`.
+Each formData element: `{ marker, type, value }`. `type` comes from `attributes[].type`.
 
 ### string, integer, float, number
 
@@ -111,19 +111,19 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 }
 ```
 
-### text — value это МАССИВ с ОДНИМ объектом, только одно из htmlValue/plainValue/mdValue
+### text — value is an ARRAY with ONE object, only one of htmlValue/plainValue/mdValue
 
 ```ts
-// ❌ НЕПРАВИЛЬНО — передавать строку
+// ❌ WRONG — passing a string
 { marker: 'message', type: 'text', value: 'Hello' }
 
-// ✅ ПРАВИЛЬНО — массив с одним объектом, только одно поле
+// ✅ CORRECT — array with one object, only one field
 { marker: 'message', type: 'text', value: [{ plainValue: 'Hello world' }] }
 { marker: 'message', type: 'text', value: [{ htmlValue: '<p>Hello</p>', params: { editorMode: 'html' } }] }
 { marker: 'message', type: 'text', value: [{ mdValue: '**Hello**' }] }
 ```
 
-### textWithHeader — то же что text + поле header
+### textWithHeader — same as text + header field
 
 ```ts
 {
@@ -137,13 +137,13 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 }
 ```
 
-### list, radioButton — обёрнутый формат
+### list, radioButton — wrapped format
 
 ```ts
-// ❌ НЕПРАВИЛЬНО — передавать значения напрямую
+// ❌ WRONG — passing values directly
 { marker: 'topic', type: 'list', value: ['article'] }
 
-// ✅ ПРАВИЛЬНО — обёртка с marker, type, value внутри
+// ✅ CORRECT — wrapper with marker, type, value inside
 {
   marker: 'topic',
   type: 'list',
@@ -151,17 +151,17 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 }
 ```
 
-### entity — числовые id для страниц, строки с префиксом для продуктов
+### entity — numeric ids for pages, prefixed strings for products
 
 ```ts
-// Страницы — числовые id
+// Pages — numeric ids
 { marker: 'related_page', type: 'entity', value: [25, 32, 24] }
 
-// Продукты — строки с префиксом 'p-[parentId]-[productId]'
+// Products — strings with prefix 'p-[parentId]-[productId]'
 { marker: 'related_product', type: 'entity', value: ['p-1-123', 'p-2-456'] }
 ```
 
-### timeInterval — массив интервалов в ISO 8601
+### timeInterval — array of ISO 8601 intervals
 
 ```ts
 {
@@ -171,31 +171,31 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
     ['2025-02-11T16:00:00.000Z', '2025-02-11T18:00:00.000Z']
   ]
 }
-// value — массив массивов [startISO, endISO]
+// value — array of arrays [startISO, endISO]
 ```
 
-### image, groupOfImages — File объект
+### image, groupOfImages — File object
 
 ```ts
-// Нужен File объект (не строка URL!)
+// Requires a File object (not a URL string!)
 const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png')
 { marker: 'photo', type: 'image', value: [file] }
 { marker: 'gallery', type: 'groupOfImages', value: [file1, file2] }
 ```
 
-### file — два варианта в зависимости от источника
+### file — two variants depending on source
 
 ```ts
-// Новый файл от пользователя (из <input type="file">):
-// value = raw File объект (НЕ массив), fileQuery указывает куда сохранить
+// New file from user (from <input type="file">):
+// value = raw File object (NOT an array), fileQuery specifies where to save
 {
   marker: 'document',
   type: 'file',
-  value: selectedFile,            // ← File объект напрямую
+  value: selectedFile,            // ← File object directly
   fileQuery: { type: 'page', entity: 'editor', id: 4965 }
 }
 
-// Уже загруженный файл (ссылка на существующий):
+// Already uploaded file (link to existing):
 {
   marker: 'document',
   type: 'file',
@@ -209,7 +209,7 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 
 ---
 
-## Полный flow: получить форму → отправить данные
+## Full flow: get form → submit data
 
 ```ts
 // app/actions/forms.ts
@@ -221,7 +221,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
   const formModuleConfig = form.moduleFormConfigs?.[0]
 
-  // Берём type из attributes формы — не угадываем!
+  // Take type from form attributes — don't guess!
   const transformedFormData = form.attributes
     .filter((attr: any) => attr.marker in formValues)
     .map((attr: any) => ({
@@ -247,7 +247,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
 ---
 
-## Ответ postFormsData
+## postFormsData response
 
 ```json
 {
@@ -266,4 +266,4 @@ export async function submitContactForm(formValues: Record<string, any>) {
 }
 ```
 
-`result.formData.id` — id созданной записи.
+`result.formData.id` — id of the created record.

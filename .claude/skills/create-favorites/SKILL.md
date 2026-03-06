@@ -3,17 +3,17 @@ type: skill
 skillConfig: {"name":"create-favorites"}
 -->
 
-# Создать список избранного (Redux + persist)
+# Create Favorites List (Redux + persist)
 
-Создаёт Redux slice для хранения ID избранных товаров с персистентностью в localStorage.
+Creates a Redux slice for storing favorite product IDs with localStorage persistence.
 
-> ⚠️ Требует Redux store. Если store ещё не создан — сначала выполни `/create-cart-manager` (или создай store вручную).
+> ⚠️ Requires Redux store. If the store hasn't been created yet — first run `/create-cart-manager` (or create the store manually).
 
 ---
 
-## Шаг 1: Создай favorites slice
+## Step 1: Create the favorites slice
 
-Файл: `app/store/reducers/FavoritesSlice.ts`
+File: `app/store/reducers/FavoritesSlice.ts`
 
 ```typescript
 'use client';
@@ -22,8 +22,8 @@ import { createSlice } from '@reduxjs/toolkit';
 import type { PayloadAction, WritableDraft } from '@reduxjs/toolkit';
 
 type FavoritesState = {
-  products: number[];  // только ID товаров
-  version: number;     // для отслеживания изменений
+  products: number[];  // product IDs only
+  version: number;     // for tracking changes
 };
 
 const initialState: FavoritesState = {
@@ -94,16 +94,16 @@ export default favoritesSlice.reducer;
 
 ---
 
-## Шаг 2: Добавь в store
+## Step 2: Add to the store
 
-В `app/store/store.ts` добавь favorites с персистентностью:
+In `app/store/store.ts` add favorites with persistence:
 
 ```typescript
 import { combineReducers, configureStore } from '@reduxjs/toolkit';
 import { persistReducer } from 'redux-persist';
 import createWebStorage from 'redux-persist/lib/storage/createWebStorage';
 import favoritesSlice from './reducers/FavoritesSlice';
-// + остальные импорты
+// + other imports
 
 const storage = typeof window !== 'undefined'
   ? createWebStorage('local')
@@ -114,13 +114,13 @@ const favoritesReducer = persistReducer(
     key: 'favorites-slice',
     storage,
     version: 1,
-    whitelist: ['products'],  // version НЕ персистируем
+    whitelist: ['products'],  // version is NOT persisted
   },
   favoritesSlice,
 );
 
 const rootReducer = combineReducers({
-  // cartReducer,  ← если уже есть
+  // cartReducer,  ← if already exists
   favoritesReducer,
 });
 
@@ -138,7 +138,7 @@ export type AppDispatch = AppStore['dispatch'];
 
 ---
 
-## Шаг 3: Кнопка добавления в избранное
+## Step 3: Add to favorites button
 
 ```tsx
 'use client';
@@ -156,7 +156,7 @@ export function FavoriteButton({ productId }: { productId: number }) {
   return (
     <button
       onClick={() => dispatch(toggleFavorite(productId))}
-      aria-label={isFavorite ? 'Убрать из избранного' : 'В избранное'}
+      aria-label={isFavorite ? 'Remove from favorites' : 'Add to favorites'}
     >
       {isFavorite ? '♥' : '♡'}
     </button>
@@ -166,9 +166,9 @@ export function FavoriteButton({ productId }: { productId: number }) {
 
 ---
 
-## Шаг 4: Страница избранного
+## Step 4: Favorites page
 
-Slice хранит только ID — полные данные товаров загружай из API при открытии страницы:
+The slice stores only IDs — load full product data from the API when opening the favorites page:
 
 ```tsx
 'use client';
@@ -188,7 +188,7 @@ export function FavoritesPage() {
     getProductsByIds(favoriteIds).then(setProducts);
   }, [favoriteIds]);
 
-  if (!favoriteIds.length) return <p>Список избранного пуст</p>;
+  if (!favoriteIds.length) return <p>Favorites list is empty</p>;
 
   return (
     <ul>
@@ -200,7 +200,7 @@ export function FavoritesPage() {
 }
 ```
 
-Server Action для загрузки:
+Server Action for loading:
 
 ```typescript
 // app/actions/products.ts
@@ -216,14 +216,14 @@ export async function getProductsByIds(ids: number[]) {
 
 ---
 
-## Важные детали
+## Important details
 
 ```md
-✅ Создан favorites. Ключевые правила:
+✅ Favorites created. Key rules:
 
-1. Slice хранит только number[] (ID) — компактно и быстро персистируется
-2. Полные данные товаров загружаются из API при открытии страницы избранного
-3. toggleFavorite — удобнее чем отдельные add/remove для кнопок
-4. version — инкрементируй при синхронизации с сервером (user.state.favorites)
-5. Если пользователь авторизован — синхронизируй favorites с user.state через Users.updateUser
+1. Slice stores only number[] (IDs) — compact and fast to persist
+2. Full product data is loaded from API when opening the favorites page
+3. toggleFavorite — more convenient than separate add/remove for buttons
+4. version — increment when syncing with server (user.state.favorites)
+5. If user is authenticated — sync favorites with user.state via Users.updateUser
 ```

@@ -4,17 +4,17 @@ paths:
   - "app/**/layout.tsx"
 ---
 
-# Next.js Pages — правила OneEntry
+# Next.js Pages — OneEntry Rules
 
-## ⚠️ params и searchParams — это Promise (Next.js 15+)
+## ⚠️ params and searchParams are Promises (Next.js 15+)
 
 ```tsx
-// ❌ НЕПРАВИЛЬНО — params не ждут, получаешь undefined
+// ❌ WRONG — params not awaited, you get undefined
 export default function Page({ params }: { params: { locale: string } }) {
   const locale = params.locale  // undefined!
 }
 
-// ✅ ПРАВИЛЬНО — функция async, params awaited
+// ✅ CORRECT — function is async, params awaited
 export default async function Page({
   params,
   searchParams,
@@ -22,24 +22,24 @@ export default async function Page({
   params: Promise<{ locale: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { locale } = await params;     // ← обязательно!
-  const sp = await searchParams;       // ← обязательно!
+  const { locale } = await params;     // ← required!
+  const sp = await searchParams;       // ← required!
 }
 ```
 
-## pageUrl = маркер, НЕ путь роута
+## pageUrl = marker, NOT route path
 
 ```typescript
-// ❌ НЕПРАВИЛЬНО — передаёшь полный путь роута
+// ❌ WRONG — passing full route path
 getApi().Pages.getPageByUrl('shop/category/about', locale)
 
-// ✅ ПРАВИЛЬНО — только маркер из поля pageUrl в OneEntry
+// ✅ CORRECT — only the marker from pageUrl field in OneEntry
 getApi().Pages.getPageByUrl('about', locale)
-// URL в приложении: /shop/category/about
-// pageUrl в OneEntry: "about"
+// URL in the app: /shop/category/about
+// pageUrl in OneEntry: "about"
 ```
 
-## Получение контента страницы
+## Getting page content
 
 ```tsx
 import { getApi, isError } from '@/lib/oneentry';
@@ -52,7 +52,7 @@ export default async function MyPage({
 }) {
   const { locale } = await params;
 
-  // Параллельные запросы — быстрее
+  // Parallel requests — faster
   const [page, blocks] = await Promise.all([
     getApi().Pages.getPageByUrl('my-page-marker', locale),
     getApi().Pages.getBlocksByPageUrl('my-page-marker'),
@@ -69,12 +69,12 @@ export default async function MyPage({
 }
 ```
 
-## НЕ хардкодить контент страниц
+## DON'T hardcode page content
 
 ```tsx
-// ❌ НЕПРАВИЛЬНО
-return <h1>О компании</h1>
+// ❌ WRONG
+return <h1>About Us</h1>
 
-// ✅ ПРАВИЛЬНО — контент из CMS
+// ✅ CORRECT — content from CMS
 return <h1>{page.localizeInfos?.title}</h1>
 ```
