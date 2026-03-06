@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m json.tool:*)",
+      "Bash(node:*)",
+      "WebFetch(domain:react-native-course.oneentry.cloud)",
+      "Bash(ls:*)",
+      "Bash(git checkout:*)",
+      "Bash(npx next build:*)",
+      "Bash(timeout:*)",
+      "Bash(node -e:*)",
+      "Bash(npx tsx:*)",
+      "Bash(npm run build:*)",
+      "Bash(head:*)",
+      "Bash(npx prettier:*)",
+      "Bash(dir:*)",
+      "Bash(npx next lint:*)",
+      "Bash(npm run lint:*)",
+      "Bash(scripts/clean-existing-docs.ts << 'EOF'\nimport fs from 'fs';\nimport path from 'path';\nimport { parseMarkdownToInstructionData, serializeInstructionData } from '../lib/markdown';\n\nconst mainMdPath = path.join\\(process.cwd\\(\\), 'data', 'project', 'main.md'\\);\n\nconsole.log\\('Читаем файл:', mainMdPath\\);\nconst content = fs.readFileSync\\(mainMdPath, 'utf-8'\\);\n\nconsole.log\\('Парсим и очищаем...'\\);\nconst data = parseMarkdownToInstructionData\\(content\\);\n\nconsole.log\\('Сериализуем обратно...'\\);\nconst cleaned = serializeInstructionData\\(data\\);\n\nconsole.log\\('Сохраняем...'\\);\nfs.writeFileSync\\(mainMdPath, cleaned, 'utf-8'\\);\n\nconsole.log\\('✅ Готово! Файл очищен от JSX-тегов.'\\);\nEOF)",
+      "Bash(npx markdownlint:*)",
+      "Bash(npm install:*)",
+      "Bash(python3 -c:*)",
+      "Bash(node:*)",
+      "Bash(git show:*)",
+      "Bash(python -c \" import sys, json data = json.load\\(sys.stdin\\) for form in data: print\\(f''Form: {form.get\\(\"\"identifier\"\"\\)} \\(type={form.get\\(\"\"type\"\"\\)}\\)''\\) for attr in form.get\\(''attributes'', []\\): print\\(f'' - {attr.get\\(\"\"marker\"\"\\)} \\({attr.get\\(\"\"type\"\"\\)}\\)''\\) \")",
+      "Bash(python -c \" import sys, json data = json.load\\(sys.stdin\\) if isinstance\\(data, list\\): for p in data: print\\(f''identifier: {p.get\\(\"\"identifier\"\"\\)}''\\) print\\(f'' authForm: {p.get\\(\"\"authFormIdentifier\"\"\\)}''\\) print\\(f'' signUpForm: {p.get\\(\"\"signUpFormIdentifier\"\"\\)}''\\) else: print\\(json.dumps\\(data, indent=2\\)[:500]\\) \")",
+      "Bash(python -c \" import sys, json data = json.load\\(sys.stdin\\) if isinstance\\(data, list\\): for p in data: print\\(f''identifier: {p.get\\(\"\"identifier\"\"\\)}''\\) print\\(f'' authForm: {p.get\\(\"\"authFormIdentifier\"\"\\)}''\\) print\\(f'' signUpForm: {p.get\\(\"\"signUpFormIdentifier\"\"\\)}''\\) print\\(f'' localizeInfos: {p.get\\(\"\"localizeInfos\"\"\\)}''\\) else: print\\(json.dumps\\(data, indent=2\\)[:500]\\) \")"
+    ]
+  }
+}
