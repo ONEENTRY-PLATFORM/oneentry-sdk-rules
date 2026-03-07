@@ -3,9 +3,9 @@ type: skill
 skillConfig: {"name":"create-cart-manager"}
 -->
 
-# Create Cart Manager (Redux + persist)
+# Create cart manager (Redux + persist)
 
-Creates a Redux cart slice with persistence, store, and types. The cart stores items with quantities and survives page reloads.
+Creates a Redux cart slice with persistence, store and types. The cart stores a list of products with quantities and survives page reloads.
 
 ---
 
@@ -17,7 +17,7 @@ npm install @reduxjs/toolkit react-redux redux-persist next-redux-wrapper
 
 ---
 
-## Step 2: Create the cart product type
+## Step 2: Create cart product type
 
 File: `app/types/cart.ts`
 
@@ -31,7 +31,7 @@ export interface ICartProduct {
 
 ---
 
-## Step 3: Create the cart slice
+## Step 3: Create cart slice
 
 File: `app/store/reducers/CartSlice.ts`
 
@@ -174,7 +174,7 @@ export const selectCartItemQty = (
 export const selectCartVersion = (state: { cartReducer: CartState }) =>
   state.cartReducer.version;
 
-// Total is calculated from attributes — confirm price/sale markers with the user!
+// Total is calculated from attributes — clarify price/sale markers with the user!
 export const selectCartTotal = createSelector(
   (state: { cartReducer: CartState }) => state.cartReducer.productsData,
   (state: { cartReducer: CartState }) => state.cartReducer.products,
@@ -237,7 +237,7 @@ const cartReducer = persistReducer(
     key: 'cart-slice',
     storage,
     version: 1,
-    whitelist: ['productsData', 'total'], // products are NOT persisted — loaded from API
+    whitelist: ['productsData', 'total'], // products NOT persisted — loaded from API
   },
   cartSlice,
 );
@@ -346,14 +346,14 @@ export function AddToCartButton({ product }: { product: any }) {
 
 ---
 
-## Important details
+## Key details
 
 ```md
 ✅ Cart manager created. Key rules:
 
 1. productsData (id + qty) is persisted — products (full data) are NOT persisted
-2. Load products from API on CartPage mount using ids from productsData
-3. selectCartTotal — confirm price/sale attribute markers with the user!
+2. Load products from API when CartPage mounts, by id from productsData
+3. selectCartTotal — clarify price/sale attribute markers with the user!
 4. On server storage = noop (no localStorage) — PersistGate handles hydration
 5. serializableCheck: false — required for redux-persist
 6. If favorites are needed — add FavoritesSlice similarly (whitelist: ['products'])

@@ -3,13 +3,13 @@ type: skill
 skillConfig: {"name":"create-product-card"}
 -->
 
-# Create a Product Card
+# Create product card
 
 ---
 
 ## Step 1: Check real product attributes
 
-**BEFORE writing code** — get the real attribute markers:
+**BEFORE writing code** — find real attribute markers:
 
 ```bash
 /inspect-api products
@@ -18,25 +18,25 @@ skillConfig: {"name":"create-product-card"}
 What to look for in `items[0].attributeValues`:
 - Image marker (type `image` or `groupOfImages`) — e.g. `pic`, `photo`, `image`
 - Price marker (type `float`/`real`/`integer`) — e.g. `price`
-- Old price / discount marker — e.g. `sale`, `old_price`
+- Sale/old price marker — e.g. `sale`, `old_price`
 - Stickers/badges marker (type `list` with `extended`) — e.g. `stickers`
 - Stock quantity marker (type `integer`) — e.g. `units_product`, `stock`
 - `statusIdentifier` — real "in stock" status identifier
 
-**⚠️ Do NOT guess markers** — they are unique per project.
+**⚠️ DON'T guess markers** — they're unique for each project.
 
 ---
 
 ## Step 2: Clarify with the user
 
-1. **Is there existing markup?** — if yes, copy it exactly, only replace data
+1. **Is there a card layout/mockup?** — if yes, copy it exactly, only replace data
 2. **Where does the card link to?** — e.g. `/shop/product/[id]` or `/${locale}/product/[id]`
 3. **Is an "Add to cart" button needed?** — if yes, clarify how the cart is implemented
 4. **Is a "Favorites" button needed?** — if yes, clarify how favorites are implemented
 
 ---
 
-## Step 3: Check the image attribute type in the SDK
+## Step 3: Check the image attribute type in SDK
 
 For `image` type — `value` is an **ARRAY**:
 
@@ -44,7 +44,7 @@ For `image` type — `value` is an **ARRAY**:
 // ✅ image → value[0].downloadLink
 const imageUrl = attrs.pic?.value?.[0]?.downloadLink || '';
 
-// ❌ NOT attrs.pic?.value?.downloadLink (missing [0])
+// ❌ NOT attrs.pic?.value?.downloadLink (without [0])
 ```
 
 For `groupOfImages` — same, `value` is an array.
@@ -56,7 +56,7 @@ For `groupOfImages` — same, `value` is an array.
 ### Basic template
 
 ```tsx
-// components/product/ProductCard.tsx
+// components/ProductCard.tsx
 import Image from 'next/image';
 import Link from 'next/link';
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces';
@@ -96,7 +96,7 @@ export function ProductCard({ product, locale }: ProductCardProps) {
           <div>No image</div>
         )}
 
-        {/* Title */}
+        {/* Name */}
         <h2>{title}</h2>
 
         {/* Price */}
@@ -116,7 +116,7 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 ### With stickers (list with extended)
 
 ```tsx
-// Stickers/badges — type list, value is an array of objects with extended
+// Stickers/badges — list type, value is an array of objects with extended
 // extended.value.downloadLink — sticker icon URL
 const stickers = attrs.stickers?.value || [];
 const stickerIconUrl = stickers[0]?.extended?.value?.downloadLink || '';
@@ -130,7 +130,7 @@ const stickerIconUrl = stickers[0]?.extended?.value?.downloadLink || '';
 ### With stock quantity
 
 ```tsx
-// Stock quantity — type integer
+// Stock quantity — integer type
 const stockQty = Number(attrs.units_product?.value) || 0;
 const isOutOfStock = !inStock || stockQty === 0;
 
@@ -162,7 +162,7 @@ export function ProductCard({ product, locale }: ProductCardProps) {
       >
         {favorited ? '♥' : '♡'}
       </button>
-      {/* ... rest of card */}
+      {/* ... rest of the card */}
     </article>
   );
 }
@@ -170,15 +170,15 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 
 ---
 
-## Step 5: Reminder — key rules
+## Step 5: Key rules reminder
 
 ✅ Component created. Key rules:
 
 ```md
 1. image/groupOfImages → value is an ARRAY → attrs.pic?.value?.[0]?.downloadLink
-2. Attribute markers are project-specific — verify via /inspect-api
+2. Attribute markers are unique per project — check via /inspect-api
 3. statusIdentifier — real status from /inspect-api, don't guess 'in_stock'
 4. Stickers (list with extended) → stickers[0]?.extended?.value?.downloadLink
 5. next/image requires remotePatterns in next.config.ts for *.oneentry.cloud
-6. If markup exists — copy classes exactly, only replace data
+6. If there's a layout — copy classes exactly, only replace data
 ```

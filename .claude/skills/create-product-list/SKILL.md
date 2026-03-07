@@ -3,13 +3,13 @@ type: skill
 skillConfig: {"name":"create-product-list"}
 -->
 
-# Product Catalog with Filters and Pagination
+# Product catalog with filters and pagination
 
 ---
 
 ## Step 1: Check real data via API
 
-**BEFORE writing code** — get the real attribute markers:
+**BEFORE writing code** — find real attribute markers:
 
 ```bash
 /inspect-api products          # attribute markers (price, color, etc.)
@@ -21,7 +21,7 @@ What to look for:
 - `items[0].statusIdentifier` — real product status
 - `ProductStatuses[].identifier` — status marker for `inStockOnly` filter
 
-**⚠️ Do NOT guess** markers `price`, `color`, `in_stock` — they may differ per project.
+**⚠️ DON'T guess** markers `price`, `color`, `in_stock` — they may differ in each project.
 
 ---
 
@@ -30,18 +30,18 @@ What to look for:
 1. **Where do products come from?** (all products `getProducts` or by category `getProductsByPageUrl`)
    - If by category — what is the `pageUrl` of the category page?
 2. **Are filters needed?** (price, status, attributes)
-3. **Infinite scroll or "Load more" button?**
-4. **Markers for filterable attributes** (price, color, size, etc.) — verify after `/inspect-api`
-5. **Is there existing card/grid markup?** — if yes, copy it exactly
+3. **Is infinite scroll or "Load more" button needed?**
+4. **Markers of filtered attributes** (price, color, size, etc.) — clarify after `/inspect-api`
+5. **Is there a card/grid layout?** — if yes, copy it exactly
 
 ---
 
-## Step 3: Create the required files
+## Step 3: Create the necessary files
 
-### 3.1 lib/filters.ts — types and URL param parsing
+### 3.1 lib/filters.ts — types and URL parameter parsing
 
-> Adapt `FilterParams` to the project's real filters.
-> Example with price, color, and availability. Add/remove fields as needed.
+> Adapt `FilterParams` to the real project filters.
+> Example with price, color and availability. Add/remove fields as needed.
 
 ```typescript
 // lib/filters.ts
@@ -133,8 +133,8 @@ export async function getProductsByCategory(
   return { items: result.items as IProductsEntity[], total: result.total as number };
 }
 
-// Filter options — price range and color list from real data
-// ⚠️ Replace markers 'price' and 'color' with real ones!
+// Filter options — real price range and color list from data
+// ⚠️ Replace 'price' and 'color' markers with real ones!
 export async function getProductFilterOptions(locale = 'en_US', categoryUrl?: string) {
   const result = categoryUrl
     ? await getApi().Products.getProductsByPageUrl(categoryUrl, [], locale, { limit: 1, offset: 0, sortOrder: null, sortKey: null })
@@ -148,7 +148,7 @@ export async function getProductFilterOptions(locale = 'en_US', categoryUrl?: st
     ? { min: Number(additional.prices.min ?? 0), max: Number(additional.prices.max ?? 9999) }
     : { min: 0, max: 9999 };
 
-  // Colors from listTitles of the color attribute on the first product
+  // Colors from listTitles of the color attribute of the first product
   const colorAttr = result.items?.[0]?.attributeValues?.color as any;
   const rawTitles = colorAttr?.listTitles?.[locale] ?? colorAttr?.listTitles ?? [];
   const colors = Array.isArray(rawTitles)
@@ -167,7 +167,7 @@ export async function getProductFilterOptions(locale = 'en_US', categoryUrl?: st
 
 ```tsx
 // app/[locale]/shop/page.tsx
-import { ShopView } from '@/components/catalog/ShopView';
+import { ShopView } from '@/components/ShopView';
 import { getProducts } from '@/app/actions/products';
 import { parseFilterParams } from '@/lib/filters';
 
@@ -189,7 +189,7 @@ export default async function ShopPage({
       initialProducts={initialData.items}
       totalProducts={initialData.total}
       locale={locale}
-      // categoryUrl — pass only for category pages
+      // pass categoryUrl only for category pages
     />
   );
 }
@@ -197,12 +197,12 @@ export default async function ShopPage({
 
 ### 3.4 ShopView — Client Component, reads filters from URL
 
-> **⚠️ CRITICAL:** ShopView MUST read `activeFilters` and `gridKey`
+> **⚠️ CRITICALLY IMPORTANT:** ShopView MUST read `activeFilters` and `gridKey`
 > from `useSearchParams`, NOT receive them as props from the server component.
 > Otherwise `loadMore` in ProductGrid will use stale filters.
 
 ```tsx
-// components/catalog/ShopView.tsx
+// components/ShopView.tsx
 'use client';
 
 import { useState } from 'react';
@@ -223,7 +223,7 @@ export function ShopView({ initialProducts, totalProducts, locale, categoryUrl }
 
   // Filters and key — always from URL, not from props
   const activeFilters = parseFilterParams(Object.fromEntries(searchParams.entries()));
-  const gridKey = searchParams.toString(); // key to remount ProductGrid when filters change
+  const gridKey = searchParams.toString(); // key for remounting ProductGrid on filter change
 
   return (
     <div>
@@ -247,7 +247,7 @@ export function ShopView({ initialProducts, totalProducts, locale, categoryUrl }
 ### 3.5 ProductGrid — infinite scroll via IntersectionObserver
 
 ```tsx
-// components/catalog/ProductGrid.tsx
+// components/ProductGrid.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -341,7 +341,7 @@ export function ProductGrid({
 
 ---
 
-## Step 4: Reminder — key rules
+## Step 4: Key rules reminder
 
 ✅ Catalog created. Key rules:
 
@@ -349,9 +349,9 @@ export function ProductGrid({
 1. ShopView reads activeFilters and gridKey from useSearchParams — NOT from server props
 2. key={gridKey} on ProductGrid — remount on filter change instead of useEffect
 3. statusMarker (inStockOnly) — in query, NOT in filter body
-4. conditionMarker 'mth'/'lth' for price — use -0.01/+0.01 to include boundaries
-5. params and searchParams in Next.js 15+ are Promises — await required
-6. Attribute markers (price, color) and statusMarker — verify via /inspect-api
+4. conditionMarker 'mth'/'lth' for price — use -0.01/+0.01 for inclusive boundaries
+5. params and searchParams in Next.js 15+ are Promises — await is required
+6. Attribute markers (price, color) and statusMarker — check via /inspect-api
 7. isLoadingRef instead of useState(loading) — prevents duplicate requests
-8. Category pageUrl is a marker ("shoes"), not a route path ("/shop/category/shoes")
+8. Category pageUrl — it's a marker ("shoes"), not a route path ("/shop/category/shoes")
 ```

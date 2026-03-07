@@ -13,7 +13,7 @@ paths:
 ## locale from params (Next.js 15+)
 
 ```typescript
-// ✅ params is a Promise, always await
+// ✅ params is a Promise, always await it
 export default async function Page({
   params,
 }: {
@@ -24,7 +24,7 @@ export default async function Page({
 }
 ```
 
-## Don't hardcode locale
+## Do not hardcode locale
 
 ```typescript
 // ❌ WRONG
@@ -35,13 +35,13 @@ const { locale } = await params
 getApi().Pages.getPageByUrl('home', locale)
 ```
 
-## langCode — optional parameter
+## langCode is an optional parameter
 
-`langCode` is set during `defineOneEntry(url, { langCode })` initialization and used as default.
+`langCode` is set during `defineOneEntry(url, { langCode })` initialization and used as the default.
 Pass `locale` explicitly only in multilingual routes `app/[locale]/`.
 
 ```typescript
-// Single-language project — langCode not needed explicitly
+// Single-language project — no need to pass langCode explicitly
 getApi().Pages.getPageByUrl('home')
 
 // Multilingual — pass locale from params
@@ -66,6 +66,6 @@ page.localizeInfos?.title        // title
 page.localizeInfos?.htmlContent  // HTML content (for dangerouslySetInnerHTML)
 page.localizeInfos?.content      // plain text
 
-// Blocks: localizeInfos as fallback if no attributes
+// Blocks: localizeInfos as fallback when no attributes
 const title = attrs.title?.value || block.localizeInfos?.title || ''
 ```

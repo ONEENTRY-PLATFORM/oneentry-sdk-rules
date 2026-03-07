@@ -5,17 +5,17 @@ skillConfig: {"name":"setup-oneentry"}
 
 ---
 name: setup-oneentry
-description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with singleton pattern, configure next.config.ts for images
+description: Initialize the OneEntry SDK in a Next.js project — create lib/oneentry.ts with the singleton pattern, configure next.config.ts for images
 allowed-tools: Read, Glob, Write, Edit
 ---
 
-# /setup-oneentry - Setup OneEntry
+# /setup-oneentry - Setup oneentry
 
-Initialize the OneEntry SDK in the current project. Follow the steps in order.
+Initialize the OneEntry SDK in the current project. Execute steps in order.
 
 ## Step 1: Check for an existing file
 
-Check if `lib/oneentry.ts` exists. If yes — read and show the current contents, then ask if it should be overwritten.
+Check whether `lib/oneentry.ts` exists. If it does — read and show the current contents, then ask whether it should be overwritten.
 
 ## Step 2: Create lib/oneentry.ts
 
@@ -47,28 +47,12 @@ export async function reDefine(refreshToken: string, langCode: string): Promise<
   if (!refreshToken) return;
   apiInstance = defineOneEntry(PROJECT_URL, {
     token: APP_TOKEN,
+    langCode,
     auth: {
       refreshToken,
       saveFunction,
     },
   });
-}
-
-export function makeUserApi(refreshToken: string): {
-  api: ReturnType<typeof defineOneEntry>;
-  getNewToken: () => string;
-} {
-  let capturedToken = refreshToken;
-  const api = defineOneEntry(PROJECT_URL, {
-    token: APP_TOKEN,
-    auth: {
-      refreshToken,
-      saveFunction: async (token: string) => {
-        capturedToken = token;
-      },
-    },
-  });
-  return { api, getNewToken: () => capturedToken };
 }
 
 export function isError(result: unknown): result is { statusCode: number; message: string } {
@@ -97,13 +81,13 @@ images: {
 
 ## Step 4: Check and create .env.local
 
-Check if the `.env.local` file exists in the project root.
+Check whether `.env.local` exists in the project root.
 
 **If the file does NOT exist:**
 
 Ask the user for:
 1. OneEntry project URL (e.g.: `https://your-project.oneentry.cloud`)
-2. App Token (find in OneEntry admin → Settings → App Token)
+2. App Token (find it in the OneEntry admin panel → Settings → App Token)
 
 After receiving the answers, create `.env.local` with the provided values:
 
@@ -114,9 +98,9 @@ NEXT_PUBLIC_ONEENTRY_TOKEN=<entered token>
 
 **If the file exists:**
 
-Read it and check for `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the variables are missing — add them (asking the user for values). If they are already present — do nothing.
+Read it and check for `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the variables are missing — add them (ask the user for the values). If they already exist — do nothing.
 
-## Step 5: Show the result
+## Step 5: Show result
 
 Output the message:
 
@@ -124,10 +108,10 @@ Output the message:
 ✅ lib/oneentry.ts created
 ✅ .env.local configured
 
-Find the token: in OneEntry admin → Settings → App Token
+Find the token: in the OneEntry admin panel → Settings → App Token
 ```
 
-## Step 6: Check oneentry import
+## Step 6: Check the oneentry import
 
 Check that the `oneentry` package is installed in `package.json`. If not — notify:
 

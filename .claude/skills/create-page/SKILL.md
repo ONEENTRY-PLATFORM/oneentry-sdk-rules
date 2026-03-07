@@ -3,116 +3,83 @@ type: skill
 skillConfig: {"name":"create-page"}
 -->
 
-# Create a Page with CMS Content
+# Create Next.js page with content from OneEntry CMS
 
-Arguments: page URL (pageUrl marker), locale, whether blocks are needed.
+Argument: `pageMarker` (page marker in OneEntry, e.g. `about` or `home`)
 
 ---
 
-## Step 1: Get real data
+## Step 1: Determine the page marker
+
+If the argument is not provided — ask the user:
+- "What is the `pageUrl` of the page in OneEntry? (Can be found via `/inspect-api pages`)"
+
+**⚠️ IMPORTANT:** `pageUrl` is a marker (a single word, e.g. `"about"`), NOT a full path (`"shop/about"`).
+
+---
+
+## Step 2: Verify the marker via /inspect-api (if needed)
+
+If the marker is unknown or the user is unsure:
 
 ```bash
-/inspect-api pages
+# Read .env.local and check real pageUrl values
+cat .env.local
+curl -s "https://<URL>/api/content/pages?langCode=en_US" \
+  -H "x-app-token: <TOKEN>" | python -m json.tool
 ```
 
-What to look for:
-- `pages[].pageUrl` — real page markers (e.g. `home`, `about`, `contacts`)
-- `pages[].localizeInfos` — content fields (title, htmlContent, content)
-- Available blocks via `getBlocksByPageUrl(url)`
-
-**⚠️ Do NOT hardcode page content** — always fetch from CMS.
+Look at the `pageUrl` field in the response — this is the marker for `getPageByUrl()`.
 
 ---
 
-## Step 2: Check the page structure in the SDK
+## Step 3: Determine the page file path
 
-```bash
-grep -r "interface IPagesEntity" node_modules/oneentry/dist --include="*.d.ts" -A 20
-```
-
-Key fields:
-- `localizeInfos.title` — page title
-- `localizeInfos.htmlContent` — HTML content (check first)
-- `localizeInfos.content` — plain text
-- `attributeValues` — custom attributes
-- `pageUrl` — page marker
+Ask the user (or determine from context):
+- Next.js route for the page, e.g.: `app/[locale]/about/page.tsx`
+- Is there i18n (`[locale]` in the path)?
+- Are page blocks needed (`getBlocksByPageUrl`)?
 
 ---
 
-## Step 3: Create the Server Action
-
-> If `app/actions/pages.ts` already exists — read it and extend, do not duplicate.
-
-```typescript
-// app/actions/pages.ts
-'use server';
-
-import { getApi, isError } from '@/lib/oneentry';
-import type { IPagesEntity } from 'oneentry/dist/pages/pagesInterfaces';
-import type { IPositionBlock } from 'oneentry/dist/blocks/blocksInterfaces';
-
-export async function getPageContent(url: string, locale = 'en_US') {
-  const result = await getApi().Pages.getPageByUrl(url, locale);
-  if (isError(result)) return { error: result.message };
-  return { page: result as IPagesEntity };
-}
-
-export async function getPageBlocks(url: string, locale = 'en_US') {
-  const result = await getApi().Pages.getBlocksByPageUrl(url, locale);
-  if (isError(result)) return { blocks: [] as IPositionBlock[] };
-  return { blocks: result as IPositionBlock[] };
-}
-```
-
----
-
-## Step 4: Create the page
+## Step 4: Create the page file
 
 ### Basic template (page content only)
 
 ```tsx
 // app/[locale]/about/page.tsx
+import { getApi, isError } from '@/lib/oneentry';
 import { notFound } from 'next/navigation';
-import { getPageContent } from '@/app/actions/pages';
 
 export default async function AboutPage({
   params,
 }: {
   params: Promise<{ locale: string }>;
 }) {
-  const { locale } = await params;  // ⚠️ Next.js 15+: await!
+  const { locale } = await params;  // ⚠️ Next.js 15+: params is a Promise!
 
-  const { page, error } = await getPageContent('about', locale);
-  if (error || !page) notFound();
-
-  const title = page.localizeInfos?.title || '';
-  const htmlContent = page.localizeInfos?.htmlContent || '';
-  const plainContent = page.localizeInfos?.content || '';
+  const page = await getApi().Pages.getPageByUrl('about', locale);
+  if (isError(page)) notFound();
 
   return (
     <main>
-      <h1>{title}</h1>
-
-      {/* HTML content — use dangerouslySetInnerHTML */}
-      {htmlContent && (
-        <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
-      )}
-
-      {/* Plain text fallback */}
-      {!htmlContent && plainContent && (
-        <p>{plainContent}</p>
-      )}
+      <h1>{page.localizeInfos?.title}</h1>
+      <div
+        dangerouslySetInnerHTML={{
+          __html: page.localizeInfos?.htmlContent || page.localizeInfos?.content || '',
+        }}
+      />
     </main>
   );
 }
 ```
 
-### With blocks (page + CMS blocks)
+### With page blocks
 
 ```tsx
 // app/[locale]/home/page.tsx
+import { getApi, isError } from '@/lib/oneentry';
 import { notFound } from 'next/navigation';
-import { getPageContent, getPageBlocks } from '@/app/actions/pages';
 
 export default async function HomePage({
   params,
@@ -121,72 +88,53 @@ export default async function HomePage({
 }) {
   const { locale } = await params;
 
-  // Parallel requests — page content + blocks
-  const [pageData, blocksData] = await Promise.all([
-    getPageContent('home', locale),
-    getPageBlocks('home', locale),
+  // Parallel requests for performance
+  const [page, blocks] = await Promise.all([
+    getApi().Pages.getPageByUrl('home', locale),
+    getApi().Pages.getBlocksByPageUrl('home'),
   ]);
 
-  if (pageData.error || !pageData.page) notFound();
-
-  const page = pageData.page;
-  const blocks = blocksData.blocks || [];
+  if (isError(page)) notFound();
 
   return (
     <main>
       <h1>{page.localizeInfos?.title}</h1>
 
-      {/* Blocks — sorted by position */}
-      {[...blocks]
-        .sort((a, b) => (a.position ?? 0) - (b.position ?? 0))
-        .map((block) => {
-          const attrs = (block as any).attributeValues || {};
-          const blockTitle = attrs.title?.value || (block as any).localizeInfos?.title || '';
-          const blockContent = attrs.description?.value?.htmlValue || '';
-
-          return (
-            <section key={(block as any).id || blockTitle}>
-              {blockTitle && <h2>{blockTitle}</h2>}
-              {blockContent && (
-                <div dangerouslySetInnerHTML={{ __html: blockContent }} />
-              )}
-            </section>
-          );
-        })}
+      {!isError(blocks) && Array.isArray(blocks) &&
+        blocks
+          .sort((a: any, b: any) => a.position - b.position)
+          .map((block: any) => {
+            const attrs = block.attributeValues || {};
+            // Access by marker (if known): attrs.title?.value
+            // For images: attrs.image?.value?.[0]?.downloadLink (ARRAY!)
+            // For text: attrs.description?.value?.htmlValue
+            return (
+              <section key={block.id}>
+                {/* render block */}
+              </section>
+            );
+          })
+      }
     </main>
   );
 }
 ```
 
-### With custom attributes
-
-```tsx
-// If page has custom attributeValues — use /inspect-api to get real markers!
-const attrs = page.attributeValues || {};
-
-// image type — value is an ARRAY
-const heroImage = attrs.hero_image?.value?.[0]?.downloadLink || '';
-
-// text type — value is an object
-const description = attrs.description?.value?.htmlValue || '';
-
-// string type — primitive value
-const subtitle = attrs.subtitle?.value || '';
-```
-
 ---
 
-## Step 5: Reminder — key rules
+## Step 5: Key rules reminder
 
-✅ Page created. Key rules:
+After creating the file output:
+
+> Localization rules (locale from params, localizeInfos, langCode): `.claude/rules/localization.md`
+
+✅ File created. Key rules:
 
 ```md
-1. params in Next.js 15+ is a Promise — await required
-2. pageUrl is the CMS marker (e.g. "home"), NOT the route path ("/")
-3. localizeInfos.htmlContent — check first, use dangerouslySetInnerHTML
-4. Promise.all for parallel requests (page + blocks)
-5. notFound() on error — don't render an empty page
-6. Blocks sorted by position
-7. attributeValues — check type via /inspect-api before accessing value
-8. NEVER hardcode page content — always fetch from CMS Pages
+1. pageUrl = marker ("about"), NOT a route path ("/[locale]/about")
+2. params in Next.js 15+ is a Promise — always await
+3. localizeInfos.htmlContent — HTML content, localizeInfos.title — heading
+4. For images: attrs.img?.value?.[0]?.downloadLink (value is an ARRAY!)
+5. Sort blocks by position before rendering
+6. Block attribute markers — find via /inspect-api
 ```

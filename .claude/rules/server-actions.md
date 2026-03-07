@@ -13,14 +13,14 @@ Server Actions are **one of the patterns**, not the only way to call the SDK. Th
 | Operation | Recommended approach | Reason |
 | --- | --- | --- |
 | Public data (Pages, Products, Menus) | Server Component directly / Server Action / Client Component | Depends on rendering strategy (SSR/SSG/CSR) |
-| Authentication (auth, signUp, generateCode) | **Client Component directly** | ⚠️ SDK transmits device fingerprint — on the client it's unique to the user's device |
-| User data (Orders, Users) | Server Action with `makeUserApi()` | Token security, server-side logic |
+| Authentication (auth, signUp, generateCode) | **Client Component directly** | ⚠️ SDK sends device fingerprint — on client the fingerprint is unique per user's device |
+| User data (Orders, Users) | Client Component via `getApi()` after `reDefine()` | Token managed by `saveFunction` automatically |
 | Mutations (form submission, order creation) | Server Action | Server-side validation |
 
 ## Required (for Server Actions)
 
 - `'use server'` directive at the top of the file
-- **Only `async function` exports** — Next.js forbids exporting constants, types, and regular functions from `'use server'` files. Move them to a separate file (e.g. `src/lib/constants.ts`)
+- **Only `async function` exports** — Next.js prohibits exporting constants, types and regular functions from `'use server'` files. Move them to a separate file (e.g. `src/lib/constants.ts`)
 
 ```typescript
 // ❌ WRONG — error: Only async functions are allowed to be exported
@@ -42,7 +42,7 @@ export async function loadProducts(...) { ... }
 
 ## Public methods (Forms, Pages, Products, Menus, Blocks)
 
-> These methods can be called from Server Components directly, Client Components, or Server Actions. A Server Action is a convenient proxy, but not required.
+> These methods can be called both directly from Server Components and from Client Components. Server Action is a convenient proxy, but not mandatory.
 
 ```typescript
 import { getApi, isError } from '@/lib/oneentry';
@@ -56,7 +56,7 @@ export async function myAction(...) {
 
 ## ⚠️ AuthProvider — NOT via Server Action
 
-Methods `auth`, `signUp`, `generateCode`, `checkCode` **must be called from Client Component directly** — the SDK transmits device fingerprint. On the server `deviceInfo.browser` will be `"Node.js/..."` instead of the real user's browser.
+Methods `auth`, `signUp`, `generateCode`, `checkCode` **must be called directly from Client Component** — SDK sends device fingerprint. On the server, `deviceInfo.browser` will be `"Node.js/..."` instead of the real user's browser.
 
 ```typescript
 // ❌ WRONG — auth in Server Action
@@ -73,25 +73,19 @@ const result = await getApi().AuthProvider.auth('email', { authData }); // finge
 
 > Detailed rules: `.claude/rules/auth-provider.md`
 
-## User-authorized methods (Orders, Users, Payments, etc.)
+## User-authorized methods (Orders, Users, Payments, Events)
+
+Call **directly from Client Component** via `getApi()` — after `reDefine(refreshToken, locale)` has been called (usually in AuthContext during initialization):
 
 ```typescript
-import { makeUserApi, isError } from '@/lib/oneentry';
+'use client';
+import { getApi, isError } from '@/lib/oneentry';
 
-// ⚠️ ONE makeUserApi for all calls in the function!
-// Each call burns refreshToken via /refresh → second call → 401
-export async function myUserAction(refreshToken: string, ...) {
-  const { api, getNewToken } = makeUserApi(refreshToken);
+// ✅ Direct call from client — token already configured via reDefine()
+const user = await getApi().Users.getUser();
+if (isError(user)) return;
 
-  const result = await api.Users.getUser();
-  if (isError(result)) return { error: result.message, statusCode: result.statusCode };
-
-  // If a second call is needed — use the same api, don't create a new makeUserApi!
-  const orders = await api.Orders.getAllOrdersByMarker('storage');
-  if (isError(orders)) return { error: orders.message, statusCode: orders.statusCode };
-
-  return { ...result, newToken: getNewToken() }; // ← always return the new token!
-}
+const orders = await getApi().Orders.getAllOrdersByMarker('storage');
 ```
 
 ## Methods and their recommended approaches
@@ -103,13 +97,41 @@ export async function myUserAction(refreshToken: string, ...) {
 | Pages, Products, Menus, Blocks | Server Component / Server Action / Client | `getApi()` |
 | Forms (getFormByMarker) | Server Component / Server Action / Client | `getApi()` |
 | FormData (postFormsData) | Server Action or Client Component | `getApi()` |
-| Orders, Users, Payments, Events | Server Action | `makeUserApi()` |
+| Orders, Users, Payments, Events | Client Component | `getApi()` after `reDefine()` |
+
+## Server Component wrappers — alternative to Server Actions for read operations
+
+For read operations in Server Components it's more convenient to create regular async functions (not Server Actions) that return a standard response shape. This allows using Next.js cache and avoids `'use server'` overhead.
+
+```typescript
+// app/api/server/products/getProducts.ts — NOT a Server Action, just an async function
+import { getApi, isError } from '@/lib/oneentry'
+import type { IFilterParams } from 'oneentry/dist/products/productsInterfaces'
+
+export const getProducts = async (filters?: IFilterParams[]) => {
+  const data = await getApi().Products.getProducts(filters)
+  if (isError(data)) return { isError: true, error: data, items: [], total: 0 }
+  return { isError: false, items: data.items, total: data.total }
+}
+
+// Usage in Server Component (direct call, no 'use server'):
+const { items, total, isError: hasError } = await getProducts(filters)
+```
+
+**When Server Action vs wrapper:**
+
+| Criteria              | Server Action `'use server'` | Server Component wrapper |
+|-----------------------|------------------------------|--------------------------|
+| Who calls it          | Client Components, browser   | Only Server Components   |
+| Next.js cache         | Not cached                   | Works with `cache()`     |
+| User auth             | Not applicable (Client only) | Only public data         |
+| Mutations             | ✅ Yes                       | ❌ No                    |
 
 ## Direct SDK call from Client Component
 
-The SDK is available on the client thanks to `NEXT_PUBLIC_*` environment variables. Valid use cases:
+The SDK is available on the client thanks to `NEXT_PUBLIC_*` environment variables. Valid cases:
 
-- **Authentication** — must be on the client (fingerprint)
+- **Authentication** — must be on client (fingerprint)
 - **Dynamic data** — search, filtering, loading on user action
 - **CSR strategy** — when SSR is not needed
 

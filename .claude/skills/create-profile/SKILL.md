@@ -3,53 +3,23 @@ type: skill
 skillConfig: {"name":"create-profile"}
 -->
 
-# User Profile Page
+# User profile page
 
 Creates a Client Component with a profile form: fields from Users API, data update, token handling.
 
 ---
 
-## Step 1: Create Server Actions
+## Step 1: Create client utilities for profile
 
-> If `app/actions/users.ts` already exists — read it and extend, do not duplicate.
+> If `lib/profile.ts` already exists — read and extend it, don't duplicate.
 
 ```typescript
-// app/actions/users.ts
-'use server';
-
-import { defineOneEntry } from 'oneentry';
-import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
+// lib/profile.ts
 import { getApi, isError } from '@/lib/oneentry';
+import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
-const PROJECT_URL = process.env.NEXT_PUBLIC_ONEENTRY_URL as string;
-const APP_TOKEN = process.env.NEXT_PUBLIC_ONEENTRY_TOKEN as string;
-
-/**
- * IMPORTANT: each makeUserApi call consumes refreshToken via /refresh.
- * Never call makeUserApi twice with the same token — combine all calls
- * into a single instance.
- */
-function makeUserApi(refreshToken: string) {
-  let capturedToken = refreshToken;
-  const api = defineOneEntry(PROJECT_URL, {
-    token: APP_TOKEN,
-    auth: {
-      refreshToken,
-      saveFunction: async (token: string) => { capturedToken = token; },
-    },
-    errors: { isShell: false },
-  });
-  return { api, getNewToken: () => capturedToken };
-}
-
-/**
- * Loads profile and form in ONE /refresh call.
- * Returns newToken — the client must update localStorage.
- */
-export async function getUserProfile(
-  refreshToken: string,
-  locale: string = 'en_US',
-): Promise<{
+// Call from Client Component after reDefine()
+export async function getUserProfile(locale: string = 'en_US'): Promise<{
   formIdentifier: string;
   formData: Array<{ marker: string; type: string; value: any }>;
   formAttributes: Array<{
@@ -59,14 +29,11 @@ export async function getUserProfile(
     validators: any;
     position: number;
   }>;
-  newToken: string;
 } | { error: string; statusCode?: number }> {
-  const { api, getNewToken } = makeUserApi(refreshToken);
   try {
-    const user = (await api.Users.getUser()) as IUserEntity;
+    const user = (await getApi().Users.getUser()) as IUserEntity;
 
     let formAttributes: any[] = [];
-    // Registration form structure — profile fields (optional)
     const form = await getApi().Forms.getFormByMarker(user.formIdentifier, locale);
     if (!isError(form)) {
       const attrs = Array.isArray((form as any).attributes)
@@ -85,33 +52,26 @@ export async function getUserProfile(
       formIdentifier: user.formIdentifier,
       formData: (user.formData || []) as any[],
       formAttributes,
-      newToken: getNewToken(),
     };
   } catch (err: any) {
     return { error: err.message || 'Failed to load profile', statusCode: err.statusCode };
   }
 }
 
-/**
- * Updates profile. ONE /refresh: getUser + updateUser in one instance.
- * password fields → authData (only if filled)
- * other fields → formData
- */
+// password fields → authData (only if filled), others → formData
 export async function updateUserProfile(
-  refreshToken: string,
   formData: Array<{ marker: string; type: string; value: string }>,
   authData?: Array<{ marker: string; value: string }>,
-): Promise<{ success: boolean; newToken: string } | { error: string }> {
-  const { api, getNewToken } = makeUserApi(refreshToken);
+): Promise<{ success: boolean } | { error: string }> {
   try {
-    const user = (await api.Users.getUser()) as IUserEntity;
-    await api.Users.updateUser({
+    const user = (await getApi().Users.getUser()) as IUserEntity;
+    await getApi().Users.updateUser({
       formIdentifier: user.formIdentifier,
       formData,
       ...(authData && authData.length > 0 ? { authData } : {}),
       state: user.state, // preserve state (cart, favorites)
     });
-    return { success: true, newToken: getNewToken() };
+    return { success: true };
   } catch (err: any) {
     return { error: err.message || 'Failed to update profile' };
   }
@@ -126,11 +86,10 @@ export async function updateUserProfile(
 
 - `'use client'` — the page uses `localStorage` and `useParams`
 - `useParams()` for `locale` — NOT `params` as a Promise (this is a Client Component!)
-- **Token race condition:** on 401 — retry with the current `localStorage.getItem('refreshToken')`,
-  log out ONLY on 401/403 after retry
+- **Token race condition:** on 401 — retry with current `localStorage.getItem('refreshToken')`,
+  logout ONLY on 401/403 after retry
 - **Field separation:** fields with `password` in the name → `authData` (only if filled),
   others → `formData`
-- **newToken:** update `localStorage.setItem('refreshToken', newToken)` after every response
 - Sort fields by `position`
 
 ### Determining input type by marker
@@ -150,9 +109,10 @@ function getInputType(marker: string): string {
 ```tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { getUserProfile, updateUserProfile } from '@/app/actions/users';
+import { reDefine, hasActiveSession } from '@/lib/oneentry';
+import { getUserProfile, updateUserProfile } from '@/lib/profile';
 
 type FormAttribute = {
   marker: string;
@@ -166,6 +126,9 @@ export default function ProfilePage() {
   const params = useParams();
   const locale = (params.locale as string) || 'en_US';
 
+  // Guard against double execution in React StrictMode (dev)
+  const initRef = useRef(false);
+
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -175,42 +138,40 @@ export default function ProfilePage() {
   const [success, setSuccess] = useState('');
 
   useEffect(() => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) {
-      setIsLoggedIn(false);
-      setLoading(false);
-      return;
-    }
-    setIsLoggedIn(true);
-    loadProfile(refreshToken);
+    if (initRef.current) return;
+    initRef.current = true;
+
+    const init = async () => {
+      const refreshToken = localStorage.getItem('refresh-token');
+      if (!refreshToken) {
+        setIsLoggedIn(false);
+        setLoading(false);
+        return;
+      }
+      // ⚠️ Check hasActiveSession before reDefine
+      // Without check — after login reDefine replaces working instance → 401 → logout
+      if (!hasActiveSession()) {
+        await reDefine(refreshToken, locale);
+      }
+      setIsLoggedIn(true);
+      loadProfile();
+    };
+    init();
   }, []);
 
-  const loadProfile = async (token: string) => {
+  const loadProfile = async () => {
     setLoading(true);
     try {
-      let result = await getUserProfile(token, locale);
-
-      // Race condition: another operation may have already updated the token
-      if ('error' in result && result.statusCode === 401) {
-        const currentToken = localStorage.getItem('refreshToken');
-        if (currentToken && currentToken !== token) {
-          result = await getUserProfile(currentToken, locale);
-        }
-      }
+      const result = await getUserProfile(locale);
 
       if ('error' in result) {
-        // Log out ONLY on confirmed auth error
+        // Logout ONLY on confirmed auth error
         if (result.statusCode === 401 || result.statusCode === 403) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('refresh-token');
           setIsLoggedIn(false);
           window.dispatchEvent(new Event('auth-change'));
         }
         return;
-      }
-
-      if (result.newToken) {
-        localStorage.setItem('refreshToken', result.newToken);
       }
 
       setFormAttributes(result.formAttributes);
@@ -227,9 +188,6 @@ export default function ProfilePage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) return;
-
     setSaving(true);
     setError('');
     setSuccess('');
@@ -253,7 +211,6 @@ export default function ProfilePage() {
       }
 
       const result = await updateUserProfile(
-        refreshToken,
         formData,
         authData.length ? authData : undefined,
       );
@@ -261,10 +218,6 @@ export default function ProfilePage() {
       if ('error' in result) {
         setError(result.error);
         return;
-      }
-
-      if (result.newToken) {
-        localStorage.setItem('refreshToken', result.newToken);
       }
 
       setSuccess('Profile updated successfully');
@@ -289,7 +242,7 @@ export default function ProfilePage() {
     return (
       <div>
         <p>Please log in to view your profile</p>
-        {/* Show AuthForm in modal or redirect here */}
+        {/* Show AuthForm in modal or redirect */}
       </div>
     );
   }
@@ -343,19 +296,16 @@ function getInputType(marker: string): string {
 
 ---
 
-## Step 3: Reminder — key rules
+## Step 3: Key rules reminder
 
-> Token rules (makeUserApi, getNewToken, race condition): `.claude/rules/tokens.md`
+> Token rules: `.claude/rules/tokens.md`
 
 ✅ Profile page created. Key rules:
 
 ```md
 1. 'use client' + useParams() — NOT a server component with await params
-2. getUserProfile and updateUserProfile — Server Actions via makeUserApi
-3. ONE makeUserApi per function — all calls through one instance
-4. Retry on 401 with current localStorage.getItem('refreshToken')
-5. Log out ONLY on 401/403 after retry
-6. password fields → authData (only if filled), others → formData
-7. Always update localStorage.setItem('refreshToken', result.newToken)
-8. Never do removeItem('refreshToken') on data loading error
+2. getUserProfile and updateUserProfile — client utilities via getApi() after reDefine()
+3. Logout ONLY on 401/403
+4. password fields → authData (only if filled), others → formData
+5. Never do removeItem('refreshToken') on data loading error
 ```

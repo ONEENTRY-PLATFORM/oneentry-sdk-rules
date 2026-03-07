@@ -1,6 +1,6 @@
 /**
- * Общая инспекция API — маркеры страниц, меню, блоков, локалей, форм
- * Запуск: node .claude/temp/inspect-api.mjs
+ * General API inspection — page markers, menus, blocks, locales, forms
+ * Run: node .claude/temp/inspect-api.mjs
  */
 import { defineOneEntry } from 'oneentry';
 

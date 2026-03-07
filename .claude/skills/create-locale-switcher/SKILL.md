@@ -3,9 +3,9 @@ type: skill
 skillConfig: {"name":"create-locale-switcher"}
 -->
 
-# /create-locale-switcher — Language Switcher
+# /create-locale-switcher — Language switcher
 
-Creates a language switcher component based on data from `Locales API`.
+Creates a language switcher component based on data from the `Locales API`.
 
 ---
 
@@ -13,7 +13,7 @@ Creates a language switcher component based on data from `Locales API`.
 
 1. **Where is the switcher placed?** (Header, Footer, separate component)
 2. **How to display languages?** — code (`en_US`), name (`English`), flag?
-3. **Is there a layout?** — if yes, copy it exactly
+3. **Is there a layout/mockup?** — if yes, copy it exactly
 
 ---
 
@@ -30,7 +30,7 @@ import { getApi, isError } from '@/lib/oneentry';
 export interface LocaleItem {
   code: string;
   title: string;
-  shortCode: string; // first two characters of the code, e.g. 'en' from 'en_US'
+  shortCode: string; // first two chars of code, e.g. 'en' from 'en_US'
 }
 
 export async function getLocales(): Promise<LocaleItem[]> {
@@ -50,11 +50,11 @@ export async function getLocales(): Promise<LocaleItem[]> {
 
 ### Key principles
 
-- Current locale is taken from URL (`[locale]` segment in the route)
-- When switching language, replace the locale segment in `pathname` and navigate there
+- Current locale comes from the URL (`[locale]` segment in the route)
+- When changing language, replace the locale segment in `pathname` and navigate there
 - `usePathname()` + `useRouter()` from `next/navigation`
 - Can be a Server Component (receives locale as prop) or Client Component
-- Locales are loaded **once** — either passed as prop from a server parent, or cached
+- Locales are loaded **once** — either passed as prop from server parent, or cached
 
 ### Option A: Server parent passes locales as prop (preferred)
 
@@ -170,7 +170,7 @@ export function LocaleSwitcher({ locale }: LocaleSwitcherProps) {
 ```tsx
 import Link from 'next/link';
 
-// Replace locale segment and make <Link> instead of button
+// Replace locale segment and use <Link> instead of button
 {locales.map((loc) => {
   const href = pathname.replace(`/${locale}`, `/${loc.code}`);
   return (
@@ -187,9 +187,9 @@ import Link from 'next/link';
 
 ---
 
-## Step 4: Configure routing (if not yet configured)
+## Step 4: Configure routing (if not already configured)
 
-The switcher assumes the app uses the `[locale]` segment in routes:
+The switcher assumes the app uses a `[locale]` segment in the route:
 
 ```
 app/
@@ -223,15 +223,15 @@ export default async function LocaleLayout({
 
 ---
 
-## Step 5: Remind of key rules
+## Step 5: Key rules reminder
 
 ```md
 ✅ Language switcher created. Key rules:
 
 1. getLocales() returns code ('en_US'), title ('English'), shortCode ('en')
-2. Switching locale — replace pathname.replace(`/${locale}`, `/${newLocale}`)
+2. Locale switch — replace pathname.replace(`/${locale}`, `/${newLocale}`)
 3. Server parent passes locales as prop — better for performance
-4. Current locale is determined from params/useParams, NOT hardcoded
+4. Current locale comes from params/useParams, NOT hardcoded
 5. locale.localizeInfos?.title — localized language name ('Russian', 'English')
 6. For SEO-friendly: use <Link href={newPath}> instead of router.push
 ```

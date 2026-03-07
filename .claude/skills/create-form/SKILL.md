@@ -3,7 +3,7 @@ type: skill
 skillConfig: {"name":"create-form"}
 -->
 
-# Create a Dynamic Form from OneEntry Forms API
+# Create dynamic form from OneEntry Forms API
 
 Argument: `marker` (form marker in OneEntry)
 
@@ -11,7 +11,7 @@ Argument: `marker` (form marker in OneEntry)
 
 ## Step 1: Get the form marker
 
-If the marker is not passed:
+If the marker is not provided:
 
 ```bash
 /inspect-api forms
@@ -34,10 +34,10 @@ const forms = await getApi().Forms.getAllForms();
 
 1. **Where is the data sent?**
    - To OneEntry via `postFormsData` — standard scenario
-   - To another endpoint — different logic required
-2. **Is a captcha needed?** — the form may contain a field of type `spam` (reCAPTCHA v3)
+   - To another endpoint — different logic needed
+2. **Is captcha needed?** — the form may contain a field of type `spam` (reCAPTCHA v3)
 3. **Where is the form displayed?** (page, modal, drawer?)
-4. **Is there a layout?** — if yes, copy it exactly
+4. **Is there a layout/mockup?** — if yes, copy it exactly
 
 ---
 
@@ -53,22 +53,44 @@ const forms = await getApi().Forms.getAllForms();
 
 import { getApi, isError } from '@/lib/oneentry';
 
+// ⚠️ Validators return message as string[] — field markers with errors
+// To show custom messages, build a map from form attributes
+function buildValidatorErrorMap(attributes: any[]): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const attr of attributes) {
+    const msg = Object.values(attr.validators || {})
+      .map((v: any) => v?.errorMessage)
+      .find(Boolean);
+    if (msg) map[attr.marker] = msg as string;
+  }
+  return map;
+}
+
+function mapErrors(message: string | string[], validatorErrors: Record<string, string>): string {
+  const msgs = Array.isArray(message) ? message : [message];
+  return msgs.map(m => validatorErrors[m] || m).join('; ');
+}
+
 // Get form structure
 export async function getFormByMarker(marker: string, locale = 'en_US') {
   const form = await getApi().Forms.getFormByMarker(marker, locale);
-  if (isError(form)) return { error: form.message, statusCode: form.statusCode };
-  const attributes = Array.isArray((form as any).attributes)
-    ? (form as any).attributes
-    : Object.values((form as any).attributes || {});
+  if (isError(form)) return { error: String(form.message), statusCode: form.statusCode };
+  const f = form as any;
+  const attributes = Array.isArray(f.attributes)
+    ? f.attributes
+    : Object.values(f.attributes || {});
+  const config = f.moduleFormConfigs?.[0];
 
   return {
-    id: (form as any).id,
-    identifier: (form as any).identifier,
+    identifier: f.identifier,
+    formModuleConfigId: config?.id ?? 0,
+    moduleEntityIdentifier: config?.entityIdentifiers?.[0]?.id ?? '',
     attributes: (attributes as any[]).map((attr: any) => ({
       marker: attr.marker,
       type: attr.type,
       localizeInfos: attr.localizeInfos,
       validators: attr.validators,
+      additionalFields: attr.additionalFields,
       position: attr.position,
     })),
   };
@@ -77,14 +99,24 @@ export async function getFormByMarker(marker: string, locale = 'en_US') {
 // Submit form data
 export async function submitForm(
   formIdentifier: string,
-  formData: Array<{ marker: string; value: string | number | boolean }>,
+  formModuleConfigId: number,
+  moduleEntityIdentifier: string,
+  formData: Array<{ marker: string; type: string; value: any }>,
+  attributes: any[],
 ) {
-  const result = await getApi().FormData.postFormData({
+  const result = await getApi().FormData.postFormsData({
     formIdentifier,
+    formModuleConfigId,
+    moduleEntityIdentifier,
+    replayTo: null,
+    status: 'sent',
     formData,
-  } as any);
-  if (isError(result)) return { error: result.message, statusCode: result.statusCode };
-  return { success: true, result };
+  }) as any;
+  if (isError(result)) {
+    const validatorErrors = buildValidatorErrorMap(attributes);
+    return { error: mapErrors(result.message, validatorErrors), statusCode: result.statusCode };
+  }
+  return { success: true, id: result.formData?.id };
 }
 ```
 
@@ -99,7 +131,7 @@ export async function submitForm(
 - Type is `'spam'`, not `'captcha'` — a common mistake!
 - `formData` for submission — only `{ marker, value }`, only non-empty values
 
-### Field types → HTML table
+### Field type → HTML mapping table
 
 | `field.type`                | Render                                            |
 |-----------------------------|---------------------------------------------------|
@@ -133,6 +165,8 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
   const [fields, setFields] = useState<any[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
   const [formId, setFormId] = useState('');
+  const [formModuleConfigId, setFormModuleConfigId] = useState(0);
+  const [moduleEntityIdentifier, setModuleEntityIdentifier] = useState('');
   const [loading, setLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(true);
   const [error, setError] = useState('');
@@ -147,6 +181,8 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
     getFormByMarker(marker, locale).then((result) => {
       if ('error' in result) { setError(result.error || ''); return; }
       setFormId(result.identifier);
+      setFormModuleConfigId(result.formModuleConfigId);
+      setModuleEntityIdentifier(result.moduleEntityIdentifier);
       // Sort fields by position
       const sorted = [...result.attributes].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
       setFields(sorted);
@@ -166,14 +202,14 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
 
     const formData = fields
       .filter(f => f.type !== 'spam' && values[f.marker] !== undefined && values[f.marker] !== '')
-      .map(f => ({ marker: f.marker, value: values[f.marker] }));
+      .map(f => ({ marker: f.marker, type: f.type, value: values[f.marker] }));
 
     // Add captcha token if present
     if (captchaToken) {
-      formData.push({ marker: 'spam', value: captchaToken });
+      formData.push({ marker: 'spam', type: 'spam', value: captchaToken });
     }
 
-    const result = await submitForm(formId, formData);
+    const result = await submitForm(formId, formModuleConfigId, moduleEntityIdentifier, formData, fields);
 
     setLoading(false);
 
@@ -401,7 +437,7 @@ export function FormReCaptcha({
 
 ---
 
-## Step 5: Remind of key rules
+## Step 5: Key rules reminder
 
 ```md
 ✅ Form created. Key rules:
@@ -409,8 +445,8 @@ export function FormReCaptcha({
 1. Captcha type — 'spam', NOT 'captcha'. Render FormReCaptcha, NOT <input>!
 2. Fields are rendered dynamically by field.type — don't hardcode
 3. formData for submission — only { marker, value }, only non-empty
-4. Forms API requires Server Action — cannot be called from 'use client' directly
+4. Forms API requires Server Action — can't call from 'use client' directly
 5. Sort fields by field.position before rendering
 6. submitForm via FormData.postFormData, not via Forms API
-7. Form marker — get via /inspect-api forms, DO NOT guess
+7. Form marker — get via /inspect-api forms, DON'T guess
 ```

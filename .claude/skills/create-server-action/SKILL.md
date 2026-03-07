@@ -3,17 +3,17 @@ type: skill
 skillConfig: {"name":"create-server-action"}
 -->
 
-# Create a Server Action
+# Create Server Action
 
 ## Step 1: Identify the module and target file
 
 Parse the argument into `Module` and `method`. Determine the file:
-| Module                                  | File                      | Type                    |
+| Module                                  | File                      | Type                     |
 |-----------------------------------------|---------------------------|-------------------------|
 | `Forms`                                 | `app/actions/forms.ts`    | public (getApi)         |
 | `AuthProvider`                          | `app/actions/auth.ts`     | public (getApi)         |
 | `Pages`, `Products`, `Menus`, `Blocks`  | `app/actions/<module>.ts` | public (getApi)         |
-| `Orders`, `Users`, `Payments`           | `app/actions/user.ts`     | user-auth (makeUserApi) |
+| `Orders`, `Users`, `Payments`, `Events` | Client Component          | user-auth (getApi after reDefine) |
 
 ## Step 2: Read the existing file
 
@@ -49,32 +49,50 @@ export async function getFormByMarker(marker: string, locale?: string) {
 }
 ```
 
-### For user-authorized methods (Orders, Users, Payments)
+### For user-authorized methods (Orders, Users, Payments, Events)
 
-```typescript
-'use server';
+These methods are called **directly from a Client Component** via `getApi()` after `reDefine()`.
 
-import { makeUserApi, isError } from '@/lib/oneentry';
+**Required auth-init pattern in the component:**
+
+```tsx
+// components/ProfileData.tsx
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { getApi, isError, reDefine, hasActiveSession } from '@/lib/oneentry';
 import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
-// ⚠️ ONE makeUserApi instance for all related calls in one function!
-// Each makeUserApi call burns refreshToken via /refresh
-export async function getUserProfile(refreshToken: string) {
-  const { api, getNewToken } = makeUserApi(refreshToken);
+export function ProfileData() {
+  // useRef guard — protection against double execution in React StrictMode (dev).
+  // Without it, two parallel reDefine calls burn the one-time refresh token → logout.
+  const initRef = useRef(false);
 
-  const user = await api.Users.getUser() as IUserEntity;
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
 
-  if (isError(user)) {
-    return { error: user.message, statusCode: user.statusCode };
-  }
-
-  return { ...user, newToken: getNewToken() };
+    const init = async () => {
+      const refreshToken = localStorage.getItem('refresh-token');
+      if (!refreshToken) return;
+      // ⚠️ hasActiveSession() is required before reDefine.
+      // After login the SDK is already authorized — reDefine without this check replaces
+      // the working instance with a new one without an access token → first request 401 → token removed → logout.
+      if (!hasActiveSession()) {
+        await reDefine(refreshToken, 'en_US');
+      }
+      // now getApi().Users/Orders/Payments/Events work
+      const user = await getApi().Users.getUser() as IUserEntity;
+      if (isError(user)) return;
+    };
+    init();
+  }, []);
 }
 ```
 
 ## Step 5: Show usage instructions
 
-After creating the file, show an example of usage from a Client Component:
+After creating the file, show a usage example from a Client Component:
 
 ```typescript
 // components/MyComponent.tsx
@@ -90,14 +108,14 @@ export function MyComponent() {
         console.error(result.error);
         return;
       }
-      // result — this is IFormsEntity
+      // result is IFormsEntity
     }
     load();
   }, []);
 }
 ```
 
-For user-auth methods remind:
+For user-auth methods, remind:
 
-⚠️ Save newToken back to localStorage after each call:
-localStorage.setItem('refresh-token', result.newToken)
+⚠️ `reDefine(refreshToken, locale)` must be called before accessing user-auth methods.
+Required: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without this, React StrictMode burns the refresh token with a double call → logout. `saveFunction` updates the token in localStorage automatically on each rotation.

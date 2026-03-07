@@ -1,7 +1,7 @@
 /**
- * Детальная инспекция блоков — структура attributeValues, маркеры атрибутов
- * Запуск: node .claude/temp/inspect-blocks.mjs
- * Аргументы: node .claude/temp/inspect-blocks.mjs shop  ← pageUrl
+ * Detailed block inspection — attributeValues structure, attribute markers
+ * Run: node .claude/temp/inspect-blocks.mjs
+ * Arguments: node .claude/temp/inspect-blocks.mjs shop  ← pageUrl
  */
 import { defineOneEntry } from 'oneentry';
 

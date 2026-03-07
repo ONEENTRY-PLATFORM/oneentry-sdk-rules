@@ -7,69 +7,148 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# Auth Tokens — OneEntry Rules
+# Auth tokens — OneEntry Rules
+
+## saveFunction — automatic refreshToken storage
+
+`saveFunction` in the SDK config is a passive callback that the SDK calls automatically on every token rotation via `/refresh`. Eliminates the need to manually track token updates.
+
+```typescript
+// lib/oneentry.ts
+const saveFunction = async (refreshToken: string) => {
+  if (typeof window !== 'undefined') {
+    localStorage.setItem('refresh-token', refreshToken)
+  }
+}
+
+defineOneEntry(url, {
+  token: appToken,
+  auth: { saveFunction }, // ← SDK calls this on every /refresh
+})
+```
+
+Thanks to `saveFunction`, the token in `localStorage` is always up to date — no need to manually return `newToken` from functions.
 
 ## Token storage (Client)
 
 ```typescript
-// After successful login
-localStorage.setItem('accessToken', result.accessToken)
-localStorage.setItem('refreshToken', result.refreshToken)
-localStorage.setItem('authProviderMarker', authProviderMarker)
+// After successful login (note the hyphen in the key!)
+localStorage.setItem('refresh-token', result.refreshToken)
 
 // After logout
-localStorage.removeItem('accessToken')
-localStorage.removeItem('refreshToken')
-localStorage.removeItem('authProviderMarker')
+localStorage.removeItem('refresh-token')
 ```
 
-## makeUserApi — ONE call per Server Action
+> `saveFunction` updates `'refresh-token'` automatically on every rotation — manual save is only needed after the first login.
 
-Each `makeUserApi(refreshToken)` calls `/refresh` and **burns the token**. A second call with the same token → 401.
+## reDefine — initializing the user-auth session
+
+In AuthContext during initialization: read `'refresh-token'` from localStorage, check `hasActiveSession`, call `reDefine`. After that, all `getApi().Users.*`, `getApi().Orders.*`, etc. work automatically.
+
+`reDefine` does an eager refresh internally (calls `/refresh` immediately after creating the instance) so the SDK has an access token before the first API call. The provider marker comes from `localStorage.getItem('authProviderMarker')` — **must be saved at login:**
 
 ```typescript
-// ❌ WRONG — token burned by first makeUserApi
-export async function badAction(refreshToken: string) {
-  const user = await makeUserApi(refreshToken).api.Users.getUser()   // /refresh → token burned
-  const orders = await makeUserApi(refreshToken).api.Orders.getAllOrdersByMarker('storage') // 401!
-}
-
-// ✅ CORRECT — one instance for all calls
-export async function goodAction(refreshToken: string) {
-  const { api, getNewToken } = makeUserApi(refreshToken) // single /refresh
-  const user = await api.Users.getUser()
-  const orders = await api.Orders.getAllOrdersByMarker('storage')
-  return { user, orders, newToken: getNewToken() }
-}
+localStorage.setItem('authProviderMarker', AUTH_PROVIDER); // save in AuthForm after auth()
 ```
 
-## getNewToken() — must be returned to the client
+**`hasActiveSession` — must be exported from `lib/oneentry.ts`:**
 
 ```typescript
-// ✅ Server Action returns newToken
-return { data: result, newToken: getNewToken() }
-
-// ✅ Client saves it to localStorage
-if (result.newToken) {
-  localStorage.setItem('refreshToken', result.newToken)
+// lib/oneentry.ts
+export function hasActiveSession(): boolean {
+  const authProvider = apiInstance.AuthProvider as unknown as { state?: { accessToken?: string } };
+  return !!authProvider?.state?.accessToken;
 }
 ```
 
-## Race condition — retry on 401
+**Usage in components:**
 
 ```typescript
-// Client Component: another tab may have updated the token first
-let result = await someUserAction(localStorage.getItem('refreshToken')!)
-if ('error' in result && result.statusCode === 401) {
-  const fresh = localStorage.getItem('refreshToken')!
-  result = await someUserAction(fresh)
-}
+import { reDefine, hasActiveSession } from '@/lib/oneentry';
 
-// Log out ONLY after confirmed 401/403
-if ('error' in result && (result.statusCode === 401 || result.statusCode === 403)) {
-  localStorage.removeItem('accessToken')
-  localStorage.removeItem('refreshToken')
-  localStorage.removeItem('authProviderMarker')
+// ⚠️ ALWAYS check hasActiveSession() before reDefine
+// Otherwise you'll replace a working instance (post-login) with a new one without an access token
+// → first API request returns 401 → removeItem('refresh-token') → logout
+const refresh = localStorage.getItem('refresh-token')
+if (!refresh) { setIsAuth(false); return }
+
+if (!hasActiveSession()) {
+  await reDefine(refresh, langCode)
+}
+```
+
+**Common mistake — calling reDefine without the check:**
+
+```typescript
+// ❌ WRONG — after login SDK is already authorized, reDefine will break the session
+const refresh = localStorage.getItem('refresh-token')
+if (refresh) await reDefine(refresh, 'en_US') // burns the token!
+
+// ✅ CORRECT
+if (refresh && !hasActiveSession()) await reDefine(refresh, 'en_US')
+```
+
+## updateUserState — writing user.state to the server
+
+After changing cart/favorites in Redux — sync with the server via a Server Action:
+
+```typescript
+// app/api/server/users/updateUserState.ts
+'use server';
+
+import { getApi } from '@/lib/oneentry';
+import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
+
+export async function updateUserState({
+  cart,
+  favorites,
+  user,
+}: {
+  cart: any[];
+  favorites: number[];
+  user: IUserEntity;
+}) {
+  await getApi().Users.updateUser({
+    formIdentifier: user.formIdentifier,
+    formData: user.formData as any,
+    state: { ...user.state, cart, favorites },
+  });
+}
+```
+
+> AuthContext calls `updateUserState` when `isAuth`, `user`, `productsInCart`, or `favoritesIds` change.
+
+## StrictMode — protection against double refresh
+
+React StrictMode in dev runs `useEffect` twice. Two parallel `reDefine` calls + first API request → two `/refresh` calls → the second one fails (refresh token is one-time) → logout.
+
+**Always add a `useRef` guard in components with auth-init:**
+
+```typescript
+const initRef = useRef(false);
+
+useEffect(() => {
+  if (initRef.current) return;  // StrictMode guard
+  initRef.current = true;
+
+  const init = async () => {
+    const refresh = localStorage.getItem('refresh-token');
+    if (refresh && !hasActiveSession()) {
+      await reDefine(refresh, 'en_US');
+    }
+    // ... load data
+  };
+  init();
+}, []);
+```
+
+## Race condition — logout only on confirmed 401/403
+
+```typescript
+// Client Component: logout only on a confirmed auth error
+const result = await getApi().Users.getUser()
+if (isError(result) && (result as any).statusCode === 401) {
+  localStorage.removeItem('refresh-token')
   window.dispatchEvent(new Event('auth-change'))
 }
 ```

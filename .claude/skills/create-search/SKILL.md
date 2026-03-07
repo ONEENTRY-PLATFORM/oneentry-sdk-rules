@@ -3,7 +3,7 @@ type: skill
 skillConfig: {"name":"create-search"}
 -->
 
-# /create-search — Site Search
+# /create-search — Site search
 
 Argument: what to search — `products` (products), `pages` (pages), `all` (everything).
 
@@ -11,23 +11,23 @@ Argument: what to search — `products` (products), `pages` (pages), `all` (ever
 
 ## Step 1: Clarify with the user
 
-1. **What to search?**
+1. **What to search through?**
    - `products` — `searchProduct(query, locale)`
    - `pages` — `searchPage(name, url)`
    - `blocks` — `searchBlock(name)`
    - multiple at once — parallel requests via `Promise.all`
 
-2. **Where to display results?**
-   - Dropdown list directly in the search bar — most common case
+2. **Where to display?**
+   - Dropdown directly in the search bar — most common case
    - Separate results page
 
-3. **Is there a layout?** — if yes, copy it exactly
+3. **Is there a layout/mockup?** — if yes, copy it exactly
 
 ---
 
 ## Step 2: Create Server Action
 
-> If `app/actions/products.ts` / `app/actions/pages.ts` already exists — read and extend it, don't duplicate.
+> If `app/actions/products.ts` / `app/actions/pages.ts` already exists — read and extend, don't duplicate.
 
 ```typescript
 // app/actions/search.ts
@@ -78,10 +78,10 @@ export async function searchAll(query: string, locale: string = 'en_US') {
 - **Dropdown** closes on click outside the component (mousedown listener)
 - **Escape** closes the dropdown
 - On empty query — don't make a request, clear results
-- Result of `searchProduct` — array `IProductsEntity[]`, access name via: `product.localizeInfos?.title`
-- Result of `searchPage` — array `IPagesEntity[]`, access name via: `page.localizeInfos?.title || page.localizeInfos?.menuTitle`
+- `searchProduct` result — array `IProductsEntity[]`, access name: `product.localizeInfos?.title`
+- `searchPage` result — array `IPagesEntity[]`, access name: `page.localizeInfos?.title || page.localizeInfos?.menuTitle`
 
-### components/search/SearchBar.tsx
+### components/SearchBar.tsx
 
 ```tsx
 'use client';
@@ -219,15 +219,15 @@ export default async function SearchPage({
 
 ---
 
-## Step 4: Remind of key rules
+## Step 4: Key rules reminder
 
 ✅ Search created. Key rules:
 
 ```md
 1. searchProduct/searchPage search by NAME, not by attributes
-2. 300ms debounce — do NOT call Action on every keystroke
+2. 300ms debounce — DON'T call Action on every keystroke
 3. On empty query — clear results, don't make a request
-4. Dropdown closes on mousedown outside the component and on Escape
+4. Dropdown closes on mousedown outside component and on Escape
 5. For products: product.localizeInfos?.title
 6. For pages: page.localizeInfos?.title || page.localizeInfos?.menuTitle
 7. Server Action returns [] on error — doesn't crash

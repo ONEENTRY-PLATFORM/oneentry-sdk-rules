@@ -7,14 +7,14 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# Working with attributeSets — OneEntry rules
+# Working with attributeSets — OneEntry Rules
 
 ## What AttributesSets methods return
 
-`getAttributes`, `getAttributesByMarker`, `getAttributeSetByMarker`, `getSingleAttributeByMarkerSet` return the **attribute schema** — the structure of fields (marker, type, listTitles, validators). **This is NOT the attribute values of entities.**
+`getAttributes`, `getAttributesByMarker`, `getAttributeSetByMarker`, `getSingleAttributeByMarkerSet` return the **attribute schema** — field structure (marker, type, listTitles, validators). **This is NOT the attribute values of entities.**
 
 ```ts
-// ❌ WRONG — attributeSet does not contain real values of products/pages
+// ❌ WRONG — attributeSet does not contain real product/page values
 const attrs = await getApi().AttributesSets.getAttributesByMarker('products')
 const price = attrs[0].value // {} — empty!
 
@@ -44,9 +44,9 @@ const price = product.attributeValues.price?.value // real value
 
 ---
 
-## listTitles — selection options (radioButton, list)
+## listTitles — select options (radioButton, list)
 
-Use `listTitles` to render filter or form options:
+Use `listTitles` to display filter or form options:
 
 ```ts
 const attrs = await getApi().AttributesSets.getAttributesByMarker('products')
@@ -64,7 +64,7 @@ const swatches = options.map((opt: any) => ({
 }))
 ```
 
-**Important:** `value` in listTitles is the option ID (string). This is exactly the value stored in entity's `attributeValues` when `radioButton` or `list` is selected.
+**Important:** `value` in listTitles is the option ID (string). This is the value stored in the entity's `attributeValues` when a `radioButton` or `list` is selected.
 
 ---
 
@@ -102,14 +102,14 @@ const currency = product.attributeValues.price?.additionalFields?.currency?.valu
 { sizeInPixelsValidator: { maxX: "500", maxY: "500" } }
 ```
 
-Use `validators` when dynamically generating forms (e.g. a field is required if `strict: true`).
+Use `validators` when generating forms dynamically (e.g. field is required if `strict: true`).
 
 ---
 
 ## Marker naming rules
 
 - Lowercase letters and `_` only (no spaces)
-- Must not start with a digit
+- Does not start with a digit
 - Unique within the project
 - Descriptive: `product_price`, not `pp`
 
@@ -127,11 +127,11 @@ attrs['2nd_price']?.value
 
 ## When to use AttributesSets
 
-| Scenario                                    | Method                                                 |
-|---------------------------------------------|--------------------------------------------------------|
-| Get list of fields for a form               | `getAttributesByMarker(setMarker)`                     |
-| Get options for a filter (colors, sizes)    | `getAttributesByMarker` → `listTitles`                 |
-| Get one attribute by marker                 | `getSingleAttributeByMarkerSet(setMarker, attrMarker)` |
-| Get all attribute sets                      | `getAttributes()`                                      |
+| Scenario                                         | Method                                                 |
+|--------------------------------------------------|--------------------------------------------------------|
+| Get list of fields for a form                    | `getAttributesByMarker(setMarker)`                     |
+| Get options for a filter (colors, sizes)         | `getAttributesByMarker` → `listTitles`                 |
+| Get a single attribute by marker                 | `getSingleAttributeByMarkerSet(setMarker, attrMarker)` |
+| Get all attribute sets                           | `getAttributes()`                                      |
 
-**DO NOT use AttributesSets to get product/page values.** Use `Products.getProducts()`, `Pages.getPageByUrl()`, etc. — they have `attributeValues` with real data.
+**Do NOT use AttributesSets to get product/page values.** Use `Products.getProducts()`, `Pages.getPageByUrl()`, etc. — they have `attributeValues` with real data.

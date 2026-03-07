@@ -7,7 +7,7 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# Working with attributeValues — OneEntry rules
+# Working with attributeValues — OneEntry Rules
 
 ## Accessing attributes
 
@@ -22,7 +22,7 @@ const price = attrs.price?.value
 const imgAttr = Object.values(attrs).find((a: any) => a?.type === 'image')
 const imgUrl = imgAttr?.value?.[0]?.downloadLink || ''
 
-// Find all attributes of a specific type:
+// Find all attributes of a certain type:
 const allImages = Object.values(attrs)
   .filter((a: any) => a?.type === 'image')
   .map((a: any) => a?.value?.[0]?.downloadLink)
@@ -31,12 +31,13 @@ const allImages = Object.values(attrs)
 
 ## Value types (critically important!)
 
-| Type                                  | Accessing value                                           |
+| Type                                  | Access to value                                           |
 |---------------------------------------|-----------------------------------------------------------|
 | `string`, `integer`, `float`, `real`  | `attrs.marker?.value` (primitive)                         |
 | `text`                                | `attrs.marker?.value?.htmlValue` or `value.plainValue`    |
 | `textWithHeader`                      | `attrs.marker?.value?.header`, `value.htmlValue`          |
-| `image`, `groupOfImages`              | `attrs.marker?.value?.[0]?.downloadLink` **(ARRAY!)**     |
+| `image`                               | `attrs.marker?.value?.downloadLink` (object)              |
+| `groupOfImages`                       | `attrs.marker?.value?.[0]?.downloadLink` (array)          |
 | `file`                                | `attrs.marker?.value?.downloadLink` (object)              |
 | `date`, `dateTime`, `time`            | `attrs.marker?.value?.fullDate` or `value.formattedValue` |
 | `list`                                | `attrs.marker?.value` (array of ids or objects with extended) |
@@ -46,15 +47,37 @@ const allImages = Object.values(attrs)
 | `timeInterval`                        | `attrs.marker?.value` → `[[ISO, ISO], ...]`               |
 | `spam`                                | captcha — render `<FormReCaptcha>`, NOT `<input>`         |
 
-## ⚠️ image, groupOfImages — value is an ARRAY
+## ⚠️ image, groupOfImages — ALWAYS check the real structure via API first
+
+**ALWAYS run this check before using an image attribute for the first time:**
+
+```bash
+node -e "
+import('oneentry').then(({ defineOneEntry }) => {
+  const api = defineOneEntry(process.env.NEXT_PUBLIC_ONEENTRY_URL, { token: process.env.NEXT_PUBLIC_ONEENTRY_TOKEN });
+  return api.Products.getProducts([], undefined, { limit: 1 });
+}).then(r => {
+  const pic = r.items?.[0]?.attributeValues?.pic;
+  console.log('pic.type:', pic?.type);
+  console.log('pic.value type:', Array.isArray(pic?.value) ? 'ARRAY' : typeof pic?.value);
+  console.log('pic.value:', JSON.stringify(pic?.value, null, 2));
+});
+"
+```
+
+## ⚠️ image — value is an object (general SDK rule)
+
+- `value` — object → `attrs.pic?.value?.downloadLink`
+
+## ⚠️ groupOfImages — value is an ARRAY (general SDK rule)
 
 ```typescript
 // ❌ WRONG
-const url = attrs.photo?.value?.downloadLink
+const url = attrs.photos?.value?.downloadLink
 
 // ✅ CORRECT
-const url = attrs.photo?.value?.[0]?.downloadLink
-const preview = attrs.photo?.value?.[0]?.previewLink
+const url = attrs.photos?.value?.[0]?.downloadLink
+const preview = attrs.photos?.value?.[0]?.previewLink
 
 // Gallery
 const gallery = attrs.gallery?.value || []
@@ -89,7 +112,7 @@ const formatted = attrs.releaseDate?.value?.formattedValue || ''
 ## radioButton
 
 ```typescript
-// value — string id of the selected element from listTitles
+// value — string id of the selected item from listTitles
 const selectedId = attrs.color?.value || ''
 // listTitles[locale]: [{ title: "Red", value: "1", extended: { type: "string", value: "#FF0000" } }]
 ```
@@ -129,7 +152,7 @@ const start = intervals[0]?.[0]  // "2026-03-15T09:00:00.000Z"
 const end = intervals[0]?.[1]    // "2026-03-15T10:00:00.000Z"
 ```
 
-**In order/booking forms** — `value` contains available slots. Pattern for calendar:
+**In order/booking forms** — `value` contains available slots. Calendar pattern:
 
 ```typescript
 // Slots for the selected date (UTC comparison!)
@@ -144,7 +167,7 @@ const h = new Date(startISO).getUTCHours();
 const m = new Date(startISO).getUTCMinutes();
 const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
 
-// Sending the selected slot — wrap in array:
+// Sending selected slot — wrap in array:
 { marker: field.marker, type: 'timeInterval', value: [[startISO, endISO]] }
 //                                                   ^^^^ not [startISO, endISO]!
 ```

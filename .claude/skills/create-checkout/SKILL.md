@@ -3,56 +3,50 @@ type: skill
 skillConfig: {"name":"create-checkout"}
 -->
 
-# Create OneEntry Checkout Page
+# Create OneEntry checkout page
 
-Creates a Server Action for getting delivery form data and the full order placement flow.
+Creates a Server Action for fetching delivery form data and a complete order creation flow.
 
 ---
 
-## Step 1: Find out the order storage marker
+## Step 1: Find the order storage marker
 
-The delivery form is tied to the order storage (`formIdentifier`). The marker doesn't need to be known in advance — it's retrieved dynamically from `getAllOrdersStorage()`.
+The delivery form is linked to the order storage (`formIdentifier`). The marker doesn't need to be known in advance — it's fetched dynamically from `getAllOrdersStorage()`.
 
-If you need to know it in advance:
+If you need it in advance:
 
 ```bash
 cat .env.local
 curl -s "https://<URL>/api/content/orders/storage" \
   -H "x-app-token: <TOKEN>" | python -m json.tool
-# Look at the "identifier" and "formIdentifier" fields
+# Look for "identifier" and "formIdentifier" fields
 ```
 
 ---
 
-## Step 2: Create a Server Action for checkout data
+## Step 2: Create client utilities for checkout
 
-File: `app/actions/orders.ts`
+File: `lib/checkout.ts`
 
 ```typescript
-'use server';
+import { getApi, isError } from '@/lib/oneentry';
 
-import { getApi, makeUserApi, isError } from '@/lib/oneentry';
-
-// ⚠️ ONE makeUserApi for all user-auth calls in the function!
-// Each call burns refreshToken via /refresh
-export async function getCheckoutData(refreshToken: string, locale: string) {
-  const { api: userApi } = makeUserApi(refreshToken);
-
-  const storages = await userApi.Orders.getAllOrdersStorage();
-  if (isError(storages) || !storages.length) {
+// Call from Client Component after reDefine()
+export async function getCheckoutData(locale: string) {
+  const storages = await getApi().Orders.getAllOrdersStorage();
+  if (isError(storages) || !(storages as any[]).length) {
     return { error: 'No order storage found' };
   }
 
-  const storage = storages[0];
+  const storage = (storages as any[])[0];
   const formIdentifier = storage.formIdentifier;
 
-  // Form — public API, use getApi()
   const form = await getApi().Forms.getFormByMarker(formIdentifier, locale);
-  if (isError(form)) return { error: form.message };
+  if (isError(form)) return { error: (form as any).message };
 
-  const attrs = Array.isArray(form.attributes)
-    ? form.attributes
-    : Object.values(form.attributes || {});
+  const attrs = Array.isArray((form as any).attributes)
+    ? (form as any).attributes
+    : Object.values((form as any).attributes || {});
 
   const formAttributes = (attrs as any[]).map((attr: any) => ({
     marker: attr.marker,
@@ -70,32 +64,27 @@ export async function getCheckoutData(refreshToken: string, locale: string) {
 }
 
 export async function createOrder(
-  refreshToken: string,
   storageMarker: string,
   formIdentifier: string,
   paymentAccountIdentifier: string,
   formData: { marker: string; value: string }[],
   products: { id: number; quantity: number }[],
 ) {
-  // ⚠️ One instance for createOrder + createSession
-  const { api, getNewToken } = makeUserApi(refreshToken);
-
-  const order = await api.Orders.createOrder(storageMarker, {
+  const order = await getApi().Orders.createOrder(storageMarker, {
     formIdentifier,
     paymentAccountIdentifier,
     formData,
     products,
   } as any);
 
-  if (isError(order)) return { error: order.message };
+  if (isError(order)) return { error: (order as any).message };
 
-  const session = await api.Payments.createSession(order.id, 'session', false) as any;
+  const session = await getApi().Payments.createSession((order as any).id, 'session', false) as any;
   if (isError(session)) return { error: session.message };
 
   return {
-    orderId: order.id,
+    orderId: (order as any).id,
     sessionUrl: session.url,
-    newToken: getNewToken(),
   };
 }
 ```
@@ -104,7 +93,7 @@ export async function createOrder(
 
 ## Step 3: Working with timeInterval on the client
 
-The `timeInterval` field in the form = **list of available delivery slots** (not entered data).
+The `timeInterval` field in the form = **list of available delivery slots** (not user-entered data).
 
 **Value structure:**
 
@@ -180,7 +169,7 @@ const slots = selectedDate
   : [];
 ```
 
-**Format for submission in order form:**
+**Format for submission in the order form:**
 
 ```typescript
 // Selected slot is wrapped in an array:
@@ -195,17 +184,51 @@ formData.push({
 
 ---
 
-## Step 4: Remind of key rules
+## Step 4: Auth-init in checkout component
 
-> Token rules (makeUserApi, getNewToken): `.claude/rules/tokens.md`
+In the Client Component that calls `getCheckoutData`/`createOrder`, useRef guard + hasActiveSession are required:
+
+```tsx
+'use client';
+
+import { useState, useEffect, useRef } from 'react';
+import { reDefine, hasActiveSession } from '@/lib/oneentry';
+import { getCheckoutData, createOrder } from '@/lib/checkout';
+
+export default function CheckoutPage() {
+  const initRef = useRef(false);
+
+  useEffect(() => {
+    if (initRef.current) return;
+    initRef.current = true;
+
+    const init = async () => {
+      const refreshToken = localStorage.getItem('refresh-token');
+      if (!refreshToken) { /* redirect to login */ return; }
+      // ⚠️ Check hasActiveSession before reDefine
+      if (!hasActiveSession()) {
+        await reDefine(refreshToken, 'en_US');
+      }
+      // now getCheckoutData/createOrder work
+    };
+    init();
+  }, []);
+}
+```
+
+---
+
+## Step 5: Key rules reminder
+
+> Token rules: `.claude/rules/tokens.md`
 
 ```md
 ✅ Checkout flow created. Key rules:
 
-1. makeUserApi — ONE instance for all calls (getAllOrdersStorage + createOrder + createSession)
+1. getCheckoutData/createOrder — call from Client Component after reDefine()
 2. Delivery form: formIdentifier comes from storage, NOT hardcoded
-3. timeInterval.value = available slots [[start, end], ...], NOT entered data
-4. createSession is called via the same api instance as createOrder
-5. Save getNewToken() back to localStorage after successful order
-6. paymentAccountIdentifier — ask the user or get from /inspect-api
+3. timeInterval.value = available slots [[start, end], ...], NOT user-entered data
+4. createSession is called via the same getApi() as createOrder
+5. paymentAccountIdentifier — ask the user or get from /inspect-api
+6. useRef guard + hasActiveSession are required in the component with auth-init
 ```

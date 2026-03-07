@@ -3,9 +3,9 @@ type: skill
 skillConfig: {"name":"create-filter-panel"}
 -->
 
-# Create Product Filter Panel
+# Create product filter panel
 
-Creates a filter panel with price, color, and availability. Uses FilterContext as a buffer between UI and URL — filters are applied only on "Apply" click, the page does not re-render on every slider movement.
+Creates a filter panel with price, color and availability. Uses FilterContext as a buffer between UI and URL — filters are applied only on "Apply" click, the page doesn't re-render on every slider move.
 
 > ⚠️ Assumes the product catalog uses URL query params (pattern from `/create-product-list`).
 
@@ -14,8 +14,8 @@ Creates a filter panel with price, color, and availability. Uses FilterContext a
 ## Step 1: Check real attribute markers
 
 ```bash
-/inspect-api products          # markers for price, color, etc.
-/inspect-api product-statuses  # marker for "in stock" status
+/inspect-api products          # price, color markers etc.
+/inspect-api product-statuses  # "in stock" status marker
 ```
 
 What to look for:
@@ -77,7 +77,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 
 ---
 
-## Step 3: Create the price filter component
+## Step 3: Create price filter component
 
 File: `components/filter/PriceFilter.tsx`
 
@@ -105,7 +105,7 @@ export const PriceFilter = memo(({
     searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : max,
   );
 
-  // Sync with context — NOT with URL directly
+  // Sync with context — NOT directly with URL
   useEffect(() => {
     setCtxFrom(priceFrom !== min ? priceFrom : null);
     setCtxTo(priceTo !== max ? priceTo : null);
@@ -142,7 +142,7 @@ PriceFilter.displayName = 'PriceFilter';
 
 ---
 
-## Step 4: Create the color filter
+## Step 4: Create color filter
 
 Colors are fetched from the product attribute via `AttributesSets.getSingleAttributeByMarkerSet`.
 
@@ -170,7 +170,7 @@ export const ColorFilter = memo(({
   }, [currentColor, setCtxColor]);
 
   const handleChange = useCallback((code: string) => {
-    setCurrentColor((prev) => (prev === code ? '' : code)); // click again = reset
+    setCurrentColor((prev) => (prev === code ? '' : code)); // click again = deselect
   }, []);
 
   return (
@@ -200,7 +200,7 @@ export const ColorFilter = memo(({
 ColorFilter.displayName = 'ColorFilter';
 ```
 
-Loading colors from API (in parent Server Component):
+Loading colors from API (in the parent Server Component):
 
 ```ts
 // app/actions/attributes.ts
@@ -209,7 +209,7 @@ import { getApi, isError } from '@/lib/oneentry';
 
 export async function getColorOptions(locale: string) {
   // setMarker — attribute set marker, attributeMarker — color attribute marker
-  // Confirm markers via /inspect-api
+  // Clarify markers via /inspect-api
   const attr = await getApi().AttributesSets.getSingleAttributeByMarkerSet(
     'product', 'color', locale,
   ) as any;
@@ -220,7 +220,7 @@ export async function getColorOptions(locale: string) {
 
 ---
 
-## Step 5: Create the availability filter
+## Step 5: Create availability filter
 
 File: `components/filter/AvailabilityFilter.tsx`
 
@@ -310,15 +310,15 @@ export function ResetButton() {
 ## Step 7: Assemble FilterPanel
 
 ```tsx
-// components/catalog/FilterPanel.tsx
+// components/filter/FilterPanel.tsx
 'use client';
 
 import { useState } from 'react';
 import { FilterProvider } from '@/app/store/providers/FilterContext';
-import { PriceFilter } from '@/components/filter/PriceFilter';
-import { ColorFilter } from '@/components/filter/ColorFilter';
-import { AvailabilityFilter } from '@/components/filter/AvailabilityFilter';
-import { ApplyButton, ResetButton } from '@/components/filter/FilterButtons';
+import { PriceFilter } from './PriceFilter';
+import { ColorFilter } from './ColorFilter';
+import { AvailabilityFilter } from './AvailabilityFilter';
+import { ApplyButton, ResetButton } from './FilterButtons';
 
 export function FilterPanel({
   prices,
@@ -372,16 +372,16 @@ export default async function ShopPage({ params, searchParams }) {
 
 ---
 
-## Important details
+## Key details
 
 ```md
 ✅ Filter panel created. Key rules:
 
 1. FilterContext = buffer: UI changes context, Apply writes to URL
-   → page does not re-render on every slider change
+   → page doesn't re-render on every slider change
 2. Each filter component initializes state from URL (useSearchParams) on mount
 3. colors and prices — Server Component loads from API, passes as props
-4. ApplyButton deletes 'page' from URL — resets pagination on filter change
-5. Confirm price/color/in_stock markers via /inspect-api — they are unique to each project
+4. ApplyButton removes 'page' from URL — resets pagination on filter change
+5. Clarify price/color/in_stock markers via /inspect-api — they're unique per project
 6. If a price slider is needed — install react-range
 ```

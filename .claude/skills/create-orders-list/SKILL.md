@@ -3,54 +3,32 @@ type: skill
 skillConfig: {"name":"create-orders-list"}
 -->
 
-# User Orders List Page
+# User orders list page
 
 Creates a Client Component with an orders list: loading through all storages, cancellation, repeat, pagination.
 
 ---
 
-## Step 1: Create Server Actions
+## Step 1: Create client utilities for orders
 
-> If `app/actions/orders.ts` already exists — read and extend it, don't duplicate.
+> If `lib/orders.ts` already exists — read and extend it, don't duplicate.
 
 ```typescript
-// app/actions/orders.ts
-'use server';
-
-import { defineOneEntry } from 'oneentry';
+// lib/orders.ts
+import { getApi } from '@/lib/oneentry';
 import type { IOrdersEntity, IOrderByMarkerEntity } from 'oneentry/dist/orders/ordersInterfaces';
 
-const PROJECT_URL = process.env.NEXT_PUBLIC_ONEENTRY_URL as string;
-const APP_TOKEN = process.env.NEXT_PUBLIC_ONEENTRY_TOKEN as string;
-
 /**
- * IMPORTANT: each makeUserApi call consumes refreshToken via /refresh.
- * Combine all calls in one instance.
- */
-function makeUserApi(refreshToken: string) {
-  let capturedToken = refreshToken;
-  const api = defineOneEntry(PROJECT_URL, {
-    token: APP_TOKEN,
-    auth: {
-      refreshToken,
-      saveFunction: async (token: string) => { capturedToken = token; },
-    },
-    errors: { isShell: false },
-  });
-  return { api, getNewToken: () => capturedToken };
-}
-
-/**
- * Loads ALL user orders through all storages — ONE /refresh call.
+ * Loads ALL user orders through all storages.
+ * Call from Client Component after reDefine().
  * storageIdToMarker is needed for cancelOrder (order.storageId → storageMarker).
  */
-export async function loadAllOrders(refreshToken: string): Promise<
-  | { orders: IOrderByMarkerEntity[]; storageIdToMarker: Record<number, string>; newToken: string }
+export async function loadAllOrders(): Promise<
+  | { orders: IOrderByMarkerEntity[]; storageIdToMarker: Record<number, string> }
   | { error: string; statusCode?: number }
 > {
-  const { api, getNewToken } = makeUserApi(refreshToken);
   try {
-    const storages = (await api.Orders.getAllOrdersStorage()) as IOrdersEntity[];
+    const storages = (await getApi().Orders.getAllOrdersStorage()) as IOrdersEntity[];
 
     const allOrders: IOrderByMarkerEntity[] = [];
     const storageIdToMarker: Record<number, string> = {};
@@ -59,7 +37,7 @@ export async function loadAllOrders(refreshToken: string): Promise<
       if (!storage.identifier) continue;
       storageIdToMarker[storage.id] = storage.identifier;
       try {
-        const result = await api.Orders.getAllOrdersByMarker(storage.identifier);
+        const result = await getApi().Orders.getAllOrdersByMarker(storage.identifier);
         if (result && 'items' in result) {
           allOrders.push(...(result as any).items);
         }
@@ -68,18 +46,17 @@ export async function loadAllOrders(refreshToken: string): Promise<
       }
     }
 
-    return { orders: allOrders, storageIdToMarker, newToken: getNewToken() };
+    return { orders: allOrders, storageIdToMarker };
   } catch (error: any) {
     return { error: error.message, statusCode: error.statusCode };
   }
 }
 
 /**
- * Cancel an order: updateOrderByMarkerAndId with statusMarker: 'canceled'.
- * storageMarker is obtained from storageIdToMarker[order.storageId].
+ * Cancels an order: updateOrderByMarkerAndId with statusMarker: 'canceled'.
+ * storageMarker comes from storageIdToMarker[order.storageId].
  */
 export async function cancelOrder(
-  refreshToken: string,
   storageMarker: string,
   orderId: number,
   order: {
@@ -88,17 +65,15 @@ export async function cancelOrder(
     formData: { marker: string; type: string; value: any }[];
     products: { id: number; quantity: number }[];
   },
-): Promise<{ newToken: string } | { error: string; statusCode?: number }> {
-  const { api, getNewToken } = makeUserApi(refreshToken);
+): Promise<void | { error: string; statusCode?: number }> {
   try {
-    await api.Orders.updateOrderByMarkerAndId(storageMarker, orderId, {
+    await getApi().Orders.updateOrderByMarkerAndId(storageMarker, orderId, {
       formIdentifier: order.formIdentifier,
       paymentAccountIdentifier: order.paymentAccountIdentifier,
       formData: order.formData,
       products: order.products.map((p) => ({ productId: p.id, quantity: p.quantity })),
       statusMarker: 'canceled',
     } as any);
-    return { newToken: getNewToken() };
   } catch (error: any) {
     return { error: error.message, statusCode: error.statusCode };
   }
@@ -111,11 +86,11 @@ export async function cancelOrder(
 
 ### Key principles
 
-- `'use client'` + `useParams()` — NOT a server component
+- `'use client'` + `useParams()` — NOT a Server Component
 - `loadAllOrders` — one instance traverses all storages
 - **Token race condition:** retry on 401 with current `localStorage.getItem('refreshToken')`
 - **storageIdToMarker** — mapping `storage.id → storage.identifier` for `cancelOrder`
-- **previewImage** — may be array or object → normalize: `Array.isArray(img) ? img[0] : img`
+- **previewImage** — can be an array or object → normalize: `Array.isArray(img) ? img[0] : img`
 - **Sort** by `createdDate` descending (newest first)
 - **Pagination** — client-side, via `visibleCount` + "Load more" button
 - **Repeat order** — `addToCart` for each product from `order.products`
@@ -125,16 +100,29 @@ export async function cancelOrder(
 ```tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
-import { loadAllOrders, cancelOrder } from '@/app/actions/orders';
+import { reDefine, hasActiveSession } from '@/lib/oneentry';
+import { loadAllOrders, cancelOrder } from '@/lib/orders';
 import type { IOrderByMarkerEntity, IOrderProducts } from 'oneentry/dist/orders/ordersInterfaces';
 
 const PAGE_SIZE = 10;
 
+// Status markers depend on the project — replace with real ones from admin panel
+const STATUS_LABELS: Record<string, string> = {
+  created: 'Created',
+  inProgress: 'In Progress',
+  completed: 'Completed',
+  canceled: 'Canceled',
+};
+
 export default function OrdersPage() {
   const params = useParams();
   const locale = (params.locale as string) || 'en_US';
+
+  // Guard against double execution in React StrictMode (dev)
+  // Without it, two parallel refresh requests burn the one-time refresh token
+  const initRef = useRef(false);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -145,41 +133,40 @@ export default function OrdersPage() {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
 
   useEffect(() => {
-    const refreshToken = localStorage.getItem('refreshToken');
-    if (!refreshToken) {
-      setIsLoggedIn(false);
-      setLoading(false);
-      return;
-    }
-    setIsLoggedIn(true);
-    loadOrders(refreshToken);
+    if (initRef.current) return;
+    initRef.current = true;
+
+    const init = async () => {
+      const refreshToken = localStorage.getItem('refresh-token');
+      if (!refreshToken) {
+        setIsLoggedIn(false);
+        setLoading(false);
+        return;
+      }
+      // ⚠️ Check hasActiveSession before reDefine
+      // Without check — after login SDK is already authorized, reDefine replaces instance
+      // → first request returns 401 → removeItem('refresh-token') → logout
+      if (!hasActiveSession()) {
+        await reDefine(refreshToken, 'en_US');
+      }
+      setIsLoggedIn(true);
+      loadOrders();
+    };
+    init();
   }, []);
 
-  const loadOrders = async (token: string) => {
+  const loadOrders = async () => {
     try {
-      let result = await loadAllOrders(token);
-
-      // Race condition: another operation may have already updated the token
-      if ('error' in result && result.statusCode === 401) {
-        const currentToken = localStorage.getItem('refreshToken');
-        if (currentToken && currentToken !== token) {
-          result = await loadAllOrders(currentToken);
-        }
-      }
+      const result = await loadAllOrders();
 
       if ('error' in result) {
-        // Log out ONLY on confirmed auth error
+        // Logout ONLY on confirmed auth error
         if (result.statusCode === 401 || result.statusCode === 403) {
-          localStorage.removeItem('accessToken');
-          localStorage.removeItem('refreshToken');
+          localStorage.removeItem('refresh-token');
           setIsLoggedIn(false);
           window.dispatchEvent(new Event('auth-change'));
         }
         return;
-      }
-
-      if (result.newToken) {
-        localStorage.setItem('refreshToken', result.newToken);
       }
 
       setStorageIdToMarker(result.storageIdToMarker);
@@ -190,7 +177,7 @@ export default function OrdersPage() {
       );
       setOrders(sorted);
     } catch {
-      // Network error — don't log out
+      // Network error — don't logout
     } finally {
       setLoading(false);
     }
@@ -206,24 +193,20 @@ export default function OrdersPage() {
   };
 
   const handleCancel = async (order: IOrderByMarkerEntity) => {
-    const token = localStorage.getItem('refreshToken');
-    if (!token) return;
-
-    // storageMarker obtained from mapping by order.storageId
+    // storageMarker comes from the mapping by order.storageId
     const storageMarker = storageIdToMarker[order.storageId];
     if (!storageMarker) return;
 
     setCancelingIds((prev) => new Set(prev).add(order.id));
     try {
-      const result = await cancelOrder(token, storageMarker, order.id, {
+      const result = await cancelOrder(storageMarker, order.id, {
         formIdentifier: order.formIdentifier || '',
         paymentAccountIdentifier: order.paymentAccountIdentifier || '',
         formData: order.formData as { marker: string; type: string; value: any }[],
         products: order.products.map((p) => ({ id: p.id, quantity: p.quantity })),
       });
 
-      if ('newToken' in result) {
-        localStorage.setItem('refreshToken', result.newToken);
+      if (!result || !('error' in result)) {
         // Update status locally without reloading
         setOrders((prev) =>
           prev.map((o) =>
@@ -254,7 +237,7 @@ export default function OrdersPage() {
     return (
       <div>
         <p>Please log in to view your orders</p>
-        {/* Show AuthForm in modal or redirect here */}
+        {/* Show AuthForm in modal or redirect */}
       </div>
     );
   }
@@ -273,11 +256,11 @@ export default function OrdersPage() {
 
         return (
           <div key={`${order.storageId}-${order.id}`}>
-            {/* Order row — click expands details */}
+            {/* Order row — click to expand details */}
             <button onClick={() => toggleOrder(order.id)}>
               <span>{new Date(order.createdDate).toLocaleDateString()}</span>
-              <span>${Number(order.totalSum).toFixed(2)}</span>
-              <span>{order.statusIdentifier}</span>
+              <span>{order.currency}{Number(order.totalSum).toFixed(2)}</span>
+              <span>{STATUS_LABELS[order.statusIdentifier ?? ''] ?? order.statusIdentifier}</span>
             </button>
 
             {/* Expanded details */}
@@ -290,7 +273,7 @@ export default function OrdersPage() {
                     <div key={product.id}>
                       {imageUrl && <img src={imageUrl} alt={product.title} />}
                       <div>{product.title}</div>
-                      <div>x{product.quantity} — ${Number(product.price).toFixed(2)}</div>
+                      <div>x{product.quantity} — {order.currency}{Number(product.price).toFixed(2)}</div>
                     </div>
                   );
                 })}
@@ -302,7 +285,7 @@ export default function OrdersPage() {
                   </div>
                 ))}
 
-                <div><b>Total:</b> ${Number(order.totalSum).toFixed(2)}</div>
+                <div><b>Total:</b> {order.currency}{Number(order.totalSum).toFixed(2)}</div>
 
                 {/* Action buttons */}
                 {isCanceled && (
@@ -340,7 +323,7 @@ export default function OrdersPage() {
 }
 
 /**
- * previewImage may be an array (image type) or object (file type).
+ * previewImage can be an array (image type) or an object (file type).
  * Normalize and get downloadLink.
  */
 function getProductImage(product: IOrderProducts): string | null {
@@ -353,18 +336,19 @@ function getProductImage(product: IOrderProducts): string | null {
 
 ---
 
-## Step 3: Remind of key rules
+## Step 3: Key rules reminder
 
 ✅ Orders page created. Key rules:
 
 ```md
-1. loadAllOrders — ONE makeUserApi for all storages (one /refresh)
+1. loadAllOrders/cancelOrder — call from Client Component, getApi() after reDefine()
 2. storageIdToMarker: storage.id → identifier — needed for cancelOrder
-3. Retry on 401 with current localStorage.getItem('refreshToken')
-4. Log out ONLY on 401/403 after retry
-5. previewImage may be array or object — normalize via Array.isArray()
-6. Sort orders by createdDate descending
-7. Client-side pagination via visibleCount — don't reload the list
-8. cancelOrder updates status locally (setOrders), no reload
-9. Repeat order: addToCart(p.id) for each product from order.products
+3. Logout ONLY on 401/403
+4. previewImage can be array or object — normalize via Array.isArray()
+5. Sort orders by createdDate descending
+6. Client-side pagination via visibleCount — don't reload the list
+7. cancelOrder updates status locally (setOrders), without reload
+8. Repeat order: addToCart(p.id) for each product from order.products
+9. statusIdentifier — marker, title only via STATUS_LABELS map (replace with real project markers)
+10. paymentAccountLocalizeInfos — locale-keyed: `localizeInfos?.[locale] || paymentAccountIdentifier`
 ```

@@ -5,12 +5,12 @@ skillConfig: {"name":"inspect-api"}
 
 ---
 name: inspect-api
-description: Read .env.local and execute curl requests to OneEntry API to get real markers, attributes, and data structures before writing code
+description: Read .env.local and execute curl requests to the OneEntry API to get real markers, attributes, and data structures before writing code
 argument-hint: "pages|menus|forms|products|product-statuses|auth-providers|all"
 allowed-tools: Read, Bash
 ---
 
-# Inspect API
+# Inspect api
 
 Read `.env.local` to find `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the file is not found — try `.env`.
 
@@ -69,7 +69,7 @@ Look at the `identifier` field.
 After executing the requests, output a structured report:
 
 ```md
-## inspect-api Results
+## inspect-api results
 
 ### Pages (markers for getPageByUrl)
 - "home" — Home
@@ -77,7 +77,7 @@ After executing the requests, output a structured report:
 ...
 
 ### Menus (markers for getMenusByMarker)
-- "main_web" — Main Menu
+- "main_web" — Main menu
 ...
 
 ### Forms (markers for getFormByMarker)
@@ -85,7 +85,7 @@ After executing the requests, output a structured report:
 - "login" — Login
 ...
 
-### Products (first product attribute example)
+### Products (first product attributes example)
 statusIdentifier: "in_stock"
 attributeValues:
   - title (string)
@@ -103,4 +103,4 @@ attributeValues:
 ...
 ```
 
-If `python` is unavailable — use `python3 -m json.tool` or just output raw JSON.
+If `python` is not available — use `python3 -m json.tool` or just output raw JSON.

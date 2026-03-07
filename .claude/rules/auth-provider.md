@@ -7,7 +7,7 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# AuthProvider — OneEntry rules
+# AuthProvider — OneEntry Rules
 
 ## auth — user authentication
 
@@ -29,7 +29,7 @@ const body = {
   value: values[marker] || '' // empty string → 400
 }
 
-// ✅ CORRECT — only { marker, value }, filter out empty
+// ✅ CORRECT — only { marker, value }, filter out empty ones
 const body: IAuthPostBody = {
   authData: formFields
     .filter(f => values[f.marker]?.trim())
@@ -37,7 +37,7 @@ const body: IAuthPostBody = {
 }
 ```
 
-**Example request:**
+**Request example:**
 
 ```json
 {
@@ -48,7 +48,7 @@ const body: IAuthPostBody = {
 }
 ```
 
-**Response `IAuthEntity`:**
+**`IAuthEntity` response:**
 
 ```json
 {
@@ -59,7 +59,7 @@ const body: IAuthPostBody = {
 }
 ```
 
-After successful `auth` — save tokens:
+After a successful `auth` — save the tokens:
 
 ```ts
 localStorage.setItem('accessToken', result.accessToken)
@@ -71,10 +71,10 @@ localStorage.setItem('authProviderMarker', marker)
 
 ## auth and signUp — ONLY from Client Component (fingerprint)
 
-`auth()`, `signUp()`, `generateCode()`, `checkCode()`, `activateUser()`, `changePassword()` send the user's **device fingerprint**. On the server the SDK also generates a fingerprint, but `deviceInfo.browser` will be `"Node.js/..."` instead of the real user browser. On the client the fingerprint is built from real browser and device characteristics.
+`auth()`, `signUp()`, `generateCode()`, `checkCode()`, `activateUser()`, `changePassword()` send the **device fingerprint**. On the server, the SDK also generates a fingerprint, but `deviceInfo.browser` will be `"Node.js/..."` instead of the real user's browser. On the client, the fingerprint is built from real browser and device characteristics.
 
 ```ts
-// ❌ NOT RECOMMENDED — via Server Action (deviceInfo.browser = "Node.js/...", not real browser)
+// ❌ NOT RECOMMENDED — via Server Action (deviceInfo.browser = "Node.js/...", not the real browser)
 // app/actions/auth.ts → 'use server'
 export async function signIn(marker, authData) {
   return await getApi().AuthProvider.auth(marker, { authData }) // browser in fingerprint = Node.js
@@ -85,15 +85,15 @@ export async function signIn(marker, authData) {
 import { getApi, isError } from '@/lib/oneentry'
 
 const result = await getApi().AuthProvider.auth(marker, { authData })
-if (isError(result)) { /* handle error */ return }
+if (isError(result)) { /* error handling */ return }
 localStorage.setItem('accessToken', result.accessToken)
 localStorage.setItem('refreshToken', result.refreshToken)
 ```
 
-**Can be called via Server Action (no fingerprint needed):**
+**Can use Server Action (no fingerprint needed):**
 
 - `getAuthProviders()` / `getAuthProviderByMarker(marker)`
-- `logout(marker, token)` — refreshToken passed as parameter
+- `logout(marker, token)` — refreshToken passed as a parameter
 - `logoutAll(marker)`
 
 ---
@@ -107,7 +107,7 @@ AuthProvider.signUp(marker, body: ISignUpData, langCode?): Promise<ISignUpEntity
 **Critical rules:**
 
 - `authData` — only `{ marker, value }`, no empty strings
-- `notificationData.phoneSMS` — do not pass if no value (empty string → 400)
+- `notificationData.phoneSMS` — do not send if empty (empty string → 400)
 - `formData` — additional profile fields (not authData!)
 
 ```ts
@@ -119,7 +119,7 @@ await getApi().AuthProvider.signUp(marker, {
   notificationData: {
     email: userEmail,
     phonePush: [],
-    // phoneSMS NOT passed — empty string causes 400
+    // Do NOT send phoneSMS — an empty string causes 400
   } as any
 })
 ```
@@ -156,14 +156,14 @@ const providers = await getApi().AuthProvider.getAuthProviders()
 
 **Algorithm:**
 
-1. Get providers → take `formIdentifier` of the needed provider
+1. Get providers → take `formIdentifier` from the needed provider
 2. Call `getFormByMarker(formIdentifier)` → get `attributes[]`
 3. Filter fields by purpose (sign-in vs sign-up)
 4. Render dynamically by `attribute.type` and `attribute.marker`
 
 ```ts
 // app/actions/auth.ts — 'use server'
-// getSignInFields can be a Server Action — Forms API, no fingerprint needed
+// getSignInFields can use Server Action — Forms API, no fingerprint needed
 
 // Auth field markers (don't guess — get from real API via /inspect-api)
 const AUTH_FIELD_MARKERS = ['email_reg', 'password_reg']
@@ -194,24 +194,24 @@ export async function getSignInFields() {
 // 'use client'
 import { getApi, isError } from '@/lib/oneentry'
 
-// authData on submit — build from real fields, filter empty
+// authData on submit — build from real fields, filter empty ones
 const result = await getApi().AuthProvider.auth('email', { authData })
 if (isError(result)) return { error: result.message }
 localStorage.setItem('accessToken', result.accessToken)
 localStorage.setItem('refreshToken', result.refreshToken)
 ```
 
-**Dynamic render in Client Component:**
+**Dynamic rendering in Client Component:**
 
 ```tsx
-// Determine <input> type by marker (not by type from API — all fields have type: "string")
+// Determining <input> type by marker (not by type from API — all fields have type: "string")
 function getInputType(marker: string) {
   if (marker.includes('password') || marker.includes('pass')) return 'password'
   if (marker.includes('email')) return 'email'
   return 'text'
 }
 
-// Field render
+// Rendering the field
 {fields.map((field) => (
   <div key={field.marker} className="input-group">
     <label htmlFor={field.marker}>{field.label}</label>
@@ -225,7 +225,7 @@ function getInputType(marker: string) {
 ))}
 ```
 
-**authData on submit — build from real fields, filter empty:**
+**authData on submit — build from real fields, filter empty ones:**
 
 ```ts
 const authData = fields
@@ -240,9 +240,9 @@ const result = await getApi().AuthProvider.auth('email', { authData })
 
 **Where to get `AUTH_FIELD_MARKERS`:**
 
-- Run `/inspect-api auth-providers` → check `formIdentifier` of the provider
-- Run `/inspect-api forms` → check form fields with that `identifier`
-- Select markers that are auth-credentials (email + password), not profile fields (name, phone, address)
+- Run `/inspect-api auth-providers` → see `formIdentifier` of the provider
+- Run `/inspect-api forms` → see form fields with that `identifier`
+- Select the markers that are auth-credentials (email + password), not profile data (name, phone, address)
 
 ---
 

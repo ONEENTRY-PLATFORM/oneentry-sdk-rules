@@ -1,7 +1,7 @@
 /**
- * Инспекция товаров — структура attributeValues, статусы, pageUrl
- * Запуск: node .claude/temp/inspect-products.mjs
- * Аргументы: node .claude/temp/inspect-products.mjs ship_designer  ← pageUrl категории
+ * Product inspection — attributeValues structure, statuses, pageUrl
+ * Run: node .claude/temp/inspect-products.mjs
+ * Arguments: node .claude/temp/inspect-products.mjs ship_designer  ← category pageUrl
  */
 import { defineOneEntry } from 'oneentry';
 

@@ -27,19 +27,19 @@ export default async function Page({
 }
 ```
 
-## pageUrl = marker, NOT route path
+## pageUrl = marker, NOT a route path
 
 ```typescript
-// ❌ WRONG — passing full route path
+// ❌ WRONG — passing the full route path
 getApi().Pages.getPageByUrl('shop/category/about', locale)
 
-// ✅ CORRECT — only the marker from pageUrl field in OneEntry
+// ✅ CORRECT — only the marker from the pageUrl field in OneEntry
 getApi().Pages.getPageByUrl('about', locale)
-// URL in the app: /shop/category/about
+// App URL: /shop/category/about
 // pageUrl in OneEntry: "about"
 ```
 
-## Getting page content
+## Fetching page content
 
 ```tsx
 import { getApi, isError } from '@/lib/oneentry';
@@ -69,11 +69,11 @@ export default async function MyPage({
 }
 ```
 
-## DON'T hardcode page content
+## Do NOT hardcode page content
 
 ```tsx
 // ❌ WRONG
-return <h1>About Us</h1>
+return <h1>About us</h1>
 
 // ✅ CORRECT — content from CMS
 return <h1>{page.localizeInfos?.title}</h1>

@@ -3,7 +3,7 @@ type: skill
 skillConfig: {"name":"create-product-page"}
 -->
 
-# Create a Product Page
+# Create product page
 
 ---
 
@@ -17,11 +17,11 @@ What to look for in `items[0].attributeValues`:
 - Image marker (type `image`) — e.g. `pic`, `photo`
 - Description marker (type `text`) — e.g. `description`
 - Price marker (type `float`/`integer`) — e.g. `price`
-- Old price marker — e.g. `sale`, `old_price`
+- Sale/old price marker — e.g. `sale`, `old_price`
 - Stock quantity marker — e.g. `units_product`, `stock`
 - `statusIdentifier` — real "in stock" status
 
-**⚠️ Do NOT guess markers** — verify via `/inspect-api`.
+**⚠️ DON'T guess markers** — check via `/inspect-api`.
 
 ---
 
@@ -29,14 +29,14 @@ What to look for in `items[0].attributeValues`:
 
 1. **Page route** — e.g. `app/[locale]/shop/product/[id]/page.tsx`
 2. **Are related products needed?** (`getRelatedProductsById`)
-3. **Image gallery or single image?**
-4. **Is there existing markup?** — if yes, copy it exactly
+3. **Is an image gallery or single image needed?**
+4. **Is there a layout/mockup?** — if yes, copy it exactly
 
 ---
 
-## Step 3: Create Server Action (if not yet created)
+## Step 3: Create Server Action (if not already done)
 
-> If `app/actions/products.ts` already exists — read it and extend, do not duplicate.
+> If `app/actions/products.ts` already exists — read it and extend, don't duplicate.
 
 ```typescript
 // app/actions/products.ts
@@ -101,7 +101,7 @@ export default async function ProductPage({
     || attrs.description?.value?.plainValue
     || '';
 
-  // Status: replace 'in_stock' with real value from /inspect-api
+  // Status: replace 'in_stock' with real one from /inspect-api
   const inStock = product.statusIdentifier === 'in_stock';
   const stockQty = Number(attrs.units_product?.value) || 0;
   const isOutOfStock = !inStock || stockQty === 0;
@@ -160,7 +160,7 @@ export default async function ProductPage({
   const { locale, id } = await params;
   const productId = Number(id);
 
-  // Parallel — product and related
+  // In parallel — product and related
   const [productData, relatedData] = await Promise.all([
     getProductById(productId, locale),
     getRelatedProducts(productId, locale),
@@ -228,15 +228,15 @@ const gallery = attrs.gallery?.value || [];
 
 ---
 
-## Step 5: Reminder — key rules
+## Step 5: Key rules reminder
 
 ✅ Page created. Key rules:
 
 ```md
-1. params in Next.js 15+ is a Promise — await required
+1. params in Next.js 15+ is a Promise — await is required
 2. image → value[0].downloadLink (ARRAY, even for a single image!)
 3. text → value.htmlValue or value.plainValue (object, not string)
-4. statusIdentifier — verify via /inspect-api, don't hardcode 'in_stock'
+4. statusIdentifier — check via /inspect-api, don't hardcode 'in_stock'
 5. Promise.all for parallel requests (product + related + blocks)
 6. notFound() on error — don't render an empty page
 7. next/image requires remotePatterns in next.config.ts for *.oneentry.cloud

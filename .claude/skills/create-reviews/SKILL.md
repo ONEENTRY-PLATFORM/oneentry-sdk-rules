@@ -3,13 +3,13 @@ type: skill
 skillConfig: {"name":"create-reviews"}
 -->
 
-# Create a Reviews Section (FormData)
+# Create reviews section (FormData)
 
 Arguments: page/product for reviews, whether replies to reviews are needed.
 
 ---
 
-## Step 1: Get the form marker and formModuleConfigId
+## Step 1: Get form marker and formModuleConfigId
 
 ```bash
 /inspect-api forms
@@ -24,7 +24,7 @@ const forms = await getApi().Forms.getAllForms();
 // forms[].identifier — marker, forms[].id — formModuleConfigId
 ```
 
-**⚠️ Do NOT guess the marker and ID.** Ask the user if you don't have bash access.
+**⚠️ DON'T guess the marker and ID.** Ask the user if you don't have bash access.
 
 ---
 
@@ -59,7 +59,7 @@ export async function getProductReviews(
   return { data: (result as any).data || [], total: (result as any).total || 0 };
 }
 
-// Submit a review (top-level)
+// Submit review (top-level)
 export async function submitReview(
   formMarker: string,
   formModuleConfigId: number,
@@ -105,7 +105,7 @@ export async function submitComment(
 ## Step 3: Response data structure
 
 ```typescript
-// Splitting parent / child reviews
+// Separating parent / child reviews
 const parentReviews = data.filter((r: any) => r.parentId === null);
 
 const replyMap: Record<number, any[]> = data.reduce((acc: any, r: any) => {
@@ -117,7 +117,7 @@ const replyMap: Record<number, any[]> = data.reduce((acc: any, r: any) => {
 
 // Review fields from formData
 const rating = review.formData.find((f: any) => f.marker === 'rating')?.value;
-// ⚠️ rating is stored as a string: '5', convert via Number(rating)
+// ⚠️ rating is stored as string: '5', convert via Number(rating)
 
 // Metadata
 review.parentId         // null = review, number = reply
@@ -138,7 +138,7 @@ const avg = parentReviews.length
 
 ## Step 4: Create components
 
-### components/product/ReviewsList.tsx
+### components/ReviewsList.tsx
 
 ```tsx
 'use client';
@@ -227,17 +227,17 @@ export function ReviewsList({
 
 ---
 
-## Step 5: Reminder — key rules
+## Step 5: Key rules reminder
 
 ```
 ✅ Reviews created. Key rules:
 
-1. formMarker and formModuleConfigId — from /inspect-api forms or Forms.getAllForms(), do NOT guess
+1. formMarker and formModuleConfigId — from /inspect-api forms or Forms.getAllForms(), DON'T guess
 2. isNested: 1 — required for parent-child structure (reviews + replies)
 3. entityIdentifier in body — filter by product
 4. replayTo: null → review, replayTo: String(id) → reply
-   ⚠️ Typo in SDK: field is named replayTo, not replyTo
-5. rating is stored as a string ('5'), convert via Number()
+   ⚠️ SDK typo: field is called replayTo, not replyTo
+5. rating is stored as string ('5'), convert via Number()
 6. parentId === null → review, parentId !== null → reply
 7. FormData.postFormsData requires Server Action
 8. Field markers (rating, text, etc.) — depend on the form schema in OneEntry

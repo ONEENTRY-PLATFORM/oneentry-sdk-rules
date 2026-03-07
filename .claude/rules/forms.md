@@ -7,7 +7,7 @@ paths:
   - "components/**/*.tsx"
 -->
 
-# Forms & FormsData — OneEntry rules
+# Forms & FormsData — OneEntry Rules
 
 ## getFormByMarker → response structure
 
@@ -26,9 +26,9 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
       "position": 1,
       "isVisible": true,
       "listTitles": [],
-      "validators": { "requiredValidator": { "strict": true } },
+      "validators": { "requiredValidator": { "strict": true, "errorMessage": "First name is required" } },
       "localizeInfos": { "title": "First name" },
-      "additionalFields": []
+      "additionalFields": { "placeholder": { "marker": "placeholder", "type": "string", "value": "Enter first name" } }
     }
   ],
   "moduleFormConfigs": [
@@ -46,6 +46,35 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 - `attributes[]` — form fields for rendering. Sort by `position`
 - `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`
 - `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`
+- `validators[name].errorMessage` — custom validator error message (set in admin panel)
+- `additionalFields` — SDK normalizes the array into `Record<marker, field>`. May contain `placeholder` and other meta-fields
+
+**Mapping validator errors:**
+
+When `postFormsData` returns an error, `IError.message` is an array of strings with field markers or messages. To show custom errors, build a map from form attributes:
+
+```ts
+// Build custom validator error map from form attributes
+function buildValidatorErrors(attributes: any[]): Record<string, string> {
+  const map: Record<string, string> = {}
+  for (const attr of attributes) {
+    // Find the first validator with an errorMessage
+    const errorMessage = Object.values(attr.validators || {})
+      .map((v: any) => v?.errorMessage)
+      .find(Boolean)
+    if (errorMessage) map[attr.marker] = errorMessage
+  }
+  return map
+}
+
+// When handling the error:
+if (isError(result)) {
+  const messages = Array.isArray(result.message) ? result.message : [result.message]
+  // Replace marker with custom message if available
+  const text = messages.map(m => validatorErrors[m] || m).join('; ')
+  return { error: text }
+}
+```
 
 ```ts
 const form = await getApi().Forms.getFormByMarker('contact_us')
@@ -56,9 +85,9 @@ const formModuleConfigId = formModuleConfig?.id ?? 0
 const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? ''
 ```
 
-**Special form field types:**
+**Special field types:**
 
-- `spam` — captcha (reCAPTCHA v3). DO NOT render as `<input>`, use `<FormReCaptcha>`
+- `spam` — captcha (reCAPTCHA v3). Do NOT render as `<input>`, use `<FormReCaptcha>`
 - `button` — submit button. Render as `<button type="submit">`
 
 ---
@@ -151,7 +180,7 @@ Each formData element: `{ marker, type, value }`. `type` comes from `attributes[
 }
 ```
 
-### entity — numeric ids for pages, prefixed strings for products
+### entity — numeric ids for pages, strings with prefix for products
 
 ```ts
 // Pages — numeric ids
@@ -177,13 +206,13 @@ Each formData element: `{ marker, type, value }`. `type` comes from `attributes[
 ### image, groupOfImages — File object
 
 ```ts
-// Requires a File object (not a URL string!)
+// A File object is required (not a URL string!)
 const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png')
 { marker: 'photo', type: 'image', value: [file] }
 { marker: 'gallery', type: 'groupOfImages', value: [file1, file2] }
 ```
 
-### file — two variants depending on source
+### file — two variants depending on the source
 
 ```ts
 // New file from user (from <input type="file">):
@@ -215,6 +244,11 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 // app/actions/forms.ts
 'use server'
 
+// ⚠️ validator message is an array of strings — always normalize it
+function normalizeError(message: string | string[]): string {
+  return Array.isArray(message) ? message.join('; ') : message
+}
+
 export async function submitContactForm(formValues: Record<string, any>) {
   const form = await getApi().Forms.getFormByMarker('contact_us') as any
   if (isError(form)) return { error: form.message }
@@ -239,7 +273,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
     formData: transformedFormData,
   }) as any
 
-  if (isError(result)) return { error: result.message }
+  if (isError(result)) return { error: normalizeError(result.message) }
 
   return { success: true, id: result.formData?.id }
 }

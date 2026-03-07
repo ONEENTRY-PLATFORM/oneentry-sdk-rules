@@ -3,15 +3,15 @@ type: skill
 skillConfig: {"name":"create-favorites"}
 -->
 
-# Create Favorites List (Redux + persist)
+# Create favorites list (Redux + persist)
 
 Creates a Redux slice for storing favorite product IDs with localStorage persistence.
 
-> ⚠️ Requires Redux store. If the store hasn't been created yet — first run `/create-cart-manager` (or create the store manually).
+> ⚠️ Requires Redux store. If the store hasn't been created yet — run `/create-cart-manager` first (or create the store manually).
 
 ---
 
-## Step 1: Create the favorites slice
+## Step 1: Create favorites slice
 
 File: `app/store/reducers/FavoritesSlice.ts`
 
@@ -94,7 +94,7 @@ export default favoritesSlice.reducer;
 
 ---
 
-## Step 2: Add to the store
+## Step 2: Add to store
 
 In `app/store/store.ts` add favorites with persistence:
 
@@ -114,7 +114,7 @@ const favoritesReducer = persistReducer(
     key: 'favorites-slice',
     storage,
     version: 1,
-    whitelist: ['products'],  // version is NOT persisted
+    whitelist: ['products'],  // version NOT persisted
   },
   favoritesSlice,
 );
@@ -138,7 +138,7 @@ export type AppDispatch = AppStore['dispatch'];
 
 ---
 
-## Step 3: Add to favorites button
+## Step 3: Favorite button
 
 ```tsx
 'use client';
@@ -168,7 +168,7 @@ export function FavoriteButton({ productId }: { productId: number }) {
 
 ## Step 4: Favorites page
 
-The slice stores only IDs — load full product data from the API when opening the favorites page:
+The slice stores only IDs — load full product data from the API when the page opens:
 
 ```tsx
 'use client';
@@ -216,13 +216,13 @@ export async function getProductsByIds(ids: number[]) {
 
 ---
 
-## Important details
+## Key details
 
 ```md
 ✅ Favorites created. Key rules:
 
 1. Slice stores only number[] (IDs) — compact and fast to persist
-2. Full product data is loaded from API when opening the favorites page
+2. Full product data is loaded from API when the favorites page opens
 3. toggleFavorite — more convenient than separate add/remove for buttons
 4. version — increment when syncing with server (user.state.favorites)
 5. If user is authenticated — sync favorites with user.state via Users.updateUser
