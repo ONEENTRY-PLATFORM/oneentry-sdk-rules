@@ -5,13 +5,13 @@ skillConfig: {"name":"setup-oneentry"}
 
 ---
 name: setup-oneentry
-description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with a singleton pattern, configure next.config.ts for images
+description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with singleton pattern, configure next.config.ts for images
 allowed-tools: Read, Glob, Write, Edit
 ---
 
 # /setup-oneentry - Setup oneentry
 
-Initialize the OneEntry SDK in the current project. Follow the steps in order.
+Initialize OneEntry SDK in the current project. Follow the steps in order.
 
 ## Step 1: Check existing file
 
@@ -43,7 +43,7 @@ let apiInstance = defineOneEntry(PROJECT_URL, {
 
 export const getApi = () => apiInstance;
 
-export async function reDefine(refreshToken: string, langCode: string): Promise<void> {
+export async function reDefine(refreshToken: string, langCode?: string): Promise<void> {
   if (!refreshToken) return;
   apiInstance = defineOneEntry(PROJECT_URL, {
     token: APP_TOKEN,
@@ -53,6 +53,19 @@ export async function reDefine(refreshToken: string, langCode: string): Promise<
       saveFunction,
     },
   });
+}
+
+// ⚠️ CRITICAL: apiInstance is { AuthProvider, Users, ... }, it does NOT have .state!
+// Check accessToken only through apiInstance.AuthProvider.state
+export function hasActiveSession(): boolean {
+  return !!(apiInstance.AuthProvider as unknown as { state?: { accessToken?: string } })?.state?.accessToken;
+}
+
+// Synchronizes tokens directly in the current instance.
+// Use in login() INSTEAD of reDefine() — avoids 401 when fetchUser after auth().
+export function syncTokens(accessToken: string, refreshToken: string): void {
+  apiInstance.AuthProvider.setAccessToken(accessToken);
+  apiInstance.AuthProvider.setRefreshToken(refreshToken);
 }
 
 export function isError(result: unknown): result is { statusCode: number; message: string } {
@@ -81,13 +94,13 @@ images: {
 
 ## Step 4: Check and create .env.local
 
-Check if the file `.env.local` exists in the root of the project.
+Check if the `.env.local` file exists in the root of the project.
 
 **If the file DOES NOT exist:**
 
 Ask the user:
-1. OneEntry project URL (for example: `https://your-project.oneentry.cloud`)
-2. App Token (find it in the OneEntry admin panel → Settings → App Token)
+1. OneEntry project URL (e.g., `https://your-project.oneentry.cloud`)
+2. App Token (find in the OneEntry admin panel → Settings → App Token)
 
 After receiving the answers, create `.env.local` with the entered values:
 

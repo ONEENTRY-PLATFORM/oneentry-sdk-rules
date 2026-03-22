@@ -45,47 +45,82 @@ localStorage.removeItem('refresh-token')
 
 In AuthContext during initialization: read `'refresh-token'` from localStorage, check `hasActiveSession`, call `reDefine`. Then all `getApi().Users.*`, `getApi().Orders.*`, etc. work automatically.
 
-`reDefine` performs an eager refresh internally (calls `/refresh` immediately after creating the instance) so that the SDK has an access token before the first API call. The provider marker is taken from `localStorage.getItem('authProviderMarker')` — **must be saved during login:**
+`reDefine` performs an eager refresh internally (calls `/refresh` immediately after creating the instance) so that the SDK has an access token before the first API call. The provider marker is taken from `localStorage.getItem('authProviderMarker')` — **must be saved upon login:**
 
 ```typescript
 localStorage.setItem('authProviderMarker', AUTH_PROVIDER); // save in AuthForm after auth()
 ```
 
-**`hasActiveSession` — must be exported from `lib/oneentry.ts`:**
+**`hasActiveSession` and `syncTokens` — must be exported from `lib/oneentry.ts`:**
 
 ```typescript
 // lib/oneentry.ts
+// ⚠️ CRITICAL: apiInstance — this is IDefineApi = { AuthProvider, Users, ... }
+// It does NOT have a .state property! Check via apiInstance.AuthProvider.state
 export function hasActiveSession(): boolean {
   const authProvider = apiInstance.AuthProvider as unknown as { state?: { accessToken?: string } };
   return !!authProvider?.state?.accessToken;
 }
+
+// Synchronizes both tokens directly in the current instance
+// Use in login() instead of reDefine() — avoids 401 on the first request
+export function syncTokens(accessToken: string, refreshToken: string): void {
+  apiInstance.AuthProvider.setAccessToken(accessToken);
+  apiInstance.AuthProvider.setRefreshToken(refreshToken);
+}
 ```
 
-**Usage in components:**
+> ❌ `(apiInstance as any).state?.accessToken` — always `undefined`, the SDK does not have `.state` at the top level!
+
+**`syncTokens` in `login()` — mandatory pattern:**
 
 ```typescript
-import { reDefine, hasActiveSession } from '@/lib/oneentry';
+// ✅ CORRECT — in AuthContext login()
+// Instead of hasActiveSession() + reDefine() use syncTokens
+// Tokens are taken from the response of auth() / oauth() and immediately set in the current instance
+const login = async (token: { accessToken: string; refreshToken: string }) => {
+  localStorage.setItem('refresh-token', token.refreshToken)
+  syncTokens(token.accessToken, token.refreshToken)  // ← without 401
+  setIsAuth(true)
+  await fetchUser()
+}
 
-// ⚠️ ALWAYS check hasActiveSession() before reDefine
-// Otherwise, you will replace the working instance (after login) with a new one without an access token
-// → the first API request will return 401 → removeItem('refresh-token') → logout
+// ❌ INCORRECT — reDefine() creates a new instance without accessToken
+// → fetchUser() → GET /users/me → 401 → SDK retry → 200 (but 401 visible in devtools)
+const login = async (token: ...) => {
+  if (!hasActiveSession()) {
+    await reDefine(token.refreshToken)  // new instance without accessToken!
+  }
+  await fetchUser()  // → 401 in the browser
+}
+```
+
+**`reDefine` — only for initialization from localStorage on page load:**
+
+```typescript
+import { reDefine, hasActiveSession, syncTokens } from '@/lib/oneentry';
+
+// useEffect on load — only here reDefine is needed
 const refresh = localStorage.getItem('refresh-token')
 if (!refresh) { setIsAuth(false); return }
 
 if (!hasActiveSession()) {
-  await reDefine(refresh, langCode)
+  await reDefine(refresh)  // ← restoring session from localStorage
 }
 ```
 
-**Common mistake — calling reDefine without a check:**
+**Common mistake — using reDefine in login():**
 
 ```typescript
-// ❌ INCORRECT — after login the SDK is already authorized, reDefine will break the session
-const refresh = localStorage.getItem('refresh-token')
-if (refresh) await reDefine(refresh, 'en_US') // burns the token!
+// ❌ INCORRECT — after auth() the SDK already has accessToken, reDefine resets it
+if (!hasActiveSession()) {
+  await reDefine(token.refreshToken) // creates a new instance without accessToken!
+}
+await fetchUser() // → 401
 
 // ✅ CORRECT
-if (refresh && !hasActiveSession()) await reDefine(refresh, 'en_US')
+syncTokens(token.accessToken, token.refreshToken)
+await fetchUser() // → 200 immediately
 ```
 
 ## updateUserState — writing user.state to the server

@@ -46,8 +46,24 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 - `attributes[]` — form fields for rendering. Sort by `position`
 - `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`
 - `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`
-- `validators[name].errorMessage` — custom error text for the validator (set in admin panel)
-- `additionalFields` — SDK normalizes the array into `Record<marker, field>`. May contain `placeholder` and other meta-fields
+- `validators[name].errorMessage` — custom error message text for the validator (set in admin panel)
+- `additionalFields` — SDK normalizes the array into `Record<marker, field>`. Contains UI metadata for the field: `placeholder`, `hint`, and others
+
+**Using `additionalFields` when rendering a field:**
+
+```tsx
+// ✅ Always use placeholder from additionalFields — do not hardcode!
+const placeholder = field.additionalFields?.placeholder?.value || ''
+const hint = field.additionalFields?.hint?.value || ''
+
+<input
+  id={field.marker}
+  type="text"
+  placeholder={placeholder}  // ← from additionalFields
+  required={!!field.validators?.requiredValidator?.strict}
+/>
+{hint && <span className="hint">{hint}</span>}
+```
 
 **Mapping validator errors:**
 
@@ -58,7 +74,7 @@ In case of an error `postFormsData` `IError.message` — an array of strings wit
 function buildValidatorErrors(attributes: any[]): Record<string, string> {
   const map: Record<string, string> = {}
   for (const attr of attributes) {
-    // Find the first validator with errorMessage
+    // Look for the first validator with errorMessage
     const errorMessage = Object.values(attr.validators || {})
       .map((v: any) => v?.errorMessage)
       .find(Boolean)
@@ -85,14 +101,14 @@ const formModuleConfigId = formModuleConfig?.id ?? 0
 const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? ''
 ```
 
-**Special types of form fields:**
+**Special field types:**
 
 - `spam` — captcha (reCAPTCHA v3). DO NOT render as `<input>`, use `<FormReCaptcha>`
 - `button` — submit button. Render as `<button type="submit">`
 
 ---
 
-## postFormsData — three mandatory identifiers
+## postFormsData — three required identifiers
 
 ```ts
 await getApi().FormData.postFormsData({
@@ -206,7 +222,7 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 { marker: 'gallery', type: 'groupOfImages', value: [file1, file2] }
 ```
 
-### file — two options depending on the source
+### file — two variants depending on the source
 
 ```ts
 // New file from user (from <input type="file">):
@@ -232,7 +248,7 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 
 ---
 
-## Full flow: get form → send data
+## Full flow: get form → submit data
 
 ```ts
 // app/actions/forms.ts
@@ -275,7 +291,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
 ---
 
-## Response postFormsData
+## Response from postFormsData
 
 ```json
 {

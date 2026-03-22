@@ -81,7 +81,7 @@ for (const [k, v] of Object.entries(attrs)) {
 
 ## ⚠️ image — structure depends on the entity type (verified with real data)
 
-> **Note:** Swagger documentation declares `image.value` as an object for all entities. The real API returns different structures — trust real data, not Swagger.
+> **Note:** Swagger documentation declares `image.value` as an object for all entities. The actual API returns different structures — trust real data, not Swagger.
 
 | Entity       | image valueType | Access                                 |
 |--------------|-----------------|----------------------------------------|
@@ -192,7 +192,7 @@ function filterIntervalsByDate(intervals: [string, string][], date: Date) {
   return intervals.filter(([s, e]) => new Date(s) < endOfDay && new Date(e) > startOfDay);
 }
 
-// Time formatting — from UTC hours!
+// Formatting time — from UTC hours!
 const h = new Date(startISO).getUTCHours();
 const m = new Date(startISO).getUTCMinutes();
 const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
@@ -206,18 +206,103 @@ const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
 
 ## additionalFields — nested attributes
 
+`additionalFields` — arbitrary nested attributes that can be attached to **any** attribute in the admin panel. The content is fully defined by the developer/administrator. The only limitation is that the types of nested fields are taken from the standard set of OneEntry types (`string`, `integer`, `float`, `text`, `image`, `groupOfImages`, `date`, `list`, etc.).
+
+It appears in two contexts:
+
+- `attributeValues` of entities (Product, Page, Block) — values of nested fields
+- `attributes` of schemas (Forms, AttributesSets) — metadata of nested fields
+
+### SDK Normalization
+
+The SDK automatically transforms `additionalFields` from an **array** (as returned by the API) into a **Record**, with the key being the `marker` of the field.
+
 ```typescript
-// Price with currency
-// { type: "float", value: "1299.99", additionalFields: { currency: { type: "string", value: "USD" } } }
-const price = attrs.price?.value
-const currency = attrs.price?.additionalFields?.currency?.value || 'USD'
-const oldPrice = attrs.price?.additionalFields?.oldPrice?.value
+// RAW API (rawData: true in config):
+{ additionalFields: [
+    { marker: "unit", type: "string", value: "kg", position: 0 },
+    { marker: "note", type: "text",   value: {...}, position: 1 }
+  ]
+}
+
+// After SDK normalization (rawData: false — default):
+{ additionalFields: {
+    unit: { marker: "unit", type: "string", value: "kg",  position: 0 },
+    note: { marker: "note", type: "text",   value: {...}, position: 1 }
+  }
+}
+
+// If additionalFields is not set → {}
 ```
 
-**Special flags:**
+### Full Record Structure
 
-- `isProductPreview: true` — product preview image
-- `isIcon: true` — attribute is an icon
+```typescript
+// Each record in additionalFields:
+{
+  marker: "unit",   // identifier of the additional field
+  type: "string",   // one of the standard OneEntry types
+  value: "kg",      // value — structure depends on type (as in main attributes)
+  position: 0,
+  isIcon: false,
+  isProductPreview: false,
+  additionalFields: {} // nesting is rarely used
+}
+```
+
+### Accessing Values
+
+> ⚠️ **Markers and meanings of `additionalFields` are defined in the admin panel** — they are unique for each project and attribute. Always check the real structure via `/inspect-api` or `console.log` before use. Do not guess markers.
+
+```typescript
+const attrs = entity.attributeValues || {}
+
+// Step 1 — see what is there (via /inspect-api or directly):
+console.log(attrs.someMarker?.additionalFields)
+// → { fieldA: { type: "string", value: "...", marker: "fieldA", ... },
+//     fieldB: { type: "image",  value: {...}, marker: "fieldB", ... } }
+
+// Step 2 — access by known marker:
+const fieldAValue = attrs.someMarker?.additionalFields?.fieldA?.value
+
+// Step 3 — the structure of value depends on the type of the nested field (the same rules as for main attributes):
+// type "string"  → value — string
+// type "text"    → value.htmlValue / plainValue
+// type "image"   → value.downloadLink (or value[0].downloadLink — check!)
+// type "integer" → value — number
+// ... etc.
+
+// Iteration if you need to go through all additional fields:
+const extra = attrs.someMarker?.additionalFields || {}
+for (const [marker, field] of Object.entries(extra as Record<string, any>)) {
+  console.log(marker, field.type, field.value)
+}
+```
+
+### Form Attributes (Forms / AttributesSets)
+
+In the form schema, `additionalFields` — arbitrary UI metadata set in the admin panel for each field. Interpretation depends on the project:
+
+```typescript
+// Markers are defined by the administrator — always inspect:
+console.log(field.additionalFields)
+// → { placeholder: { type: "string", value: "Enter name", ... },
+//     hint: { type: "string", value: "Hint", ... } }
+
+// Access by marker:
+const placeholder = field.additionalFields?.placeholder?.value || ''
+const hint        = field.additionalFields?.hint?.value || ''
+```
+
+### isIcon and isProductPreview
+
+These are flags **on the attribute itself** in `attributeValues`, NOT inside `additionalFields`:
+
+```typescript
+// { type: "image", value: {...}, isIcon: false, isProductPreview: true, additionalFields: {} }
+const previewAttr = Object.values(attrs).find((a: any) => a?.isProductPreview === true)
+const iconAttr    = Object.values(attrs).find((a: any) => a?.isIcon === true)
+```
 
 ## For page blocks — localizeInfos as fallback
 

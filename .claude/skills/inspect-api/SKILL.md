@@ -5,17 +5,52 @@ skillConfig: {"name":"inspect-api"}
 
 ---
 name: inspect-api
-description: Read `.env.local` and perform curl requests to the OneEntry API to obtain real markers, attributes, and data structures before writing code
+description: Get the project URL and token, then perform curl requests to the OneEntry API to obtain real markers, attributes, and data structures before writing code
 argument-hint: "pages|menus|forms|products|product-statuses|auth-providers|all"
 allowed-tools: Read, Bash
 ---
 
 # Inspect api
 
-Read `.env.local` to find `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the file is not found — try `.env`.
+## Step 1: Get the project URL and token
 
-Then execute curl requests depending on the argument `$ARGUMENTS`.
-If the argument is not specified or `all` — execute all requests below.
+Search in the following order of priority:
+
+### 1. MCP tool `get-project-config` (highest priority)
+
+Call the MCP tool **`get-project-config`** — it will return the URL and token if the user has added them to `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "oneentry": {
+      "command": "...",
+      "env": {
+        "ONEENTRY_URL": "https://my-project.oneentry.cloud",
+        "ONEENTRY_TOKEN": "my-app-token"
+      }
+    }
+  }
+}
+```
+
+If `source` in the response equals `".mcp.json"` and both fields are non-empty — use them, skip steps 2 and 3.
+
+### 2. `.env.local` / `.env`
+
+If the tool returned empty values — read `.env.local`. If not found — try `.env`.
+Look for `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`.
+
+### 3. Ask the user
+
+If the data is not found in any of the sources — ask:
+
+> Project URL and App Token not found. Please provide:
+> - Project URL (e.g.: `https://my-project.oneentry.cloud`)
+> - App Token (Settings → App Token in OneEntry Admin Panel)
+
+Then perform curl requests depending on the argument `$ARGUMENTS`.
+If the argument is not specified or `all` — perform all requests below.
 
 ## Requests
 
@@ -66,7 +101,7 @@ Look at the `identifier` field.
 
 ## Output
 
-After executing the requests, output a structured report:
+After performing the requests, output a structured report:
 
 ```md
 ## Results of inspect-api

@@ -17,7 +17,7 @@ AuthProvider.auth(marker, body): Promise<IAuthEntity | IError>
 
 **Parameters:**
 
-- `marker` — text identifier of the authorization provider (for example `"email"`)
+- `marker` — text identifier of the authorization provider (e.g. `"email"`)
 - `body` — object `IAuthPostBody`
 
 **Structure of body — only `authData`:**
@@ -59,7 +59,7 @@ const body: IAuthPostBody = {
 }
 ```
 
-After successful `auth` — save the tokens:
+After a successful `auth` — save the tokens:
 
 ```ts
 localStorage.setItem('accessToken', result.accessToken)
@@ -71,7 +71,7 @@ localStorage.setItem('authProviderMarker', marker)
 
 ## auth and signUp — ONLY from Client Component (fingerprint)
 
-`auth()`, `signUp()`, `generateCode()`, `checkCode()`, `activateUser()`, `changePassword()` pass the **fingerprint of the user's device**. On the server, the SDK also generates a fingerprint, but in `deviceInfo.browser` it will be `"Node.js/..."` instead of the user's actual browser. On the client, the fingerprint is built from the actual characteristics of the browser and device.
+`auth()`, `signUp()`, `generateCode()`, `checkCode()`, `activateUser()`, `changePassword()` pass the **fingerprint of the user's device**. On the server, the SDK also generates a fingerprint, but in `deviceInfo.browser` it will be `"Node.js/..."` instead of the real user's browser. On the client, the fingerprint is built from the real characteristics of the browser and device.
 
 ```ts
 // ❌ UNDESIRABLE — through Server Action (deviceInfo.browser = "Node.js/...", not the real browser)
@@ -106,7 +106,7 @@ AuthProvider.signUp(marker, body: ISignUpData, langCode?): Promise<ISignUpEntity
 
 **Critical rules:**
 
-- `authData` — only `{ marker, value }`, without empty strings
+- `authData` — only `{ marker, value }`, no empty strings
 - `notificationData.phoneSMS` — do not pass if there is no value (empty string → 400)
 - `formData` — additional profile fields (not authData!)
 
@@ -132,8 +132,8 @@ Do not guess markers (`"email"`, `"phone"`, etc.) — get the list from the API:
 
 ```ts
 const providers = await getApi().AuthProvider.getAuthProviders()
-// providers[0].identifier       — marker of the provider for auth()
-// providers[0].formIdentifier   — marker of the form with fields for this provider
+// providers[0].identifier       — provider marker for auth()
+// providers[0].formIdentifier   — form marker with fields for this provider
 ```
 
 **Full structure of the provider response:**
@@ -148,6 +148,21 @@ const providers = await getApi().AuthProvider.getAuthProviders()
 }
 ```
 
+**`isCheckCode` — for account activation, NOT for login:**
+
+`isCheckCode: true` means that after **registration** the user must confirm the email via a code (`activateUser()`). This flag does not affect the **login** process — `auth()` with email + password works normally in both cases.
+
+- `isCheckCode: true` → after `signUp()` call `activateUser(marker, email, code)`
+- `isCheckCode: false` → after `signUp()` the account is immediately active, `activateUser()` is not needed
+
+```ts
+// ❌ INCORRECT — using generateCode() for standard login
+await getApi().AuthProvider.generateCode(marker, email, 'login')
+
+// ✅ CORRECT — auth() with email + password directly
+const result = await getApi().AuthProvider.auth(marker, { authData })
+```
+
 ---
 
 ## Dynamic fields of the authorization form — MANDATORY PATTERN
@@ -156,7 +171,7 @@ const providers = await getApi().AuthProvider.getAuthProviders()
 
 **Algorithm:**
 
-1. Get providers → take `formIdentifier` of the desired provider
+1. Get providers → take `formIdentifier` of the required provider
 2. Call `getFormByMarker(formIdentifier)` → get `attributes[]`
 3. Filter fields by purpose (sign-in vs sign-up)
 4. Render dynamically by `attribute.type` and `attribute.marker`
@@ -169,7 +184,7 @@ const providers = await getApi().AuthProvider.getAuthProviders()
 const AUTH_FIELD_MARKERS = ['email_reg', 'password_reg']
 
 export async function getSignInFields() {
-  const form = await getApi().Forms.getFormByMarker('reg') // formIdentifier from the provider
+  const form = await getApi().Forms.getFormByMarker('reg') // formIdentifier from provider
   if (isError(form)) return { error: form.message }
 
   const fields = (form as any).attributes
@@ -204,7 +219,7 @@ localStorage.setItem('refreshToken', result.refreshToken)
 **Dynamic render in Client Component:**
 
 ```tsx
-// Determine the type of <input> by marker (not by type from API — all fields have type: "string")
+// Determine <input> type by marker (not by type from API — all fields have type: "string")
 function getInputType(marker: string) {
   if (marker.includes('password') || marker.includes('pass')) return 'password'
   if (marker.includes('email')) return 'email'
@@ -243,6 +258,24 @@ const result = await getApi().AuthProvider.auth('email', { authData })
 - Run `/inspect-api auth-providers` → see the `formIdentifier` of the provider
 - Run `/inspect-api forms` → see the fields of the form with this `identifier`
 - Choose markers that are auth-credentials (email + password), not profile data (name, phone, address)
+
+---
+
+## OAuth Providers (Google, Facebook, etc.)
+
+### Step 1: Redirect to the provider's authorization page
+
+Redirecting to Google (or another OAuth provider) is a **mandatory step**. Without it, you cannot obtain the `code`. `oauth()` requires `code` — it cannot be obtained otherwise than through the provider's redirect.
+
+The base URL for authorization is stored in `config.oauthAuthUrl` of the provider (e.g., `"https://accounts.google.com/o/oauth2/v2/auth"`). Get it via `getAuthProviderByMarker`, then add query parameters:
+
+> Full pattern with button, callback page, and Server Action — skill **`/create-google-oauth`**
+
+### Step 2: Exchange code for tokens (callback page)
+
+After redirecting, Google/etc. will return `?code=...` in the URL. Exchanging the code for tokens is **only through Server Action** (`'use server'`): `client_secret` must not reach the client.
+
+> Full pattern — skill **`/create-google-oauth`**
 
 ---
 

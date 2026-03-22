@@ -56,7 +56,7 @@ const colorAttr = attrs.find((a: any) => a.marker === 'color')
 const options = colorAttr?.listTitles ?? []
 // [{ title: "Red", value: "1", extended: { type: "string", value: "#FF0000" }, position: 1 }]
 
-// extended — additional value (e.g., CSS color for the swatch)
+// extended — additional value (e.g., CSS color for swatch)
 const swatches = options.map((opt: any) => ({
   label: opt.title,
   value: opt.value,
@@ -64,25 +64,31 @@ const swatches = options.map((opt: any) => ({
 }))
 ```
 
-**Important:** `value` in listTitles — this is the ID of the option (string). This value is stored in the `attributeValues` of the entity when selecting `radioButton` or `list`.
+**Important:** `value` in listTitles is the option ID (string). This is the value stored in `attributeValues` of the entity when selecting `radioButton` or `list`.
 
 ---
 
 ## additionalFields — nested attributes
 
+`additionalFields` is configured in the admin panel on the attribute. In the schema (AttributesSets / Forms), it is an **array** of nested attributes. The SDK normalizes it into `Record<marker, field>` when querying entities (Products, Pages, Blocks).
+
 ```ts
-// additionalFields — array of nested attributes (e.g., currency for price)
+// Attribute schema from getAttributesByMarker — additionalFields array (not normalized):
 {
-  type: "float",
-  marker: "price",
+  type: "string",
+  marker: "some_field",
   additionalFields: [
-    { type: "string", value: "USD", marker: "currency" }
+    { type: "string", marker: "fieldA", value: "..." },
+    { type: "integer", marker: "fieldB", value: 0 }
   ]
 }
 
-// Access in the attributeValues of the entity:
-const currency = product.attributeValues.price?.additionalFields?.currency?.value
+// In the attributeValues of the entity (normalized by SDK into Record, key = marker):
+entity.attributeValues.some_field?.additionalFields
+// → { fieldA: { type: "string", value: "...", ... }, fieldB: { type: "integer", value: 0, ... } }
 ```
+
+> ⚠️ The markers of `additionalFields` are fully defined in the admin panel and are unique for each project. **Do not guess** — always inspect via `/inspect-api` or `console.log`. In the schema (AttributesSets), `additionalFields` is an array. In the `attributeValues` of the entity — a normalized SDK object (Record). Do not confuse contexts.
 
 ---
 

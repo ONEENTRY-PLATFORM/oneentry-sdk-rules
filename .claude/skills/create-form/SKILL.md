@@ -19,7 +19,7 @@ If the marker is not provided:
 
 Look at the `identifier` field — this is the marker for `getFormByMarker()`.
 
-Or directly via the API:
+Or directly through the API:
 
 ```typescript
 const forms = await getApi().Forms.getAllForms();
@@ -32,7 +32,7 @@ const forms = await getApi().Forms.getAllForms();
 
 ## Step 2: Clarify with the user
 
-1. **Where should the data be sent?**
+1. **Where is the data sent?**
    - To OneEntry via `postFormsData` — standard scenario
    - To another endpoint — different logic needed
 2. **Is captcha required?** — the form may contain a field of type `spam` (reCAPTCHA v3)
@@ -144,7 +144,7 @@ export async function submitForm(
 | `list`                      | `<select>`, `<select multiple>` or `<checkbox>`  |
 | `radioButton`               | `<input type="radio">`                            |
 | `file`                      | `<input type="file">`                             |
-| `spam`                      | `<FormReCaptcha>` — NOT `<input>`!               |
+| `spam`                      | `<FormReCaptcha>` — NOT `<input>`!                 |
 
 #### components/DynamicForm.tsx
 
@@ -183,7 +183,7 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
       setFormId(result.identifier);
       setFormModuleConfigId(result.formModuleConfigId);
       setModuleEntityIdentifier(result.moduleEntityIdentifier);
-      // Sorting fields by position
+      // Sort fields by position
       const sorted = [...result.attributes].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
       setFields(sorted);
       setFormLoading(false);
@@ -204,7 +204,7 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
       .filter(f => f.type !== 'spam' && values[f.marker] !== undefined && values[f.marker] !== '')
       .map(f => ({ marker: f.marker, type: f.type, value: values[f.marker] }));
 
-    // Add captcha token if present
+    // Add captcha token if available
     if (captchaToken) {
       formData.push({ marker: 'spam', type: 'spam', value: captchaToken });
     }
@@ -259,7 +259,9 @@ function renderField(
   },
 ) {
   const label = field.localizeInfos?.title || field.marker;
+  const placeholder = field.additionalFields?.placeholder?.value || '';
   const value = values[field.marker] || '';
+  const required = !!field.validators?.requiredValidator?.strict;
   const onChange = (val: string) => setValues(prev => ({ ...prev, [field.marker]: val }));
 
   // ⚠️ spam = reCAPTCHA v3, NOT input!
@@ -287,6 +289,8 @@ function renderField(
         <textarea
           id={field.marker}
           value={value}
+          placeholder={placeholder}
+          required={required}
           onChange={(e) => onChange(e.target.value)}
         />
       </>
@@ -351,8 +355,9 @@ function renderField(
         id={field.marker}
         type={inputType[field.type] || 'text'}
         value={value}
+        placeholder={placeholder}
+        required={required}
         onChange={(e) => onChange(e.target.value)}
-        required={field.validators?.required}
       />
     </>
   );
@@ -445,8 +450,8 @@ export function FormReCaptcha({
 1. The captcha type is 'spam', NOT 'captcha'. Render FormReCaptcha, NOT <input>!
 2. Fields are rendered dynamically by field.type — do not hardcode
 3. formData for submission — only { marker, value }, only non-empty
-4. Forms API requires Server Action — cannot be called from 'use client' directly
+4. Forms API requires Server Action — cannot be called directly from 'use client'
 5. Sort fields by field.position before rendering
 6. submitForm via FormData.postFormData, not via Forms API
-7. Form marker — obtain via /inspect-api forms, DO NOT guess
+7. Get the form marker through /inspect-api forms, DO NOT guess
 ```
