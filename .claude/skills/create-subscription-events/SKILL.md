@@ -1,9 +1,8 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-subscription-events"}
--->
-
-# Create a Subscription for Product Events
+---
+name: create-subscription-events
+description: Create product event subscription
+---
+# Create a subscription for product events
 
 Creates a subscription for changes in price and stock status of a product via the OneEntry Events API. The user receives a notification when the product is back in stock or the price changes.
 
@@ -11,7 +10,7 @@ Creates a subscription for changes in price and stock status of a product via th
 
 ---
 
-## Step 1: Know the Event Markers
+## Step 1: Learn the event markers
 
 Event markers are configured in OneEntry Admin → Events. Standard markers from a real project:
 
@@ -22,7 +21,7 @@ Clarify the actual markers with the user or check in the admin panel.
 
 ---
 
-## Step 2: Create a Hook for Subscription
+## Step 2: Create a hook for subscription
 
 File: `app/api/hooks/useEvents.ts`
 
@@ -86,7 +85,7 @@ export async function getUserSubscriptions(offset = 0, limit = 30) {
 
 ---
 
-## Step 3: Subscription Button on Product Card
+## Step 3: Subscription button on the product card
 
 ```tsx
 // components/product/SubscribeButton.tsx
@@ -144,9 +143,9 @@ export function SubscribeButton({ productId }: { productId: number }) {
 
 ---
 
-## Step 4: Integration with Favorites Button (Optional)
+## Step 4: Integration with the favorites button (optional)
 
-In a real project, subscription to events is triggered when added to favorites:
+In a real project, the subscription to events is triggered when adding to favorites:
 
 ```tsx
 // When adding to favorites — subscribe to events
@@ -174,9 +173,9 @@ const handleRemoveFromFavorites = async (productId: number) => {
 
 ---
 
-## Step 5: Fetching Subscriptions (Optional)
+## Step 5: Getting subscriptions (optional)
 
-If you need to display a list of subscriptions on the profile page — use `getApi()` from the Client Component:
+If you need to show the list of subscriptions on the profile page — use `getApi()` from the Client Component:
 
 ```typescript
 // Call from Client Component after reDefine()
@@ -191,7 +190,7 @@ async function getUserEventSubscriptions() {
 
 ---
 
-## Important Details
+## Important details
 
 ```md
 ✅ Events subscriptions created. Key rules:
@@ -206,7 +205,7 @@ async function getUserEventSubscriptions() {
    (without guard — React StrictMode burns a one-time refresh token with a double call)
 ```
 
-### Auth-init Pattern (if no AuthContext)
+### Auth-init pattern (if there is no AuthContext)
 
 If the component initializes authorization itself (not through AuthContext):
 

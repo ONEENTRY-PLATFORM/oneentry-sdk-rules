@@ -1,8 +1,7 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-product-page"}
--->
-
+---
+name: create-product-page
+description: Create product page
+---
 # Create Product Page
 
 ---
@@ -19,7 +18,7 @@ What to look for in `items[0].attributeValues`:
 - Price marker (type `float`/`integer`) — for example `price`
 - Old price marker — for example `sale`, `old_price`
 - Stock quantity marker — for example `units_product`, `stock`
-- `statusIdentifier` — real status "in stock"
+- `statusIdentifier` — actual status "in stock"
 
 **⚠️ DO NOT guess markers** — check via `/inspect-api`.
 
@@ -34,7 +33,7 @@ What to look for in `items[0].attributeValues`:
 
 ---
 
-## Step 3: Create Server Action (if not already created)
+## Step 3: Create Server Action (if not already existing)
 
 > If `app/actions/products.ts` already exists — read it and supplement, do not duplicate.
 
@@ -78,7 +77,7 @@ import { getProductById } from '@/app/actions/products';
 export default async function ProductPage({
   params,
 }: {
-  params: Promise<{ locale: string; id: string }>;
+  params: Promise<{ locale: string; id: string }> ;
 }) {
   const { locale, id } = await params;  // ⚠️ Next.js 15+: await!
   const productId = Number(id);
@@ -101,7 +100,7 @@ export default async function ProductPage({
     || attrs.description?.value?.plainValue
     || '';
 
-  // Status: replace 'in_stock' with real one from /inspect-api
+  // Status: replace 'in_stock' with the real one from /inspect-api
   const inStock = product.statusIdentifier === 'in_stock';
   const stockQty = Number(attrs.units_product?.value) || 0;
   const isOutOfStock = !inStock || stockQty === 0;
@@ -155,7 +154,7 @@ export default async function ProductPage({
 export default async function ProductPage({
   params,
 }: {
-  params: Promise<{ locale: string; id: string }>;
+  params: Promise<{ locale: string; id: string }> ;
 }) {
   const { locale, id } = await params;
   const productId = Number(id);
@@ -181,7 +180,7 @@ export default async function ProductPage({
     <main>
       {/* ... main content ... */}
 
-      {/* Related products */}
+      {/* Related Products */}
       {relatedProducts.length > 0 && (
         <section>
           <h2>Related products</h2>
@@ -228,12 +227,12 @@ const gallery = attrs.gallery?.value || [];
 
 ---
 
-## Step 5: Remind key rules
+## Step 5: Remind Key Rules
 
 ✅ Page created. Key rules:
 
 ```md
-1. params in Next.js 15+ — this is a Promise, must use await
+1. params in Next.js 15+ — this is a Promise, await is required
 2. Products: image → value is an OBJECT → attrs.pic?.value?.downloadLink (NOT an array!)
 2. groupOfImages → value is an ARRAY → attrs.gallery?.value?.[0]?.downloadLink
 2. Pages/Blocks: image → value is an ARRAY → attrs.bg?.value?.[0]?.downloadLink

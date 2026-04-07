@@ -1,11 +1,10 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-search"}
--->
-
+---
+name: create-search
+description: Create site search
+---
 # /create-search — Site Search
 
-Argument: what to search for — `products` (goods), `pages` (pages), `all` (everything).
+Argument: what to search for — `products` (products), `pages` (pages), `all` (everything).
 
 ---
 
@@ -18,10 +17,10 @@ Argument: what to search for — `products` (goods), `pages` (pages), `all` (eve
    - multiple at once — parallel requests via `Promise.all`
 
 2. **Where to display?**
-   - Dropdown list directly in the search bar — the most common case
+   - Dropdown directly in the search bar — the most common case
    - Separate results page
 
-3. **Is there a layout?** — if yes, copy it exactly
+3. **Is there a layout?** — if yes, copy exactly
 
 ---
 
@@ -77,9 +76,9 @@ export async function searchAll(query: string, locale: string = 'en_US') {
 - **Debounce 300ms** via `setTimeout` in `useEffect` — do not call Server Action on every character
 - **Dropdown** closes on click outside the component (mousedown listener)
 - **Escape** closes the dropdown
-- On an empty query — do not make a request, clear results
-- Result of `searchProduct` — array `IProductsEntity[]`, access to the name: `product.localizeInfos?.title`
-- Result of `searchPage` — array `IPagesEntity[]`, access to the name: `page.localizeInfos?.title || page.localizeInfos?.menuTitle`
+- On empty query — do not make a request, clear results
+- Result of `searchProduct` — array `IProductsEntity[]`, access to title: `product.localizeInfos?.title`
+- Result of `searchPage` — array `IPagesEntity[]`, access to title: `page.localizeInfos?.title || page.localizeInfos?.menuTitle`
 
 ### components/SearchBar.tsx
 
@@ -226,7 +225,7 @@ export default async function SearchPage({
 ```md
 1. searchProduct/searchPage search by NAME, not by attributes
 2. Debounce 300ms — DO NOT call Action on every character
-3. On an empty query — clear results, do not make a request
+3. On empty query — clear results, do not make a request
 4. Dropdown closes on mousedown outside the component and on Escape
 5. For products: product.localizeInfos?.title
 6. For pages: page.localizeInfos?.title || page.localizeInfos?.menuTitle

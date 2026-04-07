@@ -1,17 +1,16 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-page"}
--->
-
-# Create a Next.js Page with Content from OneEntry CMS
+---
+name: create-page
+description: Create Next.js page with content from OneEntry CMS
+---
+# Create Next.js Page with Content from OneEntry CMS
 
 Argument: `pageMarker` (page marker in OneEntry, e.g., `about` or `home`)
 
 ---
 
-## Step 1: Determine the Page Marker
+## Step 1: Define the Page Marker
 
-If the argument is not provided, ask the user:
+If the argument is not provided — ask the user:
 - "What is the `pageUrl` of the page in OneEntry? (You can find out via `/inspect-api pages`)"
 
 **⚠️ IMPORTANT:** `pageUrl` is the marker (one word, e.g., `"about"`), NOT the full path (`"shop/about"`).
@@ -22,14 +21,7 @@ If the argument is not provided, ask the user:
 
 If the marker is unknown or the user is unsure:
 
-```bash
-# Read .env.local and check the real pageUrls
-cat .env.local
-curl -s "https://<URL>/api/content/pages?langCode=en_US" \
-  -H "x-app-token: <TOKEN>" | python -m json.tool
-```
-
-Look at the `pageUrl` field in the response — this is the marker for `getPageByUrl()`.
+Run `/inspect-api pages` — the skill uses the SDK and will return a list of `pageUrl` markers.
 
 ---
 
@@ -54,7 +46,7 @@ import { notFound } from 'next/navigation';
 export default async function AboutPage({
   params,
 }: {
-  params: Promise<{ locale: string }>;
+  params: Promise<{ locale: string }> ;
 }) {
   const { locale } = await params;  // ⚠️ Next.js 15+: params is a Promise!
 
@@ -84,7 +76,7 @@ import { notFound } from 'next/navigation';
 export default async function HomePage({
   params,
 }: {
-  params: Promise<{ locale: string }>;
+  params: Promise<{ locale: string }> ;
 }) {
   const { locale } = await params;
 
@@ -131,7 +123,7 @@ After creating the file, output:
 ✅ File created. Key rules:
 
 ```md
-1. pageUrl = marker ("about"), NOT the route path ("/[locale]/about")
+1. pageUrl = marker ("about"), NOT route path ("/[locale]/about")
 2. params in Next.js 15+ — is a Promise, always await
 3. localizeInfos.htmlContent — HTML content, localizeInfos.title — title
 4. Blocks/Pages: image → value ARRAY → attrs.bg?.value?.[0]?.downloadLink

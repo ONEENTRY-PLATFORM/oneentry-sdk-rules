@@ -1,9 +1,9 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-auth"}
--->
+---
+name: create-auth
+description: Create authorization/registration form with OneEntry AuthProvider
+---
 
-# /create-auth - Create an authorization/registration form with OneEntry AuthProvider
+# /create-auth - Create authorization/registration form with OneEntry AuthProvider
 
 ---
 
@@ -11,19 +11,7 @@ skillConfig: {"name":"create-auth"}
 
 **DO NOT guess the markers.** First, get the list of providers and forms:
 
-```bash
-cat .env.local
-
-# Authorization providers (the identifier field is the marker for auth/signUp/logout)
-curl -s "https://<URL>/api/auth-providers?langCode=en_US" \
-  -H "x-app-token: <TOKEN>" | python -m json.tool
-
-# List of forms (the identifier field is the marker for getFormByMarker)
-curl -s "https://<URL>/api/forms?langCode=en_US" \
-  -H "x-app-token: <TOKEN>" | python -m json.tool
-```
-
-Or use `/inspect-api auth-providers` and `/inspect-api forms`.
+Run `/inspect-api auth-providers` and `/inspect-api forms` — the skill uses the SDK and returns already normalized data.
 What to look for in the response:
 
 - `AuthProviders[].identifier` — provider marker (passed to `auth()`, `signUp()`, `logout()`)
@@ -35,7 +23,7 @@ What to look for in the response:
 ## Step 2: Clarify with the user
 
 1. **What modes are needed?** (login / registration / password reset)
-2. **Is synchronization of cart/favorites** needed after login?
+2. **Is synchronization of cart/favorites needed** after login?
    - If yes — AuthContext reads `user.state` and loads cart/favorites into Redux
    - For cross-device sync: polling `user.state` every N seconds (see below)
 3. **Where to display the form?** (modal, separate page, drawer?)
@@ -103,8 +91,16 @@ export async function getUserState(): Promise<
 
 - The form is loaded via Server Action `getFormByMarker(formIdentifier, locale)`
 - Fields are rendered **dynamically** from `form.attributes` — do not hardcode fields!
-- `authData` — only `{ marker, value }`, filter out empty values
-- `notificationData` — **DO NOT pass `phoneSMS`** (empty string → 400 error)
+- **🚨 Fields are routed by flags, DO NOT lump everything into `authData`:**
+  - `authData` — **only login credentials**: fields with `isLogin: true` + password field (determined by `additionalFields.type.value === 'password'`)
+  - `formData` — profile fields (name, address, phone, etc.) in the form `{ marker, type, value }` — everything that is not a login credential and not pure notification
+  - `notificationData.email` — value of the field with `isNotificationEmail: true` (fallback: value of the login field)
+  - `notificationData.phonePush` — array with the value of the field with `isNotificationPhonePush: true` (skip if empty)
+  - `notificationData.phoneSMS` — value of the field with `isNotificationPhoneSMS: true`; **DO NOT pass** if empty (empty string → 400)
+  - ⚠️ `isSignUp: true` — this is a UI visibility flag, NOT a routing flag — such fields still go into `formData` if they are not `isLogin: true`
+  - ⚠️ The password has no flag — determine by `additionalFields.type.value === 'password'` and always route to `authData`
+- **🚨 `isCheckCode: true` → MUST add mode `'verify'` with a field for the code and call `activateUser()`**
+- **🔄 In mode `'verify'` — MUST have a "Resend code" button** with a cooldown (`generateCode(marker, email, 'user_registration')`). Cooldown = `config.systemCodeTlsSec` of the provider (default 80 sec). Starts immediately after `signUp()` and after each resend.
 - After login, save `accessToken`, `refreshToken`, `authProviderMarker` in localStorage
 - After login, call `getUserState` and dispatch `auth-state` event (if synchronization is needed)
 
@@ -113,29 +109,38 @@ export async function getUserState(): Promise<
 ```tsx
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { getFormByMarker } from '@/app/actions/forms';
 import { logout } from '@/app/actions/auth';
 import { getApi, isError } from '@/lib/oneentry';
 import type { IAttributesSetsEntity } from 'oneentry/dist/attribute-sets/attributeSetsInterfaces';
 
+// Cooldown between resending the code (= config.systemCodeTlsSec of the provider)
+const RESEND_COOLDOWN_SEC = 80;
+
 interface AuthFormProps {
-  authProviderMarker: string;  // provider marker — get it from getAuthProviders()
+  authProviderMarker: string;  // provider marker — get from getAuthProviders()
   formIdentifier: string;      // form marker — from provider.formIdentifier
+  isCheckCode: boolean;        // from provider — is code verification needed after registration
   locale?: string;
   onSuccess?: () => void;
 }
 
-type Mode = 'signin' | 'signup' | 'reset';
+// 🚨 'verify' — MANDATORY if isCheckCode: true for the provider
+type Mode = 'signin' | 'signup' | 'verify' | 'reset';
 
-export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US', onSuccess }: AuthFormProps) {
+export function AuthForm({ authProviderMarker, formIdentifier, isCheckCode, locale = 'en_US', onSuccess }: AuthFormProps) {
   const [mode, setMode] = useState<Mode>('signin');
   const [fields, setFields] = useState<IAttributesSetsEntity[]>([]);
   const [values, setValues] = useState<Record<string, string>>({});
+  const [verifyCode, setVerifyCode] = useState('');   // verification code
+  const [verifyEmail, setVerifyEmail] = useState(''); // email for activateUser
+  const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [formLoading, setFormLoading] = useState(true);
+  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
     getFormByMarker(formIdentifier, locale).then((result) => {
@@ -145,7 +150,39 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
     });
   }, [formIdentifier, locale]);
 
-  // The displayed fields depend on the mode
+  // 🔄 Cooldown timer for resending the code
+  const startCooldown = useCallback((seconds: number) => {
+    setResendCooldown(seconds);
+    if (cooldownRef.current) clearInterval(cooldownRef.current);
+    cooldownRef.current = setInterval(() => {
+      setResendCooldown((prev) => {
+        if (prev <= 1) {
+          if (cooldownRef.current) clearInterval(cooldownRef.current);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
+  }, []);
+
+  // 🔄 Resending the activation code
+  const handleResendCode = async () => {
+    if (resendCooldown > 0) return;
+    setError('');
+    // ✅ generateCode — directly from Client Component (fingerprint)
+    const result = await getApi().AuthProvider.generateCode(
+      authProviderMarker, verifyEmail, 'user_registration',
+    );
+    if (isError(result)) { setError((result as any).message || 'Resend failed'); return; }
+    setSuccess('Code resent!');
+    startCooldown(RESEND_COOLDOWN_SEC);
+  };
+
+  // Visible fields depend on the mode
   const visibleFields = (): IAttributesSetsEntity[] => {
     if (mode === 'signup') return fields;
     // signin / reset — only login + password (or only login for reset)
@@ -208,7 +245,28 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
           notificationData: { email: getEmail(), phonePush: [] },
         } as any);
         if (isError(result)) { setError((result as any).message || 'Registration failed'); return; }
-        setSuccess('Account created! Check your email.');
+
+        // 🚨 isCheckCode: true → switch to code verification mode
+        if (isCheckCode) {
+          setVerifyEmail(getEmail());
+          setSuccess('Account created! Enter the verification code sent to your email.');
+          startCooldown(RESEND_COOLDOWN_SEC);
+          setMode('verify');
+        } else {
+          setSuccess('Account created!');
+          setTimeout(() => { setMode('signin'); setSuccess(''); }, 2000);
+        }
+
+      } else if (mode === 'verify') {
+        // 🚨 activateUser — call directly (fingerprint = user's browser)
+        const result = await getApi().AuthProvider.activateUser(
+          authProviderMarker,
+          verifyEmail,
+          verifyCode,
+        );
+        if (isError(result)) { setError((result as any).message || 'Verification failed'); return; }
+        setSuccess('Account activated! You can now sign in.');
+        setVerifyCode('');
         setTimeout(() => { setMode('signin'); setSuccess(''); }, 2000);
 
       } else if (mode === 'reset') {
@@ -232,45 +290,78 @@ export function AuthForm({ authProviderMarker, formIdentifier, locale = 'en_US',
       <h2>
         {mode === 'signin' && 'Sign in'}
         {mode === 'signup' && 'Create account'}
+        {mode === 'verify' && 'Enter verification code'}
         {mode === 'reset' && 'Reset password'}
       </h2>
 
-      {/* Fields — dynamically from Forms API */}
-      {visibleFields().map((field) => {
-        const isPassword = field.marker.includes('password');
-        const isEmail = field.marker.includes('email') || field.marker.includes('login');
-        return (
-          <div key={field.marker}>
-            <label htmlFor={field.marker}>
-              {field.localizeInfos?.title || field.marker}
-            </label>
-            <input
-              id={field.marker}
-              type={isPassword ? 'password' : isEmail ? 'email' : 'text'}
-              value={values[field.marker] || ''}
-              onChange={(e) => setValues(prev => ({ ...prev, [field.marker]: e.target.value }))}
-              required
-            />
-          </div>
-        );
-      })}
+      {/* Verify mode — field for code + resend button */}
+      {mode === 'verify' ? (
+        <div>
+          <label htmlFor="verify-code">Verification code</label>
+          <input
+            id="verify-code"
+            type="text"
+            inputMode="numeric"
+            value={verifyCode}
+            onChange={(e) => setVerifyCode(e.target.value)}
+            required
+          />
+          {/* 🔄 Resend code with cooldown */}
+          <button
+            type="button"
+            onClick={handleResendCode}
+            disabled={resendCooldown > 0}
+          >
+            {resendCooldown > 0
+              ? `Resend code in ${resendCooldown}s`
+              : 'Resend code'}
+          </button>
+        </div>
+      ) : (
+        /* Fields — dynamically from Forms API */
+        visibleFields().map((field) => {
+          const isPassword = field.marker.includes('password');
+          const isEmail = field.marker.includes('email') || field.marker.includes('login');
+          return (
+            <div key={field.marker}>
+              <label htmlFor={field.marker}>
+                {field.localizeInfos?.title || field.marker}
+              </label>
+              <input
+                id={field.marker}
+                type={isPassword ? 'password' : isEmail ? 'email' : 'text'}
+                value={values[field.marker] || ''}
+                onChange={(e) => setValues(prev => ({ ...prev, [field.marker]: e.target.value }))}
+                required
+              />
+            </div>
+          );
+        })
+      )}
 
       {error && <div role="alert">{error}</div>}
       {success && <div role="status">{success}</div>}
 
       <button type="submit" disabled={loading}>
-        {loading ? 'Loading...' : mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create account' : 'Send code'}
+        {loading ? 'Loading...' :
+          mode === 'signin' ? 'Sign in' :
+          mode === 'signup' ? 'Create account' :
+          mode === 'verify' ? 'Verify code' :
+          'Send code'}
       </button>
 
-      {/* Mode switching */}
+      {/* Switching modes */}
       {mode === 'signin' && (
         <>
           <button type="button" onClick={() => setMode('signup')}>Create account</button>
           <button type="button" onClick={() => setMode('reset')}>Forgot password?</button>
         </>
       )}
-      {mode !== 'signin' && (
+      {mode !== 'signin' && mode !== 'verify' && (
         <button type="button" onClick={() => setMode('signin')}>Back to sign in</button>
+      )}
+      {mode === 'verify' && (
+        <button type="button" onClick={() => setMode('signup')}>Back to registration</button>
       )}
     </form>
   );
@@ -301,12 +392,12 @@ async function handleLogout() {
 
 ## Step 5: AuthContext with polling (cross-device sync)
 
-If synchronization of cart/favorites between devices is needed — AuthContext polls `user.state` on a timer. When data is updated, the Redux store receives the current cart and favorites.
+If synchronization of cart/favorites between devices is needed — AuthContext polls `user.state` on a timer. When the data is updated, the Redux store receives the current cart and favorites.
 
 ```typescript
 // AuthContext — polling pattern through RTK Query (or direct setInterval)
 const [trigger] = useLazyGetMeQuery({
-  pollingInterval: isAuth ? 30000 : 0, // every 30 seconds only when authorized
+  pollingInterval: isAuth ? 30000 : 0, // every 30 sec only when authorized
 });
 
 // When receiving a new user — load state into Redux
@@ -335,9 +426,11 @@ useEffect(() => {
 
 1. authData — only { marker, value }, filter out empty strings
 2. notificationData — DO NOT pass phoneSMS (empty string → 400)
-3. formIdentifier is taken from provider.formIdentifier, not hardcoded
+3. formIdentifier is taken from provider.formIdentifier, do not hardcode
 4. Fields are rendered dynamically from Forms API — do not hardcode <input>
 5. After login, save 'refresh-token' in localStorage
-6. auth/signUp/generateCode — ONLY directly from Client Component (device fingerprint!)
-7. Cross-device sync: polling user.state every 30 seconds, writing through updateUserState Server Action
+6. auth/signUp/generateCode/activateUser — ONLY directly from Client Component (device fingerprint!)
+7. 🚨 isCheckCode: true → MUST add mode 'verify' with code field + activateUser(marker, email, code)
+8. 🔄 In verify mode — MUST have "Resend code" button with cooldown (generateCode + config.systemCodeTlsSec)
+9. Cross-device sync: polling user.state every 30 sec, writing through updateUserState Server Action
 ```

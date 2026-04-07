@@ -1,17 +1,16 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-favorites"}
--->
+---
+name: create-favorites
+description: Create favorites list with Redux and persistence
+---
+# Create Favorites List (Redux + persist)
 
-# Create a Favorites List (Redux + persist)
+Creates a Redux slice to store the IDs of favorite products with persistence in localStorage.
 
-Creates a Redux slice for storing the IDs of favorite products with persistence in localStorage.
-
-> ⚠️ Requires a Redux store. If the store has not been created yet — first execute `/create-cart-manager` (or create the store manually).
+> ⚠️ Requires a Redux store. If the store has not been created yet, first run `/create-cart-manager` (or create the store manually).
 
 ---
 
-## Step 1: Create the favorites slice
+## Step 1: Create favorites slice
 
 File: `app/store/reducers/FavoritesSlice.ts`
 
@@ -94,7 +93,7 @@ export default favoritesSlice.reducer;
 
 ---
 
-## Step 2: Add to the store
+## Step 2: Add to store
 
 In `app/store/store.ts`, add favorites with persistence:
 
@@ -225,5 +224,5 @@ export async function getProductsByIds(ids: number[]) {
 2. Full product data is loaded from the API when opening the favorites page
 3. toggleFavorite — more convenient than separate add/remove for buttons
 4. version — increment when synchronizing with the server (user.state.favorites)
-5. If the user is authenticated — synchronize favorites with user.state through Users.updateUser
+5. If the user is authenticated — synchronize favorites with user.state via Users.updateUser
 ```

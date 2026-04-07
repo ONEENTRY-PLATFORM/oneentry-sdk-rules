@@ -1,19 +1,18 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-google-oauth"}
--->
-
+---
+name: create-google-oauth
+description: Google OAuth authorization via OneEntry
+---
 # /create-google-oauth — Google OAuth authorization via OneEntry
 
 ---
 
 ## Step 0: Setting up Google Cloud Console — user instructions
 
-**Before writing code**, provide the user with the following instructions and **wait for a response**:
+**Before writing code** provide the user with the following instructions and **wait for a response**:
 
 ---
 
-> ### To set up Google OAuth, you need to complete several steps in the Google Cloud Console:
+> ### To set up Google OAuth, you need to complete several steps in Google Cloud Console:
 >
 > **1. Create a project (if you don't have one)**
 > - Open [console.cloud.google.com](https://console.cloud.google.com)
@@ -38,7 +37,7 @@ skillConfig: {"name":"create-google-oauth"}
 > - (Or open the created client and copy from there)
 >
 > ---
-> **When you're ready — send me:**
+> **When ready — send me:**
 > - `Client ID` (looks like `123456789-abc...apps.googleusercontent.com`)
 > - `Client Secret` (looks like `GOCSPX-...`)
 > - `Redirect URI` that you added (by default: `http://localhost:3000/auth/callback`)
@@ -47,13 +46,13 @@ skillConfig: {"name":"create-google-oauth"}
 
 **Wait for the user's response.** Do not write code until you receive all three values.
 
-After the user has provided the data — proceed to **Step 0.1**.
+After the user provides the data — proceed to **Step 0.1**.
 
 ---
 
-## Step 0.1: Get the data and fill in the files
+## Step 0.1: Get data and fill in files
 
-When the user has sent `Client ID`, `Client Secret`, and `Redirect URI`:
+When the user sends `Client ID`, `Client Secret`, and `Redirect URI`:
 
 ### 1. Fill in `.env.local`
 
@@ -79,15 +78,15 @@ NEXT_PUBLIC_APP_URL=<origin from Redirect URI, for example http://localhost:3000
 
 If the redirect_uri from the user's response differs from `${APP_URL}/auth/callback` — inform them and clarify.
 
-### 3. Ensure the callback page exists
+### 3. Make sure the callback page exists
 
-Check for the presence of `app/auth/callback/page.tsx`. If it doesn't exist — create it (see Step 4 below).
+Check for the presence of `app/auth/callback/page.tsx`. If not — create it (see Step 4 below).
 
 ### 4. Inform the user
 
 After writing the files, say:
 
-> `.env.local` has been updated. Google OAuth data is configured:
+> `.env.local` updated. Google OAuth data is set up:
 > - Client ID: `...first 20 characters...`
 > - Redirect URI: `http://localhost:3000/auth/callback`
 >
@@ -107,7 +106,7 @@ Find the provider with `"type": "oauth"` and Google in the name. Remember:
 - `config.oauthAuthUrl` — base URL for Google authorization
 - `formIdentifier` — not used for OAuth (only for email authorization)
 
-Ensure that `.env.local` contains:
+Make sure that `.env.local` contains:
 
 ```env
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=<client_id from Google Cloud Console>
@@ -120,7 +119,7 @@ which has the registered `redirect_uri`. Mismatch → `redirect_uri_mismatch`.
 
 ---
 
-## Step 2: Register the redirect URI in Google Cloud Console
+## Step 2: Register redirect URI in Google Cloud Console
 
 In Google Cloud Console → **APIs & Services** → **Credentials** → the required OAuth 2.0 client:
 

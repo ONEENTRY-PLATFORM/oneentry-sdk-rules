@@ -1,11 +1,10 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-checkout"}
--->
-
+---
+name: create-checkout
+description: Create checkout page with OneEntry
+---
 # Create OneEntry Checkout Page
 
-Creates a Server Action to retrieve delivery form data and a complete order checkout cycle.
+Creates a Server Action to retrieve delivery form data and a complete order processing cycle.
 
 ---
 
@@ -13,13 +12,21 @@ Creates a Server Action to retrieve delivery form data and a complete order chec
 
 The delivery form is tied to the order storage (`formIdentifier`). The marker does not need to be known in advance — it is obtained dynamically from `getAllOrdersStorage()`.
 
-If you need to know it in advance:
+If you need to check in advance — create a temporary script in `.claude/temp/`:
+
+```js
+// .claude/temp/check-checkout.mjs
+import { defineOneEntry } from 'oneentry';
+// URL and TOKEN from .env.local
+const api = defineOneEntry(URL, { token: TOKEN });
+const storages = await api.Orders.getAllOrdersStorage();
+// The SDK normalizes the data: see identifier and formIdentifier
+console.log(JSON.stringify(storages, null, 2));
+```
 
 ```bash
-cat .env.local
-curl -s "https://<URL>/api/content/orders/storage" \
-  -H "x-app-token: <TOKEN>" | python -m json.tool
-# Look at the "identifier" and "formIdentifier" fields
+node .claude/temp/check-checkout.mjs
+rm .claude/temp/check-checkout.mjs
 ```
 
 ---
@@ -229,6 +236,6 @@ export default function CheckoutPage() {
 2. Delivery form: formIdentifier is taken from storage, NOT hardcoded
 3. timeInterval.value = available slots [[start, end], ...], NOT entered data
 4. createSession is called through the same getApi() as createOrder
-5. paymentAccountIdentifier — ask the user or get from /inspect-api
+5. paymentAccountIdentifier — ask the user or get it from /inspect-api
 6. useRef guard + hasActiveSession are mandatory in the component with auth-init
 ```

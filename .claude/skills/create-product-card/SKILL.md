@@ -1,15 +1,14 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-product-card"}
--->
-
-# Create a Product Card
+---
+name: create-product-card
+description: Create product card component
+---
+# Create Product Card
 
 ---
 
-## Step 1: Check the Real Product Attributes
+## Step 1: Check the real product attributes
 
-**BEFORE writing the code** — find out the real attribute markers:
+**BEFORE writing code** — find out the real attribute markers:
 
 ```bash
 /inspect-api products
@@ -21,22 +20,22 @@ What to look for in `items[0].attributeValues`:
 - Old price / discount marker — for example `sale`, `old_price`
 - Stickers/badges marker (type `list` with `extended`) — for example `stickers`
 - Stock quantity marker (type `integer`) — for example `units_product`, `stock`
-- `statusIdentifier` — the real identifier for the "in stock" status
+- `statusIdentifier` — the real status identifier "in stock"
 
 **⚠️ DO NOT guess the markers** — they are unique for each project.
 
 ---
 
-## Step 2: Clarify with the User
+## Step 2: Clarify with the user
 
-1. **Is there a layout for the card?** — if yes, copy it exactly, changing only the data
-2. **Where does the link from the card lead?** — for example `/shop/product/[id]` or `/${locale}/product/[id]`
+1. **Is there a layout for the card?** — if yes, copy it exactly, only change the data
+2. **Where does the card link lead?** — for example `/shop/product/[id]` or `/${locale}/product/[id]`
 3. **Is a "Add to Cart" button needed?** — if yes, clarify how the cart is implemented
 4. **Is a "Favorites" button needed?** — if yes, clarify how it is implemented
 
 ---
 
-## Step 3: Check the Image Attribute Type in the SDK
+## Step 3: Check the image attribute type in the SDK
 
 For Products `image` type — `value` is an **OBJECT** (verified with real data):
 
@@ -53,11 +52,11 @@ For `groupOfImages` — `value` is always an **ARRAY**:
 const firstImg = attrs.gallery?.value?.[0]?.downloadLink || '';
 ```
 
-> ⚠️ For Pages and Blocks `image` returns an ARRAY. Always check through `/inspect-api` or `console.log(attrs.marker?.value)` before writing code.
+> ⚠️ For Pages and Blocks `image` returns an ARRAY. Always check via `/inspect-api` or `console.log(attrs.marker?.value)` before writing code.
 
 ---
 
-## Step 4: Create the Card Component
+## Step 4: Create the card component
 
 ### Basic Template
 
@@ -147,7 +146,7 @@ const isOutOfStock = !inStock || stockQty === 0;
 }
 ```
 
-### With Favorites Button (through context)
+### With Favorites Button (via context)
 
 ```tsx
 // If there is a FavoritesContext
@@ -184,10 +183,10 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 1. Products: image → value OBJECT → attrs.pic?.value?.downloadLink (NOT an array!)
 1. groupOfImages → value ARRAY → attrs.gallery?.value?.[0]?.downloadLink
 1. Pages/Blocks: image → value ARRAY → attrs.bg?.value?.[0]?.downloadLink
-1. Always check the structure through /inspect-api before writing code
-2. Attribute markers are unique to the project — check through /inspect-api
-3. statusIdentifier — the real status from /inspect-api, do not guess 'in_stock'
+1. Always check the structure via /inspect-api before writing code
+2. Attribute markers are unique for the project — check via /inspect-api
+3. statusIdentifier — real status from /inspect-api, do not guess 'in_stock'
 4. Stickers (list with extended) → stickers[0]?.extended?.value?.downloadLink
 5. next/image requires remotePatterns in next.config.ts for *.oneentry.cloud
-6. If there is a layout — copy classes exactly, change only the data
+6. If there is a layout — copy classes exactly, only change the data
 ```

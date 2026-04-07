@@ -1,8 +1,7 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-locale-switcher"}
--->
-
+---
+name: create-locale-switcher
+description: Create language switcher
+---
 # /create-locale-switcher — Language Switcher
 
 Creates a component for changing the language based on data from the `Locales API`.
@@ -11,15 +10,15 @@ Creates a component for changing the language based on data from the `Locales AP
 
 ## Step 1: Clarify with the user
 
-1. **Where is the switch located?** (Header, Footer, separate component)
+1. **Where is the switcher located?** (Header, Footer, separate component)
 2. **How to display languages?** — code (`en_US`), name (`English`), flag?
-3. **Is there a layout?** — if yes, copy it exactly
+3. **Is there a layout?** — if yes, copy exactly
 
 ---
 
 ## Step 2: Create Server Action
 
-> If `app/actions/locales.ts` already exists — read and supplement it, do not duplicate.
+> If `app/actions/locales.ts` already exists — read and supplement, do not duplicate.
 
 ```typescript
 // app/actions/locales.ts
@@ -30,7 +29,7 @@ import { getApi, isError } from '@/lib/oneentry';
 export interface LocaleItem {
   code: string;
   title: string;
-  shortCode: string; // the first two characters of the code, e.g. 'en' from 'en_US'
+  shortCode: string; // first two characters of the code, e.g. 'en' from 'en_US'
 }
 
 export async function getLocales(): Promise<LocaleItem[]> {
@@ -48,12 +47,12 @@ export async function getLocales(): Promise<LocaleItem[]> {
 
 ## Step 3: Create the switcher component
 
-### Key principles
+### Key Principles
 
 - The current locale is taken from the URL (the `[locale]` segment in the route)
-- When changing the language, replace the locale segment in the `pathname` and navigate there
+- When changing the language, replace the locale segment in `pathname` and navigate there
 - `usePathname()` + `useRouter()` from `next/navigation`
-- Can be implemented as a Server Component (receives locale as a prop) or Client Component
+- Can be done as a Server Component (receives locale as a prop) or Client Component
 - Locales are loaded **once** — either passed as a prop from the server parent or cached
 
 ### Option A: Server parent passes locales as a prop (preferred)
@@ -170,7 +169,7 @@ export function LocaleSwitcher({ locale }: LocaleSwitcherProps) {
 ```tsx
 import Link from 'next/link';
 
-// Replace the locale segment and make <Link> instead of a button
+// Replace locale segment and make <Link> instead of button
 {locales.map((loc) => {
   const href = pathname.replace(`/${locale}`, `/${loc.code}`);
   return (
@@ -230,8 +229,8 @@ export default async function LocaleLayout({
 
 1. getLocales() returns code ('en_US'), title ('English'), shortCode ('en')
 2. Changing locale — replace pathname.replace(`/${locale}`, `/${newLocale}`)
-3. Server parent passes locales as a prop — better for performance
-4. The current locale is determined from params/useParams, NOT hardcoded
-5. locale.localizeInfos?.title — localized name of the language ('Русский', 'English')
+3. Server parent passes locales as prop — better for performance
+4. Current locale is determined from params/useParams, NOT hardcoded
+5. locale.localizeInfos?.title — localized language name ('Русский', 'English')
 6. For SEO-friendly: use <Link href={newPath}> instead of router.push
 ```

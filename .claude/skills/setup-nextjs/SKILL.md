@@ -1,9 +1,8 @@
-<!-- META
-type: skill
-skillConfig: {"name":"setup-nextjs"}
--->
-
-# Initializing a Next.js Project
+---
+name: setup-nextjs
+description: Initialize Next.js project
+---
+# Initialize Next.js Project
 
 Creates a new Next.js project from scratch or initializes it in an empty directory. Follow the steps in order.
 
@@ -13,14 +12,14 @@ Creates a new Next.js project from scratch or initializes it in an empty directo
 
 Check for the presence of `package.json` in the current directory.
 
-- If `package.json` **exists** — ask the user: create a project on top (overwrite) or just configure the settings.
+- If `package.json` **exists** — ask the user: create the project on top (overwrite) or just configure.
 - If **not** — proceed to Step 2.
 
 ---
 
 ## Step 2: Choose a creation method
 
-### Option A — directory is empty (or only contains `.claude/`, `.git/`, `.env.local`)
+### Option A — directory is empty (or only `.claude/`, `.git/`, `.env.local`)
 
 ```bash
 npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --no-git --yes
@@ -36,13 +35,13 @@ Flags:
 - `--no-git` — do not initialize a git repository
 - `--yes` — without interactive questions
 
-> If you need to skip dependency installation: add `--skip-install`, then run `npm install`.
+> If you need to skip dependency installation: add `--skip-install`, then `npm install`.
 
 > `create-next-app` **will fail** if there are already files in the directory (except for `.git/`, `.claude/`, `.env*`). In this case, use **Option B**.
 
 ---
 
-### Option B — directory is not empty (already contains `.claude/`, `CLAUDE.md`, etc.)
+### Option B — directory is not empty (already has `.claude/`, `CLAUDE.md`, etc.)
 
 Create project files manually.
 
@@ -243,7 +242,7 @@ export default function Home() {
 }
 ```
 
-After creating the files — install the dependencies:
+After creating the files — install dependencies:
 
 ```bash
 npm install
@@ -260,11 +259,11 @@ src/
   app/
     layout.tsx
     page.tsx
-  components/   ← create if it doesn't exist
-  lib/          ← create if it doesn't exist
+  components/   ← create if not present
+  lib/          ← create if not present
 ```
 
-If the folders `src/components/` and `src/lib/` are not created — create them (empty `.gitkeep` or the necessary files right away).
+If the `src/components/` and `src/lib/` folders are not created — create them (empty `.gitkeep` or the necessary files right away).
 
 ---
 

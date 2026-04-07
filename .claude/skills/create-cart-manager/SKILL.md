@@ -1,15 +1,14 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-cart-manager"}
--->
-
-# Create a Cart Manager (Redux + persist)
+---
+name: create-cart-manager
+description: Create cart manager with Redux and persistence
+---
+# Create Cart Manager (Redux + Persist)
 
 Creates a Redux slice for the cart with persistence, store, and types. The cart stores a list of products with quantities and survives page reloads.
 
 ---
 
-## Step 1: Install dependencies
+## Step 1: Install Dependencies
 
 ```bash
 npm install @reduxjs/toolkit react-redux redux-persist next-redux-wrapper
@@ -17,7 +16,7 @@ npm install @reduxjs/toolkit react-redux redux-persist next-redux-wrapper
 
 ---
 
-## Step 2: Create product type in the cart
+## Step 2: Create Product Type in Cart
 
 File: `app/types/cart.ts`
 
@@ -31,7 +30,7 @@ export interface ICartProduct {
 
 ---
 
-## Step 3: Create cart slice
+## Step 3: Create Cart Slice
 
 File: `app/store/reducers/CartSlice.ts`
 
@@ -83,6 +82,7 @@ export const cartSlice = createSlice({
     increaseProductQty(
       state: WritableDraft<CartState>,
       action: PayloadAction<{ id: number; units: number }>,
+
     ) {
       const index = state.productsData.findIndex((p) => p.id === action.payload.id);
       if (index === -1) {
@@ -98,6 +98,7 @@ export const cartSlice = createSlice({
     decreaseProductQty(
       state: WritableDraft<CartState>,
       action: PayloadAction<{ id: number }>,
+
     ) {
       const index = state.productsData.findIndex((p) => p.id === action.payload.id);
       if (index === -1) return;
@@ -111,6 +112,7 @@ export const cartSlice = createSlice({
     setProductQty(
       state: WritableDraft<CartState>,
       action: PayloadAction<{ id: number; quantity: number; units: number }>,
+
     ) {
       if (action.payload.quantity <= 0) {
         state.productsData = state.productsData.filter((p) => p.id !== action.payload.id);
@@ -137,6 +139,7 @@ export const cartSlice = createSlice({
     addProductsToCart(
       state: WritableDraft<CartState>,
       action: PayloadAction<IProductsEntity[]>,
+
     ) {
       state.products = action.payload;
     },
@@ -209,7 +212,7 @@ export default cartSlice.reducer;
 
 ---
 
-## Step 4: Create Redux store with persistence
+## Step 4: Create Redux Store with Persistence
 
 File: `app/store/store.ts`
 
@@ -220,7 +223,7 @@ import { persistReducer } from 'redux-persist';
 import createWebStorage from 'redux-persist/lib/storage/createWebStorage';
 import cartSlice from './reducers/CartSlice';
 
-// SSR-compatible storage (noop on the server)
+// SSR-compatible storage (noop on server)
 const createNoopStorage = () => ({
   getItem: () => Promise.resolve(null),
   setItem: (_key: string, value: unknown) => Promise.resolve(value),
@@ -260,7 +263,7 @@ export const wrapper = createWrapper<AppStore>(setupStore, { debug: false });
 
 ---
 
-## Step 5: Wrap the application in Provider
+## Step 5: Wrap Application in Provider
 
 File: `app/store/providers/StoreProvider.tsx`
 
@@ -308,7 +311,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ---
 
-## Step 6: Usage in components
+## Step 6: Usage in Components
 
 ```tsx
 'use client';
@@ -353,8 +356,8 @@ export function AddToCartButton({ product }: { product: any }) {
 
 1. productsData (id + qty) is persisted — products (full data) are NOT persisted
 2. Load products from API when mounting CartPage by id from productsData
-3. selectCartTotal — clarify attribute markers for price/sale with the user!
-4. On the server, storage = noop (without localStorage) — PersistGate handles hydration
+3. selectCartTotal — clarify attribute markers price/sale with the user!
+4. On the server, storage = noop (no localStorage) — PersistGate handles hydration
 5. serializableCheck: false — needed for redux-persist
 6. If favorites are needed — add FavoritesSlice similarly (whitelist: ['products'])
 ```

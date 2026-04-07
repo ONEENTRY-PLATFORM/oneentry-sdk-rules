@@ -1,9 +1,8 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-form"}
--->
-
-# Create a Dynamic Form from OneEntry Forms API
+---
+name: create-form
+description: Create dynamic form from OneEntry Forms API
+---
+# Create a dynamic form from OneEntry Forms API
 
 Argument: `marker` (form marker in OneEntry)
 
@@ -32,7 +31,7 @@ const forms = await getApi().Forms.getAllForms();
 
 ## Step 2: Clarify with the user
 
-1. **Where is the data sent?**
+1. **Where should the data be sent?**
    - To OneEntry via `postFormsData` — standard scenario
    - To another endpoint — different logic needed
 2. **Is captcha required?** — the form may contain a field of type `spam` (reCAPTCHA v3)
@@ -127,11 +126,11 @@ export async function submitForm(
 ### Key principles
 
 - Fields are rendered **dynamically** by `field.type` — do not hardcode `<input>`
-- The `spam` field is a **hidden captcha** (reCAPTCHA v3), render `<FormReCaptcha>`, NOT `<input>`
-- Type `'spam'`, not `'captcha'` — a common mistake!
+- The `spam` field is an **invisible captcha** (reCAPTCHA v3), render `<FormReCaptcha>`, NOT `<input>`
+- Type `'spam'`, not `'captcha'` — common mistake!
 - `formData` for submission — only `{ marker, value }`, only non-empty values
 
-### Field type table → HTML
+### Field types table → HTML
 
 | `field.type`                | Render                                            |
 |-----------------------------|---------------------------------------------------|
@@ -144,7 +143,7 @@ export async function submitForm(
 | `list`                      | `<select>`, `<select multiple>` or `<checkbox>`  |
 | `radioButton`               | `<input type="radio">`                            |
 | `file`                      | `<input type="file">`                             |
-| `spam`                      | `<FormReCaptcha>` — NOT `<input>`!                 |
+| `spam`                      | `<FormReCaptcha>` — NOT `<input>`!                |
 
 #### components/DynamicForm.tsx
 
@@ -183,7 +182,7 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
       setFormId(result.identifier);
       setFormModuleConfigId(result.formModuleConfigId);
       setModuleEntityIdentifier(result.moduleEntityIdentifier);
-      // Sort fields by position
+      // Sorting fields by position
       const sorted = [...result.attributes].sort((a, b) => (a.position ?? 0) - (b.position ?? 0));
       setFields(sorted);
       setFormLoading(false);
@@ -453,5 +452,5 @@ export function FormReCaptcha({
 4. Forms API requires Server Action — cannot be called directly from 'use client'
 5. Sort fields by field.position before rendering
 6. submitForm via FormData.postFormData, not via Forms API
-7. Get the form marker through /inspect-api forms, DO NOT guess
+7. Form marker — obtain via /inspect-api forms, DO NOT guess
 ```

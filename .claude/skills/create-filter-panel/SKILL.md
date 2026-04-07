@@ -1,17 +1,16 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-filter-panel"}
--->
+---
+name: create-filter-panel
+description: Create product filter panel
+---
+# Create product filter panel
 
-# Create a Product Filter Panel
-
-Creates a filter panel with price, color, and availability. Uses FilterContext as a buffer between the UI and the URL — filters are applied only when the "Apply" button is clicked, and the page is not re-rendered on each slider movement.
+Creates a filter panel with price, color, and availability. Uses FilterContext as a buffer between the UI and the URL — filters are applied only when the "Apply" button is clicked, and the page is not re-rendered on every slider movement.
 
 > ⚠️ Assumes that the product catalog uses URL query params (pattern from `/create-product-list`).
 
 ---
 
-## Step 1: Check Real Attribute Markers
+## Step 1: Check real attribute markers
 
 ```bash
 /inspect-api products          # markers price, color, etc.
@@ -77,7 +76,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 
 ---
 
-## Step 3: Create Price Filter Component
+## Step 3: Create price filter component
 
 File: `components/filter/PriceFilter.tsx`
 
@@ -142,7 +141,7 @@ PriceFilter.displayName = 'PriceFilter';
 
 ---
 
-## Step 4: Create Color Filter
+## Step 4: Create color filter
 
 Colors are taken from the product attribute via `AttributesSets.getSingleAttributeByMarkerSet`.
 
@@ -208,7 +207,7 @@ Loading colors from the API (in the parent Server Component):
 import { getApi, isError } from '@/lib/oneentry';
 
 export async function getColorOptions(locale: string) {
-  // setMarker — marker of the attribute set, attributeMarker — marker of the color attribute
+  // setMarker — marker for the attribute set, attributeMarker — marker for the color attribute
   // Clarify markers via /inspect-api
   const attr = await getApi().AttributesSets.getSingleAttributeByMarkerSet(
     'product', 'color', locale,
@@ -220,7 +219,7 @@ export async function getColorOptions(locale: string) {
 
 ---
 
-## Step 5: Create Availability Filter
+## Step 5: Create availability filter
 
 File: `components/filter/AvailabilityFilter.tsx`
 
@@ -247,7 +246,7 @@ export const AvailabilityFilter = memo(() => {
         checked={available}
         onChange={() => setAvailable((prev) => !prev)}
       />
-      In Stock
+      In stock
     </label>
   );
 });
@@ -257,7 +256,7 @@ AvailabilityFilter.displayName = 'AvailabilityFilter';
 
 ---
 
-## Step 6: Apply and Reset Buttons
+## Step 6: Apply and Reset buttons
 
 File: `components/filter/FilterButtons.tsx`
 
@@ -372,13 +371,13 @@ export default async function ShopPage({ params, searchParams }) {
 
 ---
 
-## Important Details
+## Important details
 
 ```md
 ✅ Filter panel created. Key rules:
 
 1. FilterContext = buffer: UI changes context, Apply writes to URL
-   → the page does not re-render on each slider change
+   → the page does not re-render on every slider change
 2. Each filter component initializes state from URL (useSearchParams) on mount
 3. colors and prices — Server Component loads from API, passes as props
 4. ApplyButton removes 'page' from URL — resets pagination when filters change

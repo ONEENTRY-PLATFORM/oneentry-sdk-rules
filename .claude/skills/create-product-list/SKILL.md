@@ -1,8 +1,7 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-product-list"}
--->
-
+---
+name: create-product-list
+description: Create product catalog with filters and pagination
+---
 # Product Catalog with Filters and Pagination
 
 ---
@@ -30,15 +29,15 @@ What to look for:
 1. **Where are the products from?** (all products `getProducts` or by category `getProductsByPageUrl`)
    - If by category — what is the `pageUrl` of the category page?
 2. **Are filters needed?** (price, status, attributes)
-3. **Is infinite scrolling or a "Load More" button needed?**
-4. **Markers for filterable attributes** (price, color, size, etc.) — clarify after `/inspect-api`
+3. **Is infinite scroll or a "Load More" button needed?**
+4. **Markers of filterable attributes** (price, color, size, etc.) — clarify after `/inspect-api`
 5. **Is there a layout for the card/grid?** — if yes, copy it exactly
 
 ---
 
 ## Step 3: Create Necessary Files
 
-### 3.1 lib/filters.ts — Types and Parsing URL Parameters
+### 3.1 lib/filters.ts — types and parsing URL parameters
 
 > Adapt `FilterParams` to the real filters of the project.
 > Example with price, color, and availability. Add/remove fields as necessary.
@@ -50,7 +49,7 @@ export interface FilterParams {
   maxPrice?: number;
   inStockOnly?: boolean;
   colors?: string[];
-  // Add other filters as necessary
+  // Add other filters as needed
 }
 
 export function parseFilterParams(
@@ -94,7 +93,7 @@ function buildFilterBody(filters?: FilterParams): any[] {
 
 function buildQuery(offset: number, limit: number, filters?: FilterParams): IProductsQuery {
   const query: IProductsQuery = { offset, limit, sortOrder: 'ASC', sortKey: 'position' };
-  // ⚠️ Replace 'in_stock' with real statusMarker from /inspect-api product-statuses!
+  // ⚠️ Replace 'in_stock' with the real statusMarker from /inspect-api product-statuses!
   if (filters?.inStockOnly) query.statusMarker = 'in_stock';
   return query;
 }
@@ -163,7 +162,7 @@ export async function getProductFilterOptions(locale = 'en_US', categoryUrl?: st
 }
 ```
 
-### 3.3 Server Page — Reads searchParams, Renders ShopView
+### 3.3 Server Page — reads searchParams, renders ShopView
 
 ```tsx
 // app/[locale]/shop/page.tsx
@@ -195,10 +194,10 @@ export default async function ShopPage({
 }
 ```
 
-### 3.4 ShopView — Client Component, Reads Filters from URL
+### 3.4 ShopView — Client Component, reads filters from URL
 
 > **⚠️ CRITICALLY IMPORTANT:** ShopView MUST read `activeFilters` and `gridKey`
-> from `useSearchParams`, NOT receive as props from the server component.
+> from `useSearchParams`, NOT as props from the server component.
 > Otherwise, `loadMore` in ProductGrid will use outdated filters.
 
 ```tsx
@@ -244,7 +243,7 @@ export function ShopView({ initialProducts, totalProducts, locale, categoryUrl }
 }
 ```
 
-### 3.5 ProductGrid — Infinite Scrolling via IntersectionObserver
+### 3.5 ProductGrid — infinite scroll via IntersectionObserver
 
 ```tsx
 // components/ProductGrid.tsx
@@ -353,5 +352,5 @@ export function ProductGrid({
 5. params and searchParams in Next.js 15+ — are Promises, must use await
 6. Attribute markers (price, color) and statusMarker — check via /inspect-api
 7. isLoadingRef instead of useState(loading) — prevents duplicate requests
-8. category pageUrl — is a marker ("shoes"), not the route path ("/shop/category/shoes")
+8. category pageUrl — is a marker ("shoes"), not a route path ("/shop/category/shoes")
 ```

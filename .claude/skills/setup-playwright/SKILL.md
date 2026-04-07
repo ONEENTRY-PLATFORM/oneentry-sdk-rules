@@ -1,8 +1,7 @@
-<!-- META
-type: skill
-skillConfig: {"name":"setup-playwright"}
--->
-
+---
+name: setup-playwright
+description: Setup Playwright E2E testing
+---
 ---
 name: setup-playwright
 description: Set up Playwright E2E testing in a Next.js project — install dependencies, create config, connect MCP server, write first tests
@@ -149,10 +148,10 @@ e2e/
 ### Conventions
 
 - One file = one area of functionality
-- Test names in English (clear to the user)
+- Test names in English (clear for the user)
 - Use `page.getByRole`, `page.getByText`, `page.getByTestId` — not CSS selectors
 - Add `data-testid` to key elements when creating components
-- Tests should be independent — do not rely on the state from previous tests
+- Tests should be independent — do not rely on the state from the previous test
 
 ### Authorization test pattern
 
@@ -168,7 +167,7 @@ test.describe('Authorization', () => {
     await expect(page).toHaveURL('/profile');
   });
 
-  test('shows error on invalid data', async ({ page }) => {
+  test('shows error for invalid data', async ({ page }) => {
     await page.goto('/login');
     await page.getByRole('button', { name: /log in/i }).click();
     await expect(page.getByText(/required field/i)).toBeVisible();
@@ -184,7 +183,7 @@ After connecting the MCP server, Claude can:
 - `browser_click` / `browser_type` — interact with elements
 - `browser_get_text` — get text from elements
 
-Use these tools for **page inspection** before writing tests to know the actual selectors.
+Use these tools for **page inspection** before writing tests to know the real selectors.
 
 ---
 

@@ -1,21 +1,20 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-reviews"}
--->
-
-# Create a Review Section (FormData)
+---
+name: create-reviews
+description: Create reviews section using FormData
+---
+# Create Reviews Section (FormData)
 
 Arguments: page/product for reviews, whether responses to reviews are needed.
 
 ---
 
-## Step 1: Get the form marker and formModuleConfigId
+## Step 1: Get form marker and formModuleConfigId
 
 ```bash
 /inspect-api forms
 ```
 
-Find the review form. The `identifier` field is the form marker, `id` is the `formModuleConfigId`.
+Find the reviews form. The `identifier` field is the form marker, `id` is the `formModuleConfigId`.
 
 Or via API:
 
@@ -105,7 +104,7 @@ export async function submitComment(
 ## Step 3: Response Data Structure
 
 ```typescript
-// Splitting parent / child reviews
+// Separating parent / child reviews
 const parentReviews = data.filter((r: any) => r.parentId === null);
 
 const replyMap: Record<number, any[]> = data.reduce((acc: any, r: any) => {
@@ -117,12 +116,12 @@ const replyMap: Record<number, any[]> = data.reduce((acc: any, r: any) => {
 
 // Review fields from formData
 const rating = review.formData.find((f: any) => f.marker === 'rating')?.value;
-// ⚠️ rating is stored as a string: '5', convert it using Number(rating)
+// ⚠️ rating is stored as a string: '5', convert using Number(rating)
 
 // Metadata
 review.parentId         // null = review, number = response
 review.time             // date
-review.userIdentifier   // user's email
+review.userIdentifier   // user email
 review.entityIdentifier // product ID
 
 // Average rating
@@ -227,7 +226,7 @@ export function ReviewsList({
 
 ---
 
-## Step 5: Remember Key Rules
+## Step 5: Reminder of Key Rules
 
 ```
 ✅ Reviews created. Key rules:
@@ -237,7 +236,7 @@ export function ReviewsList({
 3. entityIdentifier in body — filter by product
 4. replayTo: null → review, replayTo: String(id) → response
    ⚠️ Typo in SDK: the field is called replayTo, not replyTo
-5. rating is stored as a string ('5'), convert it using Number()
+5. rating is stored as a string ('5'), convert using Number()
 6. parentId === null → review, parentId !== null → response
 7. FormData.postFormsData requires Server Action
 8. Field markers (rating, text, etc.) — depend on the form schema in OneEntry

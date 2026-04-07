@@ -1,8 +1,7 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-profile"}
--->
-
+---
+name: create-profile
+description: Create user profile page
+---
 # User Profile Page
 
 Creates a Client Component with a profile form: fields from the Users API, data update, token handling.
@@ -11,7 +10,7 @@ Creates a Client Component with a profile form: fields from the Users API, data 
 
 ## Step 1: Create client utilities for the profile
 
-> If `lib/profile.ts` already exists — read and supplement, do not duplicate.
+> If `lib/profile.ts` already exists — read and supplement it, do not duplicate.
 
 ```typescript
 // lib/profile.ts
@@ -61,7 +60,7 @@ export async function getUserProfile(locale: string = 'en_US'): Promise<{
 // password fields → authData (only if filled), others → formData
 export async function updateUserProfile(
   formData: Array<{ marker: string; type: string; value: string }>,
-  authData?: Array<{ marker: string; value: string }>,
+  authData?: Array<{ marker: string; value: string }> ,
 ): Promise<{ success: boolean } | { error: string }> {
   try {
     const user = (await getApi().Users.getUser()) as IUserEntity;
@@ -85,12 +84,12 @@ export async function updateUserProfile(
 ### Key Principles
 
 - `'use client'` — the page uses `localStorage` and `useParams`
-- `useParams()` for `locale` — NOT `params` as Promise (this is a Client Component!)
+- `useParams()` for `locale` — NOT `params` as a Promise (this is a Client Component!)
 - **Token race condition:** on 401 — retry with the current `localStorage.getItem('refreshToken')`,
   log out ONLY on 401/403 after retry
 - **Field separation:** fields with `password` in the name → `authData` (only if filled),
   others → `formData`
-- **newToken:** update `localStorage.setItem('refreshToken', newToken)` after each response
+- **newToken:** after each response update `localStorage.setItem('refreshToken', newToken)`
 - Sort fields by `position`
 
 ### Determine input type by marker

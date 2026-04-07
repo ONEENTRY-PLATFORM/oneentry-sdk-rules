@@ -1,8 +1,7 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-orders-list"}
--->
-
+---
+name: create-orders-list
+description: Create user orders list page
+---
 # User Orders List Page
 
 Creates a Client Component with a list of orders: loading through all storages, cancellation, repeat, pagination.
@@ -87,7 +86,7 @@ export async function cancelOrder(
 ### Key Principles
 
 - `'use client'` + `useParams()` — NOT a server component
-- `loadAllOrders` — one instance goes through all storages
+- `loadAllOrders` — one instance traverses all storages
 - **Token race condition:** retry on 401 with the current `localStorage.getItem('refreshToken')`
 - **storageIdToMarker** — mapping `storage.id → storage.identifier` for `cancelOrder`
 - **previewImage** — can be an array or an object → normalize: `Array.isArray(img) ? img[0] : img`
@@ -171,7 +170,7 @@ export default function OrdersPage() {
 
       setStorageIdToMarker(result.storageIdToMarker);
 
-      // Sort: newest orders first
+      // Sort: new orders first
       const sorted = [...result.orders].sort(
         (a, b) => new Date(b.createdDate).getTime() - new Date(a.createdDate).getTime(),
       );
@@ -323,7 +322,7 @@ export default function OrdersPage() {
 }
 
 /**
- * previewImage can be an array (image type) or an object (file type).
+ * previewImage can be an array (type image) or an object (type file).
  * Normalize and take downloadLink.
  */
 function getProductImage(product: IOrderProducts): string | null {
@@ -344,7 +343,7 @@ function getProductImage(product: IOrderProducts): string | null {
 1. loadAllOrders/cancelOrder — call from Client Component, getApi() after reDefine()
 2. storageIdToMarker: storage.id → identifier — needed for cancelOrder
 3. Logout ONLY on 401/403
-4. previewImage can be an array or an object — normalize using Array.isArray()
+4. previewImage can be an array or an object — normalize through Array.isArray()
 5. Sort orders by createdDate in descending order
 6. Client-side pagination through visibleCount — do not reload the list
 7. cancelOrder updates status locally (setOrders), without reload

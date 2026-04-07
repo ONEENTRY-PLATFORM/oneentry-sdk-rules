@@ -1,13 +1,12 @@
-<!-- META
-type: skill
-skillConfig: {"name":"create-server-action"}
--->
-
+---
+name: create-server-action
+description: Create a server action
+---
 # Creating a Server Action
 
 ## Step 1: Define the module and target file
 
-Break down the argument into `Module` and `method`. Define the file:
+Break down the argument into `Module` and `method`. Determine the file:
 | Module                                  | File                      | Type                     |
 |-----------------------------------------|---------------------------|-------------------------|
 | `Forms`                                 | `app/actions/forms.ts`    | public (getApi)         |
@@ -27,7 +26,7 @@ Search in `node_modules/oneentry/dist/` to find the correct return type:
 grep -r "interface I" node_modules/oneentry/dist/<module>/ --include="*.d.ts" -l
 ```
 
-## Step 4: Create or update the file
+## Step 4: Create or supplement the file
 
 ### For public methods (Forms, AuthProvider, Pages, Products, etc.)
 
@@ -65,7 +64,7 @@ import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
 export function ProfileData() {
   // useRef guard — protection against double execution in React StrictMode (dev).
-  // Without it, two parallel reDefines burn a one-time refresh token → logout.
+  // Without it, two parallel reDefine calls burn a one-time refresh token → logout.
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -77,7 +76,7 @@ export function ProfileData() {
       if (!refreshToken) return;
       // ⚠️ hasActiveSession() is mandatory before reDefine.
       // After login, the SDK is already authorized — reDefine without checking will replace the working
-      // instance with a new one without access token → first request 401 → token deletion → logout.
+      // instance with a new one without an access token → first request 401 → token deletion → logout.
       if (!hasActiveSession()) {
         await reDefine(refreshToken, 'en_US');
       }
@@ -117,4 +116,5 @@ export function MyComponent() {
 
 For user-auth methods, remind:
 
-⚠️ `reDefine(refreshToken, locale)` must be called before accessing user-auth methods. Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without this, React StrictMode burns the refresh token with a double call → logout. `saveFunction` automatically updates the token in localStorage with each rotation.
+⚠️ `reDefine(refreshToken, locale)` must be called before accessing user-auth methods.
+Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without this, React StrictMode burns the refresh token with a double call → logout. `saveFunction` automatically updates the token in localStorage with each rotation.
