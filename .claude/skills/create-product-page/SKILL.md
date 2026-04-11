@@ -18,7 +18,7 @@ What to look for in `items[0].attributeValues`:
 - Price marker (type `float`/`integer`) — for example `price`
 - Old price marker — for example `sale`, `old_price`
 - Stock quantity marker — for example `units_product`, `stock`
-- `statusIdentifier` — actual status "in stock"
+- `statusIdentifier` — real status "in stock"
 
 **⚠️ DO NOT guess markers** — check via `/inspect-api`.
 
@@ -31,11 +31,16 @@ What to look for in `items[0].attributeValues`:
 3. **Is an image gallery or a single image needed?**
 4. **Is there a layout?** — if yes, copy it exactly
 
+> **🛒 The "Add to Cart" button is ALWAYS added by default.**
+> Do not ask the user "is the button needed?". If the user **explicitly** said "without a button" — add it.
+> If the cart is not yet implemented — first run `/create-cart-manager`.
+> The "Add to Favorites" button is added **only upon user request** (→ `/create-favorites`).
+
 ---
 
-## Step 3: Create Server Action (if not already existing)
+## Step 3: Create Server Action (if not already)
 
-> If `app/actions/products.ts` already exists — read it and supplement, do not duplicate.
+> If `app/actions/products.ts` already exists — read it and supplement it, do not duplicate.
 
 ```typescript
 // app/actions/products.ts
@@ -77,7 +82,7 @@ import { getProductById } from '@/app/actions/products';
 export default async function ProductPage({
   params,
 }: {
-  params: Promise<{ locale: string; id: string }> ;
+  params: Promise<{ locale: string; id: string }>;
 }) {
   const { locale, id } = await params;  // ⚠️ Next.js 15+: await!
   const productId = Number(id);
@@ -100,7 +105,7 @@ export default async function ProductPage({
     || attrs.description?.value?.plainValue
     || '';
 
-  // Status: replace 'in_stock' with the real one from /inspect-api
+  // Status: replace 'in_stock' with real one from /inspect-api
   const inStock = product.statusIdentifier === 'in_stock';
   const stockQty = Number(attrs.units_product?.value) || 0;
   const isOutOfStock = !inStock || stockQty === 0;
@@ -136,10 +141,10 @@ export default async function ProductPage({
             <div dangerouslySetInnerHTML={{ __html: description }} />
           )}
 
-          {/* Button */}
+          {/* Cart button — always by default */}
           {isOutOfStock
             ? <div>Out of stock</div>
-            : <button type="button">Add to cart</button>
+            : <AddToCartButton product={product} />
           }
         </div>
       </div>
@@ -154,7 +159,7 @@ export default async function ProductPage({
 export default async function ProductPage({
   params,
 }: {
-  params: Promise<{ locale: string; id: string }> ;
+  params: Promise<{ locale: string; id: string }>;
 }) {
   const { locale, id } = await params;
   const productId = Number(id);
@@ -180,7 +185,7 @@ export default async function ProductPage({
     <main>
       {/* ... main content ... */}
 
-      {/* Related Products */}
+      {/* Related products */}
       {relatedProducts.length > 0 && (
         <section>
           <h2>Related products</h2>
@@ -236,7 +241,7 @@ const gallery = attrs.gallery?.value || [];
 2. Products: image → value is an OBJECT → attrs.pic?.value?.downloadLink (NOT an array!)
 2. groupOfImages → value is an ARRAY → attrs.gallery?.value?.[0]?.downloadLink
 2. Pages/Blocks: image → value is an ARRAY → attrs.bg?.value?.[0]?.downloadLink
-3. text → value.htmlValue or value.plainValue (object, not string)
+3. text → value.htmlValue or value.plainValue (object, not a string)
 4. statusIdentifier — check via /inspect-api, do not hardcode 'in_stock'
 5. Promise.all for parallel requests (product + related + blocks)
 6. notFound() on error — do not render an empty page

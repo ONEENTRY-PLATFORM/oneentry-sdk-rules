@@ -6,7 +6,7 @@ oneentry — OneEntry NPM package
 
 ## Glossary of OneEntry SDK Terms
 
-A quick reference for key concepts. If you're unsure about a term, check here.
+A quick reference guide to key concepts. If you're unsure about a term, check here.
 
 ---
 
@@ -25,7 +25,7 @@ A string identifier for an entity in OneEntry (pages, menus, forms, attributes, 
 ### id
 
 A numeric identifier. Use only when the API explicitly requires `id`.
-Prefer `marker`/`pageUrl` where possible — they are stable when transferring data.
+Prefer `marker`/`pageUrl` where possible — they are stable during data migration.
 
 ---
 
@@ -71,7 +71,7 @@ A set of attributes (template) assigned to the entity. Do not confuse with `attr
 Language code for API requests.
 
 - `locale` — a string from Next.js params (`'en_US'`, `'ru_RU'`)
-- `langCode` — the same, a parameter for SDK methods
+- `langCode` — the same, a parameter of SDK methods
 - **DO NOT hardcode** `'en_US'` in components — take it from `params`
 
 ```typescript
@@ -86,7 +86,7 @@ getApi().Pages.getPageByUrl('home', locale)
 
 ### getApi()
 
-Get the current SDK instance. Singleton — **do not create new instances** via `defineOneEntry()` in components.
+Get the current instance of the SDK. Singleton — **do not create new instances** via `defineOneEntry()` in components.
 
 ```typescript
 import { getApi } from '@/lib/oneentry'
@@ -97,7 +97,7 @@ const products = await getApi().Products.getProducts()
 
 ### reDefine()
 
-Recreate the SDK instance with a different `refreshToken` and/or `langCode`. Used during authentication.
+Recreate the SDK instance with a different `refreshToken` and/or `langCode`. Used during authorization.
 
 ```typescript
 // ✅ ALWAYS check hasActiveSession() before calling
@@ -120,7 +120,7 @@ Check if the current SDK instance has an active `accessToken`.
 
 ### saveFunction
 
-Callback in the SDK config that is called **automatically** on each rotation of `refreshToken`.
+Callback in the SDK config that is called **automatically** on each rotation of the `refreshToken`.
 No need to manage the token manually — just save it on the first login.
 
 > Details: `.claude/rules/tokens.md`
@@ -146,7 +146,7 @@ if (isError(result)) {
 
 ### fingerprint
 
-User device data that the SDK sends during authentication.
+User device data that the SDK sends during authorization.
 On the server, `deviceInfo.browser` will be `"Node.js/..."` — therefore:
 
 **`auth()`, `signUp()`, `generateCode()`, `checkCode()` — only from Client Component**
@@ -159,11 +159,11 @@ On the server, `deviceInfo.browser` will be `"Node.js/..."` — therefore:
 
 The `image` type returns **different structures** depending on the entity (verified with real data):
 
-| Entity    | `image` | Access                                   |
-|-----------|---------|------------------------------------------|
-| **Products** | OBJECT  | `attrs.pic?.value?.downloadLink`       |
+| Entity    | `image` | Access                               |
+|-----------|---------|--------------------------------------|
+| **Products** | OBJECT  | `attrs.pic?.value?.downloadLink`   |
 | **Pages**    | ARRAY   | `attrs.icon?.value?.[0]?.downloadLink` |
-| **Blocks**   | ARRAY   | `attrs.bg?.value?.[0]?.downloadLink`    |
+| **Blocks**   | ARRAY   | `attrs.bg?.value?.[0]?.downloadLink` |
 
 `groupOfImages` — always an ARRAY: `attrs.marker?.value?.[0]?.downloadLink`
 
@@ -188,7 +188,7 @@ if (attr.type === 'spam') {
 
 ### moduleFormConfigs / formModuleConfigId
 
-Required parameters for submitting a form via `postFormsData`. Obtain from `getFormByMarker()`.
+Mandatory parameters for submitting a form via `postFormsData`. Obtain from `getFormByMarker()`.
 
 ```typescript
 const form = await getApi().Forms.getFormByMarker('contact_us')
@@ -202,11 +202,11 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 
 ### pageUrl marker vs Next.js route
 
-| Concept         | Example                  | Where to use                     |
-|------------------|--------------------------|----------------------------------|
-| `pageUrl` (marker) | `'about'`               | Argument for `getPageByUrl()`   |
-| Next.js route     | `'/[locale]/about'`     | Folders in `app/`                |
-| `href` for Link   | `'/about'`              | `<Link href>`                   |
+| Concept        | Example                     | Where to use                      |
+|----------------|-----------------------------|-----------------------------------|
+| `pageUrl` (marker) | `'about'`                 | Argument of `getPageByUrl()`     |
+| Next.js route  | `'/[locale]/about'`        | Folders in `app/`                 |
+| `href` for Link| `'/about'`                 | `<Link href>`                     |
 
 ## Project Context
 
@@ -217,12 +217,12 @@ OneEntry is a headless CMS for e-commerce and content projects.
 
 - Manage product catalogs, categories
 - Create and process orders
-- Work with authentication and profiles
+- Work with authorization and profiles
 - Integrate payment systems
 - Manage multilingual content
 - Work with forms, menus, pages, and many other entities
 
-## Starting Each Session — Mandatory Checklist
+## Start of Each Session — Mandatory Checklist
 
 ### 🚨 BEFORE writing any code
 
@@ -236,19 +236,19 @@ OneEntry is a headless CMS for e-commerce and content projects.
 
 - **No `any`** — use types from `node_modules/oneentry/dist/**/*.d.ts` (see `.claude/rules/typescript.md`)
 - **Linter** — code must pass without errors (`next/core-web-vitals` + `next/typescript`)
-- **Imports** — only used, no extras
+- **Imports** — only used, no unnecessary ones
 - **`<img>`** → `next/image`, **`<a>`** → `next/link`
 
 ### Skills for Typical Tasks
 
-| Task                  | Skill                      |
-|-----------------------|----------------------------|
+| Task                   | Skill                      |
+|------------------------|----------------------------|
 | Project Initialization | `/setup-oneentry`          |
-| Orders Page           | `/create-orders-list`      |
-| Authentication Form    | `/create-auth` (check)     |
-| Page                  | `/create-page`             |
-| Server Action         | `/create-server-action`    |
-| Inspect API Markers   | `/inspect-api`             |
+| Orders Page            | `/create-orders-list`      |
+| Authorization Form     | `/create-auth` (check)     |
+| Page                   | `/create-page`             |
+| Server Action          | `/create-server-action`    |
+| Inspect API Markers    | `/inspect-api`             |
 
 ### Before Each New Component
 
@@ -269,43 +269,43 @@ OneEntry is a headless CMS for e-commerce and content projects.
 ## Available Skills
 
 | Skill                          | What it creates                                          |
-|-------------------------------|------------------------------------------------------|
-| `/setup-nextjs`               | Create a Next.js project from scratch                        |
-| `/setup-oneentry`             | Initialize SDK in an existing project             |
-| `/create-auth`                | Authentication: login, registration, logout, AuthContext |
-| `/create-google-oauth`        | Google OAuth: redirect, callback, code exchange         |
-| `/create-profile`             | User profile page                        |
-| `/create-orders-list`         | Orders list page with cancellation and pagination       |
-| `/create-checkout`            | Checkout: delivery form, timeInterval, payment       |
-| `/create-product-list`        | Product list with filtering and pagination            |
-| `/create-product-card`        | Product card                                      |
-| `/create-product-page`        | Product page                                      |
-| `/create-page`                | Page from CMS (Pages API)                          |
-| `/create-menu`                | Navigation menu                                   |
-| `/create-form`                | Form from Forms API                                   |
-| `/create-cart-manager`        | Cart (CartContext / Redux)                        |
-| `/create-favorites`           | Favorites                                            |
-| `/create-filter-panel`        | Filter panel by attributes                         |
-| `/create-locale-switcher`     | Language switcher                                  |
-| `/create-search`              | Search for products / pages                         |
-| `/create-reviews`             | Product reviews                                      |
-| `/create-subscription-events` | Subscribe to product events (price, availability)           |
-| `/create-server-action`       | Server Action for public SDK methods              |
-| `/inspect-api`                | API exploration: markers, response structure         |
-| `/setup-playwright`           | E2E testing: Playwright + MCP server            |
+|-------------------------------|----------------------------------------------------------|
+| `/setup-nextjs`               | Create a Next.js project from scratch                    |
+| `/setup-oneentry`             | Initialize SDK in an existing project                     |
+| `/create-auth`                | Authorization: login, registration, logout, AuthContext  |
+| `/create-google-oauth`        | Google OAuth: redirect, callback, code exchange           |
+| `/create-profile`             | User profile page                                        |
+| `/create-orders-list`         | Orders list page with cancellation and pagination         |
+| `/create-checkout`            | Checkout: delivery form, timeInterval, payment           |
+| `/create-product-list`        | Product list with filtering and pagination                |
+| `/create-product-card`        | Product card                                            |
+| `/create-product-page`        | Product page                                            |
+| `/create-page`                | Page from CMS (Pages API)                                |
+| `/create-menu`                | Navigation menu                                         |
+| `/create-form`                | Form from Forms API                                     |
+| `/create-cart-manager`        | Cart (CartContext / Redux)                              |
+| `/create-favorites`           | Favorites                                              |
+| `/create-filter-panel`        | Attribute filter panel                                   |
+| `/create-locale-switcher`     | Language switcher                                       |
+| `/create-search`              | Search for products / pages                             |
+| `/create-reviews`             | Product reviews                                        |
+| `/create-subscription-events` | Subscribe to product events (price, availability)       |
+| `/create-server-action`       | Server Action for public SDK methods                    |
+| `/inspect-api`                | API exploration: markers, response structure            |
+| `/setup-playwright`           | E2E testing: Playwright + MCP server                    |
 
 ## Instructions for AI
 
 ### Mode of Operation — Question at the Beginning
 
-**At the very beginning of working on the application** (the first time you are asked to write code for the project) — be sure to ask:
+**At the very beginning of working on the application** (the first time you are asked to write code for the project) — ALWAYS ask:
 
 > **Do we need to save tokens?**
 
 ### If saving is needed (economy mode)
 
 - ❌ Do not run the linter and do not fix linting errors
-- ❌ Do not build the application for testing
+- ❌ Do not build the application for verification
 - ❌ Do not add comments to the code
 
 ### If saving is NOT needed (full mode)
@@ -318,7 +318,7 @@ OneEntry is a headless CMS for e-commerce and content projects.
 
 **After receiving the answer — save it in **project** memory** (not global):
 
-Use Claude Code memory system for the current project (`~/.claude/projects/<project>/memory/`). Create a file `feedback_token_mode.md` with frontmatter:
+Use Claude Code's memory system for the current project (`~/.claude/projects/<project>/memory/`). Create a file `feedback_token_mode.md` with frontmatter:
 
 ```markdown
 ---
@@ -338,14 +338,14 @@ Token mode: [economy / full].
 
 ### Playwright E2E Tests — Question at the Beginning
 
-**At the very beginning of working on the application**, also ask:
+**At the very beginning of working on the application** also ask:
 
 > **Do we need to write Playwright E2E tests along with the code?**
 
 #### If yes
 
 1. Run **`/setup-playwright`** — it will install dependencies, create config, connect MCP server
-2. **When creating each new component/page** — immediately write a test in `e2e/`
+2. **When creating each new component/page** — write the test in `e2e/` immediately
 3. Add `data-testid` to key interactive elements
 4. Use MCP Playwright to inspect pages before writing tests
 
@@ -392,7 +392,7 @@ When working on the project, AI often creates temporary scripts for API inspecti
   temp/
     inspect-api.mjs     ← API inspection scripts
     debug-blocks.mjs    ← debugging scripts
-    test-auth.mjs       ← authentication tests
+    test-auth.mjs       ← authorization tests
 ```
 
 ---
@@ -421,13 +421,13 @@ components/
 
 ---
 
-When generating code with OneEntry SDK **ALWAYS**:
+When generating code with the OneEntry SDK **ALWAYS**:
 
-### ⚠️ CRITICALLY IMPORTANT: Check Types BEFORE Writing Code and Use Them
+### ⚠️ CRITICALLY IMPORTANT: Check Types BEFORE writing code and their usage
 
 #### ALWAYS check the data structure in the SDK BEFORE writing code
 
-`node_modules/oneentry/dist/` contains all interfaces (IProductsEntity, IBlockEntity, IAuthPostBody, etc.). Use `grep` to find interfaces BEFORE writing code.
+`node_modules/oneentry/dist/` contains all interfaces (IProductsEntity, IBlockEntity, IAuthPostBody, etc.). Use `grep` to search for interfaces BEFORE writing code.
 
 ```bash
 # Find interface
@@ -437,10 +437,10 @@ grep -r "interface IAuthPostBody" node_modules/oneentry/dist --include="*.d.ts" 
 grep -r "auth(marker" node_modules/oneentry/dist --include="*.d.ts" -A 5
 ```
 
-**NEVER INVENT data STRUCTURE!** Even if examples in the documentation look different - check real TypeScript types.
+**NEVER INVENT the data structure!** Even if examples in the documentation look different - check real TypeScript types.
 **NEVER INVENT DATA! Always obtain from the API (Pages, Menus, Products, Blocks, and other entities). If you don't know where to get the data → ASK THE USER. This is CRITICALLY IMPORTANT!**
 
-#### Import Types from SDK
+#### Import types from the SDK
 
 (`oneentry/dist/.../...Interfaces`)
 
@@ -457,16 +457,16 @@ Exception: The SDK itself declares the field as `any` (for example `ILocalizeInf
 
 ### 📋 Composite Prompts — MUST be broken down into subtasks
 
-**🚨 CRITICALLY IMPORTANT:** When a prompt contains multiple tasks ("do X + add Y + create Z"), there is a risk of missing rules in haste. **Real case:** in the prompt "make product pages + profile + authentication" AI missed the flag `isCheckCode: true` and did not add the step `activateUser()` — the rule was in `.claude/rules/auth-provider.md`, but was not applied due to haste.
+**🚨 CRITICALLY IMPORTANT:** When a prompt contains multiple tasks ("do X + add Y + create Z"), there is a risk of missing rules in haste. **Real case:** in the prompt "make product + profile + authorization pages" AI missed the flag `isCheckCode: true` and did not add the step `activateUser()` — the rule was in `.claude/rules/auth-provider.md`, but was not applied due to haste.
 
-**RULE: composite prompt = stepwise or parallel execution, NOT simultaneous "in one go."**
+**RULE: composite prompt = stepwise or parallel execution, NOT simultaneous "in one pass."**
 
 #### Step 1. Decomposition BEFORE any code
 
 1. Explicitly write out all subtasks from the prompt (list in the response to the user or in TodoWrite)
 2. For **each** subtask, determine the mandatory skill from the trigger table
 3. For **each** subtask, identify all relevant `.claude/rules/*.md`
-4. A broad prompt DOES NOT cancel the obligation to apply skills and rules to each part
+4. A broad prompt does NOT cancel the obligation to apply skills and rules to each part
 
 #### Step 2. Choosing the Execution Mode
 
@@ -474,17 +474,17 @@ Exception: The SDK itself declares the field as `any` (for example `ILocalizeInf
 
 - Execute subtasks one by one: one subtask → all its rules → checklist verification → next subtask
 - After **each** subtask — run the checklist: have all rules from `.claude/rules/*.md` been applied? Have all fields from the API been processed? Have all provider flags (`isCheckCode`, `systemCodeTlsSec`, etc.) been considered?
-- Only after explicit verification — proceed to the next subtask
+- Only after explicit verification — move to the next subtask
 
 **Option B — In Parallel via Agents (for independent tasks):**
 
-- If subtasks are **completely independent** (different pages, different components without shared dependencies) — run several agents in parallel via Agent tool (`general-purpose` or `Explore`)
+- If subtasks are **completely independent** (different pages, different components without shared dependencies) — run several agents in parallel via the Agent tool (`general-purpose` or `Explore`)
 - Pass each agent the **full context** of its subtask: relevant skill, rules, expected result
 - Parallel agents cannot be used if subtasks share state (AuthContext, common `lib/oneentry.ts` setup) — only sequentially
 
 #### Step 3. Prohibition on "one pass through everything"
 
-❌ **FORBIDDEN:** read the prompt with 3 tasks → immediately write 3 components in a row in one message without a checklist between them. This is the main reason for missing rules.
+❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in a row in one message without a checklist in between. This is the main reason for missing rules.
 
 ✅ **NECESSARY:** after each component/file — stop, checklist, only then the next.
 
@@ -492,11 +492,11 @@ Exception: The SDK itself declares the field as `any` (for example `ILocalizeInf
 
 | Words in Prompt | Mandatory Skill |
 | --- | --- |
-| login, registration, authentication, personal account, auth | `/create-auth` |
+| login, registration, authorization, personal account, auth | `/create-auth` |
 | google login, oauth, login via google/facebook | `/create-google-oauth` |
 | profile, personal user data | `/create-profile` |
 | orders, order history | `/create-orders-list` |
-| checkout, checkout | `/create-checkout` |
+| checkout, checkout process | `/create-checkout` |
 | product list, catalog | `/create-product-list` |
 | product card (component in the list) | `/create-product-card` |
 | product page (full detailed page) | `/create-product-page` |
@@ -515,8 +515,8 @@ Exception: The SDK itself declares the field as `any` (for example `ILocalizeInf
 | connect SDK, configure oneentry, SDK initialization | `/setup-oneentry` |
 | e2e tests, playwright, end-to-end | `/setup-playwright` |
 
-> ⚠️ Trigger word found → **first skill**, then code. Do not write the component manually.
-> ⚠️ Multiple triggers in one prompt → **multiple skills**, each executed with its full checklist. No saving by "common pass."
+> ⚠️ Trigger word found → **first the skill**, then the code. Do not write the component manually.
+> ⚠️ Multiple triggers in one prompt → **multiple skills**, each executed with its full checklist. No savings due to "common pass."
 
 ---
 
@@ -538,9 +538,9 @@ Exception: The SDK itself declares the field as `any` (for example `ILocalizeInf
    - 1️⃣ First, look at the type in the SDK (`node_modules/oneentry/dist/`)
    - 2️⃣ Then make a real call and look at the data (`console.log`)
    - DO NOT guess object fields!
-4. ☑️ **Is the marker needed?**
+4. ☑️ **Is a marker needed?**
    - Does the method require a marker? → run **`/inspect-api`** to see real markers from the API
-   - No access to Bash? → ASK THE USER which marker
+   - No access to Bash? → ASK THE USER what marker to use
    - DO NOT guess markers like 'main', 'header', 'footer'!
 5. ☑️ **Is the langCode correct?**
    - Are there params in Next.js? → Use it (do not forget await in Next.js 15+/16!)
@@ -550,11 +550,11 @@ Exception: The SDK itself declares the field as `any` (for example `ILocalizeInf
    - Is the function async? → Yes, it must be!
    - Type of params: `Promise<{...}>`? → Yes, it is a Promise!
    - Awaited params? → `const { locale } = await params;`
-   - DO NOT forget await - otherwise, you will get undefined!
+   - DO NOT forget await - otherwise you will get undefined!
 7. ☑️ **Is data transformation needed?**
-   - Is the data from the API already in the required format? → Use it directly
+   - Are the data from the API already in the required format? → Use directly
    - DO NOT create intermediate objects unnecessarily!
-8. ☑️ **Does the component require the SDK (form, authentication, data)?**
+8. ☑️ **Does the component require the SDK (form, authorization, data)?**
    - The user provided the layout of the form/component → IMMEDIATELY connect to the SDK, do not create a static stub first
    - Is a marker needed → run **`/inspect-api`** BEFORE writing the component
    - Is a Server Action needed → create it TOGETHER with the component in one step
@@ -576,50 +576,51 @@ Exception: The SDK itself declares the field as `any` (for example `ILocalizeInf
 
    → If the entity is **NOT FOUND** — respond:
    > **First create [name] in the OneEntry Admin Panel, then I will connect it in the code.**
-   → **NEVER** use a marker that is not confirmed via the API — only real data!
+   → **NEVER** use a marker that is not confirmed through the API — only real data!
 
-2. ❓ **Did not check types in the SDK**
+2. ❓ **You have not checked the types in the SDK**
    → FIRST: `grep -r "interface I[TypeName]" node_modules/oneentry/dist --include="*.d.ts" -A 10`
    → Example: Before using `getApi().AuthProvider.auth()` ALWAYS check the structure of IAuthPostBody
-3. ❓ **Do not know the marker** for Menus, Forms, Orders, Blocks, AuthProvider, etc.
+3. ❓ **You do not know the marker** for Menus, Forms, Orders, Blocks, AuthProvider, etc.
    → Run **`/inspect-api`** — it will return real markers from the API
    → No Bash access: For AuthProvider — `getApi().AuthProvider.getAuthProviders()`, for Forms — `getApi().Forms.getAllForms()`
-   → Nothing helped: Ask: "Which marker to use for [name]?"
-4. ❓ **Getting 403 Forbidden**
+   → Nothing helped: Ask: "What marker to use for [name]?"
+4. ❓ **You get 403 Forbidden**
    → Check: are you calling `AuthProvider.auth/signUp/generateCode` via Server Action? → move it to Client Component (fingerprint)
-   → Or check user group rights in the admin panel (`PROJECT_URL/users/groups`)
-5. ❓ **Did not see the layout** but need to create a component
+   → Or check user group permissions in the admin panel (`PROJECT_URL/users/groups`)
+5. ❓ **You have not seen the layout** but need to create a component
    → Ask: "Is there a layout/design example for this component?"
-6. ❓ **There is a layout, but do not know the marker** to connect to the SDK
+6. ❓ **There is a layout, but you do not know the marker** to connect to the SDK
    → First run **`/inspect-api`**, get the marker — and only then create the component already connected
    → DO NOT create a static stub with the intention of "connecting later"
-7. ❓ **Do not understand where to get the data**
+7. ❓ **You do not understand where to get the data**
    → Ask: "Where should the data for [component] come from?"
-8. ❓ **There are several options for a solution**
+8. ❓ **There are several options for solutions**
    → Offer options: "We can do X or Y, which option do you prefer?"
 
 ### Mandatory
 
-1. **💰 SAVE TOKENS: Do not fix linting, formatting, minor warnings. Leave this work to the user. Focus on the main task.**
-2. **🎯 WRITE CODE ACCORDING TO LINTER RULES: When writing new code, always follow the project's linter settings (ESLint, Prettier, etc.). Check the linter config in the project before writing code if you do not know the settings.**
-3. **🎨 EXACTLY COPY THE LAYOUT: If the user provided the layout (HTML/JSX), copy it exactly, especially if the same framework is used (e.g., Tailwind CSS). Do not change classes, structure, and styles without explicit necessity. Only replace hardcoded data with data from the API.**
-4. **🔌 IMMEDIATELY CONNECT TO SDK: If the user provided the layout of a component that should work with the SDK (authentication form, order form, data from CMS) — NEVER create a static UI stub first. Immediately: (1) run `/inspect-api` to get markers, (2) create Server Action, (3) connect the component to the SDK — all in one step.**
-5. **📋 FORMS ARE ALWAYS DYNAMIC: NEVER hardcode form fields (`<input>` with hardcoded `name`/`type`). Always get fields via `getFormByMarker(marker)` and render them dynamically by `attribute.type` and `attribute.marker`. The user's layout only sets the visual style — fields are taken from the API.**
-6. **❓ ASK FOR MARKERS:** Many API methods require a marker (Menus.getMenusByMarker, etc.), but there are no methods to "get all". DO NOT GUESS markers like 'main', 'footer', 'header'. ALWAYS ask the user which marker to use for the required entity.
-7. For AuthProvider, you can get the list of providers: `getApi().AuthProvider.getAuthProviders()` to find out available markers. For Forms, you can get the list of forms: `getApi().Forms.getAllForms()` to find out available markers, etc.
-8. Create a type guard `isError`
-9. Use async/await
-10. **Extract the API instance into a separate file (singleton). Use `getApi()` to get the current instance. DO NOT create new instances `defineOneEntry()` in components — use `reDefine()` to change the configuration (refreshToken, langCode)**
-11. Specify correct TypeScript types
-12. **When creating pages, get content from CMS Pages, not hardcode it**
-13. **When working with attributeValues: if you KNOW the marker (attribute name), access it directly `attrs.title?.value`. If you do not know - ask the user or search by type if the user also does not know `Object.values(attrs).find(a => a.type === 'image')`**
-14. **🚨 BEFORE writing code to access an attribute — ALWAYS check `type`, then use the correct structure `value`. DO NOT guess! Type table: `.claude/rules/attribute-values.md`**
+1. **🛒 "ADD TO CART" BUTTON — ALWAYS BY DEFAULT:** When creating a product card, catalog, or product page, **ALWAYS** add an "Add to Cart" button (AddToCartButton), unless the user **explicitly** says otherwise. Do not ask "is a button needed?" — it is needed. If the cart is not yet implemented — first run `/create-cart-manager`, then add the button to the card/page. The "Add to Favorites" button (FavoriteButton) is added **only at the user's request**.
+2. **💰 SAVE TOKENS: Do not fix linting, formatting, minor warnings. Leave this work to the user. Focus on the main task.**
+3. **🎯 WRITE CODE ACCORDING TO LINTER RULES: When writing new code, always follow the project's linter settings (ESLint, Prettier, etc.). Check the linter config in the project before writing code if you do not know the settings.**
+4. **🎨 EXACTLY COPY THE LAYOUT: If the user provided the layout (HTML/JSX), copy it exactly, especially if the same framework is used (e.g., Tailwind CSS). Do not change classes, structure, and styles without explicit necessity. Only replace hardcoded data with data from the API.**
+5. **🔌 IMMEDIATELY CONNECT TO THE SDK: If the user provided the layout of a component that should work with the SDK (authorization form, order form, data from CMS) — NEVER create a static UI stub first. Immediately: (1) run `/inspect-api` to get markers, (2) create Server Action, (3) connect the component to the SDK — all in one step.**
+6. **📋 FORMS ARE ALWAYS DYNAMIC: NEVER hardcode form fields (`<input>` with hardcoded `name`/`type`). Always get fields via `getFormByMarker(marker)` and render them dynamically by `attribute.type` and `attribute.marker`. The user's layout only sets the visual style — fields are taken from the API.**
+7. **❓ ASK FOR MARKERS:** Many API methods require a marker (Menus.getMenusByMarker, etc.), but there are no methods to "get all". DO NOT GUESS markers like 'main', 'footer', 'header'. ALWAYS ask the user what marker to use for the required entity.
+8. For AuthProvider, you can get the list of providers: `getApi().AuthProvider.getAuthProviders()` to find out available markers. For Forms, you can get the list of forms: `getApi().Forms.getAllForms()` to find out available markers, etc.
+9. Create a type guard `isError`
+10. Use async/await
+11. **Extract the API instance into a separate file (singleton). Use `getApi()` to get the current instance. DO NOT create new instances `defineOneEntry()` in components — use `reDefine()` to change the configuration (refreshToken, langCode)**
+12. Specify correct TypeScript types
+13. **When creating pages, get content from CMS Pages, not hardcoded**
+14. **When working with attributeValues: if you KNOW the marker (attribute name), access it directly `attrs.title?.value`. If you do not know - ask the user or search by type if the user also does not know `Object.values(attrs).find(a => a.type === 'image')`**
+15. **🚨 BEFORE writing code to access an attribute — ALWAYS check `type`, then use the correct structure of `value`. DO NOT guess! Type table: `.claude/rules/attribute-values.md`**
    - ⚠️ `image` in **Products** → `attrs.marker?.value?.downloadLink` (OBJECT)
    - ⚠️ `image` in **Pages/Blocks** → `attrs.marker?.value?.[0]?.downloadLink` (ARRAY!)
    - ⚠️ `groupOfImages` → `attrs.marker?.value?.[0]?.downloadLink` (always ARRAY)
-   - ⚠️ `spam` → DO NOT render as `<input>`! Render as `<FormReCaptcha>`. The type is called `'spam'`, not `'captcha'`
+   - ⚠️ `spam` → DO NOT render as `<input>`! Render `<FormReCaptcha>`. The type is called `'spam'`, not `'captcha'`
    - If you do not know the type — `console.log(attrs.marker)` to see the structure
-15. The SDK works both on the server and on the client (`NEXT_PUBLIC_*` variables are available in both contexts). The choice between Server Component / Server Action / Client Component is a matter of **rendering strategy**, not SDK limitations. Exception: `AuthProvider.auth/signUp/generateCode` — **only client** (device fingerprint).
+16. The SDK works both on the server and on the client (`NEXT_PUBLIC_*` variables are available in both contexts). The choice between Server Component / Server Action / Client Component is a matter of **rendering strategy**, not SDK limitations. Exception: `AuthProvider.auth/signUp/generateCode` — **only client** (device fingerprint).
 
 ### IMPORTANT: API Permissions and Record Count Limits
 
@@ -631,7 +632,7 @@ By default, in OneEntry for the user group "Guests," there is a limit of **maxim
 2. For each entity (Pages, Products, Forms, etc.), change permissions:
    - **Read: Yes, with restriction - with restriction on the number of records**
    - → switch to **without restrictions**
-3. This will allow you to get **all entities without limits** on the number
+3. This will allow you to obtain **all entities without limits** on the number
 
 **Example:**
 
@@ -641,15 +642,15 @@ https://react-native-course.oneentry.cloud/users/groups/edit-group/1?tab
 → Products: Read → without restrictions
 ```
 
-Without this setting, `getPages()`, `getProducts()` and other methods will return a maximum of 10 records!
+Without this setting, `getPages()`, `getProducts()`, and other methods will return a maximum of 10 records!
 
 ### Recommended
 
 1. Handle pagination for lists
-2. Pass `langCode` from context (i18n)
+2. Pass `langCode` from the context (i18n)
 3. Use markers instead of IDs where possible
 4. Add loading states
-5. Always check the result through `isError` guard
+5. Always check the result through the `isError` guard
 
 ### Working with Pages
 
@@ -666,7 +667,7 @@ The SDK is isomorphic — it works both on the server and on the client. The cho
 - **CSR, dynamics, search** → Client Component (`'use client'`) directly via `getApi()`
 - **User data** (Orders, Users, Payments) → Client Component via `getApi()` after `reDefine()`
 
-**The only strict limitation:** `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **only from Client Component** (on the server, `deviceInfo.browser` in fingerprint will be server-side, not the user's real browser).
+**The only strict limitation:** `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **only from Client Component** (on the server, `deviceInfo.browser` in the fingerprint will be server-side, not the user's real browser).
 
 > Server Actions rules: `.claude/rules/server-actions.md` | Authorization rules: `.claude/rules/auth-provider.md`
 
@@ -675,13 +676,13 @@ The SDK is isomorphic — it works both on the server and on the client. The cho
 **Existing code may have been written incorrectly or guessed — it is NOT a source of truth.**
 
 ```typescript
-// ❌ FORBIDDEN — see in code and use without checking:
+// ❌ NOT ALLOWED — see in the code and use without checking:
 const inStock = product.statusIdentifier === 'in_stock'
-// → and immediately write: query.statusMarker = 'in_stock'  ← FORBIDDEN!
+// → and immediately write: query.statusMarker = 'in_stock'  ← NOT ALLOWED!
 
-// ❌ FORBIDDEN — see in code and use without checking:
+// ❌ NOT ALLOWED — see in the code and use without checking:
 const stockQty = attrs.units_product?.value
-// → and immediately write: { attributeMarker: 'units_product', ... }  ← FORBIDDEN!
+// → and immediately write: { attributeMarker: 'units_product', ... }  ← NOT ALLOWED!
 ```
 
 **Even if the value looks plausible — ALWAYS check via a real API request.**
@@ -788,7 +789,7 @@ The `lib/oneentry.ts` file contains exports:
 ```typescript
 import { reDefine, hasActiveSession } from '@/lib/oneentry'
 
-// If you call reDefine immediately after login — you will burn the just received refreshToken
+// If reDefine is called immediately after login — you will burn the just received refreshToken
 // ❌ INCORRECT — blind reDefine without checking
 await reDefine(refreshToken, langCode)
 
@@ -811,7 +812,7 @@ The SDK works **both on the server and on the client** — environment variables
 | **SSR** (Server Component) | Server | Catalog, pages, menus, blocks |
 | **SSG** (`generateStaticParams`) | Server (build-time) | Generating static product routes |
 | **ISR** (`revalidate`) | Server (periodically) | Content with rare updates |
-| **CSR** (Client Component) | Client (browser) | Authentication, dynamic data, search |
+| **CSR** (Client Component) | Client (browser) | Authorization, dynamic data, search |
 | **Server Action** (`'use server'`) | Server | Mutations, form submissions, user-authorized data |
 
 ```tsx
@@ -822,7 +823,7 @@ export default async function CatalogPage({ params }) {
   // ...
 }
 
-// SSG — static generation
+// SSG — static path generation
 export async function generateStaticParams() {
   const products = await getApi().Products.getProducts({ limit: 100 });
   if (isError(products)) return [];
@@ -850,14 +851,14 @@ const results = await getApi().Products.searchProducts({ name: query });
 | --- | --- | --- |
 | Public data (Pages, Products, Menus, Blocks) | Server Component / Server Action / Client Component | No restrictions — depends on rendering strategy |
 | Authorization (auth, signUp, generateCode) | **Only Client Component** | Device fingerprint |
-| User data (Orders, Users, Payments) | Client Component via `getApi()` after `reDefine()` | Token is managed automatically by `saveFunction` |
+| User data (Orders, Users, Payments) | Client Component via `getApi()` after `reDefine()` | Token is managed by `saveFunction` automatically |
 | Forms and data submission | Server Action or Client Component | Depends on strategy |
 
-### ⚠️ params and searchParams in Next.js 15+/16 — these are Promises
+### ⚠️ params and searchParams in Next.js 15+/16 — this is a Promise
 
-In Next.js 15+ `params` and `searchParams` are Promises. Rules for pages are outlined in `.claude/rules/nextjs-pages.md` (automatically loaded when working with `page.tsx` / `layout.tsx`).
-Localization rules are outlined in `.claude/rules/localization.md` (automatically loaded when working with `page.tsx`, `layout.tsx`, `app/actions/**/*.ts`).
-In short:
+In Next.js 15+ `params` and `searchParams` are Promises. The rules for pages are outlined in `.claude/rules/nextjs-pages.md` (automatically loaded when working with `page.tsx` / `layout.tsx`).
+The localization rules are outlined in `.claude/rules/localization.md` (automatically loaded when working with `page.tsx`, `layout.tsx`, `app/actions/**/*.ts`).
+In brief:
 
 ```tsx
 // ✅ Always await params
@@ -895,7 +896,7 @@ async function getProduct(id: number) {
 // oneentry/dist/base/utils
 interface IError {
   statusCode: number
-  message: string | string[]  // ⚠️ In case of form validator errors — ARRAY of strings!
+  message: string | string[]  // ⚠️ For form validator errors — ARRAY of strings!
   pageData: any
   timestamp: string
   [key: string]: any
@@ -907,12 +908,12 @@ function normalizeErrorMessage(message: string | string[]): string {
 }
 // Usage: return { error: normalizeErrorMessage(result.message) }
 
-// Check error code
+// Error code checking
 if (isError(result)) {
   switch (result.statusCode) {
     case 400: // Bad Request
     case 401: // Unauthorized — no or expired token
-    case 403: // Forbidden — no rights
+    case 403: // Forbidden — no permissions
     case 404: // Not Found — resource not found
     case 429: // Rate Limit Exceeded
     case 500: // Server Error
@@ -936,24 +937,24 @@ import type { IAttributesSetsEntity } from 'oneentry/dist/attribute-sets/attribu
 
 > Detailed examples of each type: `.claude/rules/attribute-values.md`
 
-| Type | Access to value | Note |
-| --- | --- | --- |
-| `string`, `integer`, `real`, `float` | `attrs.marker?.value` | primitive |
-| `text` | `attrs.marker?.value?.htmlValue` | or `plainValue`, `mdValue` |
-| `textWithHeader` | `attrs.marker?.value?.header`, `.htmlValue` | |
-| `image` | `attrs.marker?.value?.downloadLink` | object |
-| `groupOfImages` | `attrs.marker?.value?.[0]?.downloadLink` | **ARRAY!** |
-| `file` | `attrs.marker?.value?.downloadLink` | object |
-| `date`, `dateTime`, `time` | `attrs.marker?.value?.fullDate` | or `formattedValue` |
-| `radioButton` | `attrs.marker?.value` | string-id |
-| `list` | `attrs.marker?.value` | array of ids or objects with `extended` |
-| `entity` | `attrs.marker?.value` | array of markers |
-| `json` | `JSON.parse(attrs.marker?.value || '{}')` | |
-| `timeInterval` | `attrs.marker?.value` | `[[ISO, ISO], ...]` |
-| `spam` | — | reCAPTCHA captcha v3 → `<FormReCaptcha>` |
+| Type              | Access to value                          | Note                       |
+|-------------------|-----------------------------------------|----------------------------|
+| `string`, `integer`, `real`, `float` | `attrs.marker?.value`                | primitive                  |
+| `text`            | `attrs.marker?.value?.htmlValue`      | or `plainValue`, `mdValue` |
+| `textWithHeader`  | `attrs.marker?.value?.header`, `.htmlValue` |                            |
+| `image`           | `attrs.marker?.value?.downloadLink`    | object                     |
+| `groupOfImages`   | `attrs.marker?.value?.[0]?.downloadLink` | **ARRAY!**                 |
+| `file`            | `attrs.marker?.value?.downloadLink`    | object                     |
+| `date`, `dateTime`, `time` | `attrs.marker?.value?.fullDate` | or `formattedValue`        |
+| `radioButton`     | `attrs.marker?.value`                  | string-id                  |
+| `list`            | `attrs.marker?.value`                  | array of ids or objects with `extended` |
+| `entity`          | `attrs.marker?.value`                  | array of markers           |
+| `json`            | `JSON.parse(attrs.marker?.value || '{}')` |                            |
+| `timeInterval`    | `attrs.marker?.value`                  | `[[ISO, ISO], ...]`       |
+| `spam`            | —                                       | reCAPTCHA v3 → `<FormReCaptcha>` |
 
 ```typescript
-// If you know the marker — directly (preferably):
+// If you know the marker — access directly (preferably):
 const title = attrs.title?.value
 const img = attrs.photo?.value?.downloadLink         // image — object
 const imgs = attrs.photos?.value?.[0]?.downloadLink  // groupOfImages — array
@@ -996,7 +997,7 @@ Contains data for the requested language. Direct access to fields (without nesti
 
 ```typescript
 page.localizeInfos?.title        // title
-page.localizeInfos?.menuTitle    // menu title
+page.localizeInfos?.menuTitle    // name in the menu
 page.localizeInfos?.htmlContent  // HTML content (check first)
 page.localizeInfos?.content      // plain text
 page.localizeInfos?.plainContent // unformatted text
@@ -1021,7 +1022,7 @@ const filtered = await getApi().Products.getProducts(
   ]
 )
 
-// Order + payment session (call from the client after reDefine)
+// Order + payment session (call from client after reDefine)
 const order = await getApi().Orders.createOrder('storage_marker', {
   formIdentifier, paymentAccountIdentifier, formData, products,
 }) as any
@@ -1035,7 +1036,7 @@ To create a product catalog, use the skill **`/create-product-list`** — it wil
 
 | Scenario | Method |
 | --- | --- |
-| **Entire catalog** (all products of the project) | `getProducts(filters, locale, query)` |
+| **Entire catalog** (all products in the project) | `getProducts(filters, locale, query)` |
 | **Category products** (linked to a category page in OneEntry) | `getProductsByPageUrl(categoryUrl, filters, locale, query)` |
 
 ```typescript
@@ -1048,27 +1049,27 @@ const result = await getApi().Products.getProductsByPageUrl('soft_toys', [], loc
 
 ⚠️ **Do not use `getProductsByPageUrl` to display the entire catalog** — it will only return products linked to a specific catalog_page.
 
-To create a single product page, use the skill **`/create-product-card`** — it will create a product page with `getProductById`, extracting attributes by type and marker, image gallery, price block, and related products section via `getRelatedProductsById`.
+To create a single product page, use the skill **`/create-product-card`** — it will create a product page with `getProductById`, extracting attributes by type and marker, an image gallery, a price block, and a section for related products via `getRelatedProductsById`.
 
-To create a user orders list page, use the skill **`/create-orders-list`** — it will create a Client Component with loading through all storages (`getAllOrdersStorage` + `getAllOrdersByMarker`), direct calls to `getApi()` from the client, client pagination.
+To create a user orders list page, use the skill **`/create-orders-list`** — it will create a Client Component with loading through all storages (`getAllOrdersStorage` + `getAllOrdersByMarker`), direct calls to `getApi()` from the client, and client-side pagination.
 
 To create a checkout page, use the skill **`/create-checkout`** — it will create a form with fields from Forms API (`getFormByMarker` by `formIdentifier` of the storage), handling the `timeInterval` type field (delivery slots), direct calls to `getApi()` for `createOrder` + `createSession`, and redirecting to the payment page.
 
-To manage the cart (Redux slice + redux-persist, add/remove/quantity), use the skill **`/create-cart-manager`** — it will create `CartSlice`, store with persistence, and `StoreProvider`.
+To manage the cart (Redux slice + redux-persist, add/remove/quantity), use the skill **`/create-cart-manager`** — it will create `CartSlice`, a store with persistence, and `StoreProvider`.
 
-For a favorites list (Redux slice + persist, stores only product IDs), use the skill **`/create-favorites`** — it will create `FavoritesSlice`, a button, and a page loading data from the API.
+For the favorites list (Redux slice + persist, stores only product IDs), use the skill **`/create-favorites`** — it will create `FavoritesSlice`, a button, and a page with loading data from the API.
 
-For a filter panel (price, color, availability + `FilterContext` + Apply/Reset buttons), use the skill **`/create-filter-panel`**.
+For the filter panel (price, color, availability + `FilterContext` + Apply/Reset buttons), use the skill **`/create-filter-panel`**.
 
-To subscribe to changes in product price and availability, use the skill **`/create-subscription-events`** — `Events.subscribeByMarker` / `unsubscribeByMarker`.
+To subscribe to product price and availability changes, use the skill **`/create-subscription-events`** — `Events.subscribeByMarker` / `unsubscribeByMarker`.
 
-### Authentication and Users
+### Authorization and Users
 
-To create an authentication/registration form, use the skill **`/create-auth`** — it will create a Client Component with direct SDK calls (fingerprint!) and Server Actions only for `getAuthProviders`/`logout`. Fields are dynamic from Forms API, correct `authData` structure, token synchronization.
+To create an authorization/registration form, use the skill **`/create-auth`** — it will create a Client Component with direct SDK calls (fingerprint!) and Server Actions only for `getAuthProviders`/`logout`. Fields are dynamic from Forms API, with the correct structure of `authData`, and token synchronization.
 
 To create a user profile page, use the skill **`/create-profile`** — fields from Users API, data updating, handling token race condition.
 
-To create an orders list page, use the skill **`/create-orders-list`** — loading through all storages, cancellation, repeat, client pagination.
+To create an orders list page, use the skill **`/create-orders-list`** — loading through all storages, cancellation, repeat, client-side pagination.
 
 To create a language switcher, use the skill **`/create-locale-switcher`** — it loads locales via `getLocales()`, builds links to the current page with a different locale segment.
 
@@ -1076,13 +1077,13 @@ To create a search bar, use the skill **`/create-search`** — debounce 300ms, S
 
 ### Creating Pages with Content from CMS
 
-To create Next.js pages with data from OneEntry, use the skill **`/create-page`** — it will create a page file with `getPageByUrl`, `getBlocksByPageUrl`, and proper `isError` handling.
+To create Next.js pages with data from OneEntry, use the skill **`/create-page`** — it will create a page file with `getPageByUrl`, `getBlocksByPageUrl`, and proper handling of `isError`.
 
-Rules for `params`/`searchParams` (Next.js 15+) and working with `langCode`: `.claude/rules/nextjs-pages.md` (loaded automatically when working with `page.tsx`/`layout.tsx`).
+Rules for `params`/`searchParams` (Next.js 15+) and working with `langCode`: `.claude/rules/nextjs-pages.md` (automatically loaded when working with `page.tsx`/`layout.tsx`).
 
 **⚠️ CRITICALLY IMPORTANT: pageUrl is a MARKER, not a full path!**
 
-In OneEntry, the `pageUrl` field is an **identifier/marker for the page**, NOT the actual URL of the application's route.
+In OneEntry, the `pageUrl` field is an **identifier/marker of the page**, NOT the actual URL of the application's route.
 
 ```typescript
 // ❌ INCORRECT - passing the full route path
@@ -1110,11 +1111,11 @@ const menuEN = await getApi().Menus.getMenusByMarker('main', 'en_US')
 
 ### Navigation Menu with Hierarchy
 
-To create a navigation menu with support for submenus and URL prefixes, use the skill **`/create-menu`** — it will properly handle the hierarchy via `parentId`, normalize `pages`, and build URLs.
+To create a navigation menu with support for submenus and URL prefixes, use the skill **`/create-menu`** — it will correctly handle the hierarchy via `parentId`, normalize `pages`, and build URLs.
 
 ## Working with Blocks and Attributes
 
-> Type table of `attributeValues` and examples of access: `.claude/rules/attribute-values.md` (loaded automatically when working with `*.tsx` components).
+> Type table for `attributeValues` and examples of access: `.claude/rules/attribute-values.md` (automatically loaded when working with `*.tsx` components).
 
 ### Working with Blocks
 
@@ -1160,10 +1161,10 @@ if (isError(product)) return
 console.log(product.attributeValues.title)
 ```
 
-### Creating SDK Instance in Component
+### Creating an SDK Instance in a Component
 
 ```typescript
-// ❌ INCORRECT - new instance on each render
+// ❌ INCORRECT - new instance on every render
 function ProductList() {
   const api = defineOneEntry(url, config)
 }
@@ -1172,7 +1173,7 @@ function ProductList() {
 const products = await getApi().Products.getProducts()
 ```
 
-> Full singleton pattern: see **SDK Initialization** section
+> Full singleton pattern: see **SDK Initialization**
 
 ### Guessing Menu Markers and Filtering by Names
 
@@ -1192,7 +1193,7 @@ const quickLinks = !isError(quickLinksMenu) && quickLinksMenu.pages
 
 ### Creating Intermediate Types and Mapping API Data into Custom Objects
 
-**NEVER** create an intermediate `type`/`interface` to wrap data from the API and map it in Server Actions. Components should work directly with what the API returned.
+**NEVER** create an intermediate `type`/`interface` to wrap data from the API and do not map it in Server Actions. Components should work directly with what the API returns.
 
 ```typescript
 // ❌ INCORRECT — creating a custom type and mapping attributes into it
@@ -1228,7 +1229,7 @@ field.validators?.stringInspectionValidator?.stringMax
 field.listTitles   // full objects with title, value, extended
 ```
 
-**Rule:** Server Action is a thin proxy. The only permissible operations on API data: `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
+**Rule:** Server Action is a thin proxy. The only permissible operations on API data are `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
 
 ### Inventing Data Structures and Creating Unnecessary Transformations
 
@@ -1238,7 +1239,7 @@ const navItems = pages.map(item => ({
   id: item.id,
   title: item.localizeInfos?.title || '',
   url: item.pageUrl || '#',
-  children: item.children || []  // ← field children is NOT in the API!
+  children: item.children || []  // ← field children is NOT in API!
 }))
 
 // CORRECT - using data from the API directly as is
@@ -1252,7 +1253,7 @@ const navItems = pages.filter((p: any) => !p.parentId)
 ))}
 ```
 
-### Logging the User Out on Any Error on Account Pages
+### Logging Out the User on Any Error on Account Pages
 
 **Problem:** On 401, you need to retry with the current token from localStorage (another operation might have already updated it), and log out ONLY on confirmed 401/403 after retry.
 
@@ -1261,7 +1262,7 @@ The full pattern for orders pages — skill **`/create-orders-list`**.
 
 **Never do `localStorage.removeItem('refreshToken')` on error loading forms/data** — this destroys the fresh token that another operation just wrote.
 
-### Showing a Preloader When Changing State (Not Just on Load)
+### Showing a Preloader on State Change (not just on loading)
 
 **Problem:** When adding/removing from favorites/cart, the entire list reloads with a loader.
 
@@ -1287,8 +1288,8 @@ useEffect(() => {
 **Rules:**
 
 - Do not call `setState` / `dispatch` synchronously in the body of `useEffect` — move the initial value to `useState(initialValue)` or compute it via `useMemo`
-- For checking "is the component mounted" — **do not use** `useEffect + setMounted`. Instead, use `useSyncExternalStore` or manage visibility through data
-- If you need to reset state when changing a dependency — pass the initial value directly into `useState`, not through an effect
+- To check "is the component mounted" — **do not use** `useEffect + setMounted`. Instead, use `useSyncExternalStore` or manage visibility through data
+- If you need to reset state on dependency change — pass the initial value directly into `useState`, not through an effect
 - Asynchronous calls (fetch, dispatch after await) — are allowed inside `useEffect`
 
 ```typescript
@@ -1312,7 +1313,7 @@ const mounted = useSyncExternalStore(
 );
 ```
 
-## Frequent AI Hallucinations (Real Examples of Mistakes)
+## Frequent AI Hallucinations (Real Examples of Errors)
 
 ### Hardcoding OAuth Provider URL or Skipping Redirect Step
 
@@ -1346,9 +1347,9 @@ The `children` field is not in `IMenusPages` — use `parentId` (see the section
 
 > Skill: **`/create-menu`**
 
-### Rendering Captcha Field as a Regular Input
+### Rendering Captcha Field as Regular Input
 
-The captcha type in OneEntry is `'spam'`, not `'captcha'`. This is an **invisible** reCAPTCHA v3 — render as `<FormReCaptcha>`, not `<input>`.
+The captcha type in OneEntry is `'spam'`, not `'captcha'`. This is an **invisible** reCAPTCHA v3 — render `<FormReCaptcha>`, not `<input>`.
 
 ```tsx
 // ❌ HALLUCINATION
@@ -1364,7 +1365,7 @@ The full pattern for dynamic forms — skill **`/create-form`**.
 
 ### Using `getProductsByPageUrl` for the Entire Catalog
 
-`getProductsByPageUrl` returns **only products linked to a specific catalog_page** in OneEntry. To display all products of the project — use `getProducts`.
+`getProductsByPageUrl` returns **only products linked to a specific catalog_page** in OneEntry. To display all products in the project — use `getProducts`.
 
 ```typescript
 // ❌ HALLUCINATION — getProductsByPageUrl for the entire catalog
@@ -1373,7 +1374,7 @@ const result = await getApi().Products.getProductsByPageUrl('catalog', [], local
 // ✅ CORRECT — entire catalog
 const result = await getApi().Products.getProducts([], locale, { offset: 0, limit: 30 })
 
-// ✅ CORRECT — category products (marker of a specific category)
+// ✅ CORRECT — products of a specific category (marker of a specific category)
 const result = await getApi().Products.getProductsByPageUrl('soft_toys', [], locale, { offset: 0, limit: 30 })
 ```
 
@@ -1382,7 +1383,7 @@ const result = await getApi().Products.getProductsByPageUrl('soft_toys', [], loc
 - `getProducts` — page with all products, global search, cart
 - `getProductsByPageUrl` — category page that has a corresponding `catalog_page` in OneEntry
 
-> Skill: **`/create-product-list`** — at step 2 asks "where to get products?" and creates both Server Actions.
+> Skill: **`/create-product-list`** — at step 2 asks "where to get products?" and creates both Server Actions
 
 ### Hardcoding langCode
 
@@ -1411,8 +1412,8 @@ Get colors and price ranges from the API, do not hardcode them. The full pattern
 
 ### ✅ PREFERRED METHOD: skill `/inspect-api`
 
-> **IMPORTANT:** All API requests are performed **only through the SDK** (not via curl).
-> The SDK normalizes data before returning: removes locale wrapping from `attributeValues` and `localizeInfos`, converts `additionalFields` from an array to `Record<marker, field>`, transforms a single `image.value` from an array to an object. Curl returns raw data — code based on it will contain errors.
+> **IMPORTANT:** All API requests are made **only through the SDK** (not via curl).
+> The SDK normalizes data before returning: removes locale wrapping from `attributeValues` and `localizeInfos`, converts `additionalFields` from an array to `Record<marker, field>`, transforms a single `image.value` from an array to an object. Curl returns raw data — code based on them will contain errors.
 
 Use the skill **`/inspect-api`** — it will automatically read `.env.local` and run the SDK script:
 

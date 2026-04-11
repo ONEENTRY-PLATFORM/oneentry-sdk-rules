@@ -12,14 +12,14 @@ Creates a new Next.js project from scratch or initializes it in an empty directo
 
 Check for the presence of `package.json` in the current directory.
 
-- If `package.json` **exists** — ask the user: create the project on top (overwrite) or just configure.
+- If `package.json` **exists** — ask the user: create the project on top (overwrite) or just configure the settings.
 - If **not** — proceed to Step 2.
 
 ---
 
-## Step 2: Choose a creation method
+## Step 2: Choose the creation method
 
-### Option A — directory is empty (or only `.claude/`, `.git/`, `.env.local`)
+### Option A — directory is empty (or only contains `.claude/`, `.git/`, `.env.local`)
 
 ```bash
 npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir --import-alias "@/*" --no-git --yes
@@ -33,7 +33,7 @@ Flags:
 - `--src-dir` — files in `src/` (`@/` → `./src/*`)
 - `--import-alias "@/*"` — alias for imports
 - `--no-git` — do not initialize a git repository
-- `--yes` — without interactive questions
+- `--yes` — no interactive questions
 
 > If you need to skip dependency installation: add `--skip-install`, then `npm install`.
 
@@ -242,11 +242,16 @@ export default function Home() {
 }
 ```
 
-After creating the files — install dependencies:
+After creating the files — install the dependencies:
 
 ```bash
 npm install
 ```
+
+> ⚠️ **IMPORTANT: `dependencies` vs `devDependencies`.**
+> In `dependencies` only runtime packages: `next`, `react`, `react-dom`, `oneentry`.
+> Everything else (`@types/*`, `eslint`, `typescript`, `tailwindcss`, `postcss`, `autoprefixer`, `eslint-config-next`, `@tailwindcss/postcss`) — in `devDependencies`.
+> Never place types, linters, and build tools in `dependencies`.
 
 ---
 
@@ -263,7 +268,7 @@ src/
   lib/          ← create if not present
 ```
 
-If the `src/components/` and `src/lib/` folders are not created — create them (empty `.gitkeep` or the necessary files right away).
+If the folders `src/components/` and `src/lib/` are not created — create them (empty `.gitkeep` or the necessary files right away).
 
 ---
 

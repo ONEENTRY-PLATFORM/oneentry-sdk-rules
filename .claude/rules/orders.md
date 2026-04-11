@@ -70,10 +70,10 @@ const total = result.total
 
 ⚠️ `currency` — often an empty string `""`. **Do not hardcode `$`**. Pattern: `{order.currency || ''}{Number(order.totalSum).toFixed(2)}`. For products in the order, use the currency of the parent order, as there is no currency field in `IOrderProducts`.
 
-⚠️ `statusIdentifier` — only the order status marker. Order statuses are set in the **project admin panel** — markers are unique for each project, do not hardcode. The title cannot be obtained via SDK — build a map on the client side:
+⚠️ `statusIdentifier` — only the order status marker. Order statuses are set in the **project admin panel** — markers are unique for each project, do not hardcode. The title cannot be obtained through the SDK — build a map on the client side:
 
 ```ts
-// Markers — real ones from your project (find out through admin panel)
+// Markers — real ones from your project (find out through the admin panel)
 const STATUS_LABELS: Record<string, string> = {
   myStatus1: 'Label 1',
   myStatus2: 'Label 2',
@@ -83,6 +83,7 @@ STATUS_LABELS[order.statusIdentifier ?? ''] ?? order.statusIdentifier
 ```
 
 ⚠️ `paymentAccountLocalizeInfos` — `{ title: string }`. For output:
+
 ```tsx
 order.paymentAccountLocalizeInfos?.title || order.paymentAccountIdentifier
 ```
@@ -133,9 +134,9 @@ const session = Array.isArray(sessions) ? sessions[0] : sessions
 ### PayPal — asynchronous flow
 
 For PayPal, `createSession` returns `paymentUrl: null` immediately.
-OneEntry creates a payment session asynchronously — polling is needed via `getSessionByOrderId`:
+OneEntry creates a payment session asynchronously — polling is needed through `getSessionByOrderId`:
 
-**Full flow order + payment (call from client via getApi()):**
+**Full flow order + payment (call from client through getApi()):**
 
 ```ts
 // Client Component — after reDefine() the token is already set up
@@ -184,7 +185,7 @@ const isStripe = selectedPayment === 'stripe'
 const isOnline = selectedPayment === 'stripe' || selectedPayment === 'paypal'
 
 // Cash and any other offline: isOnline = false → show success screen
-// PayPal: isOnline = true, !isStripe → polling via getSessionByOrderId
+// PayPal: isOnline = true, !isStripe → polling through getSessionByOrderId
 // Stripe: isOnline = true, isStripe → createSession
 ```
 

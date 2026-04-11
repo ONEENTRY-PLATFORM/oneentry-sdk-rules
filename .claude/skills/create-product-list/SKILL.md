@@ -29,9 +29,14 @@ What to look for:
 1. **Where are the products from?** (all products `getProducts` or by category `getProductsByPageUrl`)
    - If by category — what is the `pageUrl` of the category page?
 2. **Are filters needed?** (price, status, attributes)
-3. **Is infinite scroll or a "Load More" button needed?**
+3. **Is infinite scrolling or a "Load More" button needed?**
 4. **Markers of filterable attributes** (price, color, size, etc.) — clarify after `/inspect-api`
 5. **Is there a layout for the card/grid?** — if yes, copy it exactly
+
+> **🛒 The "Add to Cart" button in cards is ALWAYS by default.**
+> When creating the catalog, product cards must contain an "Add to Cart" button.
+> If the cart is not yet implemented — first run `/create-cart-manager`.
+> The "Add to Favorites" button is added **only at the user's request**.
 
 ---
 
@@ -188,7 +193,7 @@ export default async function ShopPage({
       initialProducts={initialData.items}
       totalProducts={initialData.total}
       locale={locale}
-      // categoryUrl should only be passed for category pages
+      // categoryUrl should be passed only for category pages
     />
   );
 }
@@ -197,7 +202,7 @@ export default async function ShopPage({
 ### 3.4 ShopView — Client Component, reads filters from URL
 
 > **⚠️ CRITICALLY IMPORTANT:** ShopView MUST read `activeFilters` and `gridKey`
-> from `useSearchParams`, NOT as props from the server component.
+> from `useSearchParams`, and NOT receive them as props from the server component.
 > Otherwise, `loadMore` in ProductGrid will use outdated filters.
 
 ```tsx
@@ -243,7 +248,7 @@ export function ShopView({ initialProducts, totalProducts, locale, categoryUrl }
 }
 ```
 
-### 3.5 ProductGrid — infinite scroll via IntersectionObserver
+### 3.5 ProductGrid — infinite scrolling via IntersectionObserver
 
 ```tsx
 // components/ProductGrid.tsx

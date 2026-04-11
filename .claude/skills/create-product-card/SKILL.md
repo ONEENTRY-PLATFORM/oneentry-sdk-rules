@@ -22,16 +22,19 @@ What to look for in `items[0].attributeValues`:
 - Stock quantity marker (type `integer`) — for example `units_product`, `stock`
 - `statusIdentifier` — the real status identifier "in stock"
 
-**⚠️ DO NOT guess the markers** — they are unique for each project.
+**⚠️ DO NOT guess the markers** — they are unique to each project.
 
 ---
 
 ## Step 2: Clarify with the user
 
-1. **Is there a layout for the card?** — if yes, copy it exactly, only change the data
-2. **Where does the card link lead?** — for example `/shop/product/[id]` or `/${locale}/product/[id]`
-3. **Is a "Add to Cart" button needed?** — if yes, clarify how the cart is implemented
-4. **Is a "Favorites" button needed?** — if yes, clarify how it is implemented
+1. **Is there a layout for the card?** — if yes, copy it exactly, changing only the data
+2. **Where does the link from the card lead?** — for example `/shop/product/[id]` or `/${locale}/product/[id]`
+
+> **🛒 The "Add to Cart" button is ALWAYS added by default.**
+> Do not ask the user "do you need a button?". If the user **explicitly** did not say "without a button" — add it.
+> If the cart is not yet implemented — first run `/create-cart-manager`.
+> The "Add to Favorites" button is added **only upon user request** (→ `/create-favorites`).
 
 ---
 
@@ -58,12 +61,18 @@ const firstImg = attrs.gallery?.value?.[0]?.downloadLink || '';
 
 ## Step 4: Create the card component
 
-### Basic Template
+### Basic template
+
+> ⚠️ The "Add to Cart" button is **mandatory by default**. The "Add to Favorites" button — only upon request.
+> The card is a Client Component (`'use client'`), as the cart button requires interactivity (dispatch in Redux store).
 
 ```tsx
-// components/ProductCard.tsx
+// components/product/ProductCard.tsx
+'use client';
+
 import Image from 'next/image';
 import Link from 'next/link';
+import { AddToCartButton } from '@/components/cart/AddToCartButton';
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces';
 
 interface ProductCardProps {
@@ -113,12 +122,17 @@ export function ProductCard({ product, locale }: ProductCardProps) {
         {/* Status */}
         {!inStock && <div>Out of stock</div>}
       </Link>
+
+      {/* Cart button — always by default */}
+      {inStock && (
+        <AddToCartButton product={product} />
+      )}
     </article>
   );
 }
 ```
 
-### With Stickers (list with extended)
+### With stickers (list with extended)
 
 ```tsx
 // Stickers/badges — type list, value is an array of objects with extended
@@ -132,7 +146,7 @@ const stickerIconUrl = stickers[0]?.extended?.value?.downloadLink || '';
 )}
 ```
 
-### With Stock Quantity
+### With stock quantity
 
 ```tsx
 // Stock quantity — type integer
@@ -146,7 +160,7 @@ const isOutOfStock = !inStock || stockQty === 0;
 }
 ```
 
-### With Favorites Button (via context)
+### With favorites button (via context)
 
 ```tsx
 // If there is a FavoritesContext
@@ -175,18 +189,18 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 
 ---
 
-## Step 5: Remind Key Rules
+## Step 5: Remind key rules
 
 ✅ Component created. Key rules:
 
 ```md
-1. Products: image → value OBJECT → attrs.pic?.value?.downloadLink (NOT an array!)
-1. groupOfImages → value ARRAY → attrs.gallery?.value?.[0]?.downloadLink
-1. Pages/Blocks: image → value ARRAY → attrs.bg?.value?.[0]?.downloadLink
+1. Products: image → value is an OBJECT → attrs.pic?.value?.downloadLink (NOT an array!)
+1. groupOfImages → value is an ARRAY → attrs.gallery?.value?.[0]?.downloadLink
+1. Pages/Blocks: image → value is an ARRAY → attrs.bg?.value?.[0]?.downloadLink
 1. Always check the structure via /inspect-api before writing code
-2. Attribute markers are unique for the project — check via /inspect-api
+2. Attribute markers are unique to the project — check via /inspect-api
 3. statusIdentifier — real status from /inspect-api, do not guess 'in_stock'
 4. Stickers (list with extended) → stickers[0]?.extended?.value?.downloadLink
 5. next/image requires remotePatterns in next.config.ts for *.oneentry.cloud
-6. If there is a layout — copy classes exactly, only change the data
+6. If there is a layout — copy classes exactly, changing only the data
 ```
