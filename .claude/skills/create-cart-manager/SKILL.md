@@ -2,13 +2,13 @@
 name: create-cart-manager
 description: Create cart manager with Redux and persistence
 ---
-# Create Cart Manager (Redux + Persist)
+# Create Cart Manager (Redux + persist)
 
 Creates a Redux slice for the cart with persistence, store, and types. The cart stores a list of products with quantities and survives page reloads.
 
 ---
 
-## Step 1: Install Dependencies
+## Step 1: Install dependencies
 
 ```bash
 npm install @reduxjs/toolkit react-redux redux-persist next-redux-wrapper
@@ -16,7 +16,7 @@ npm install @reduxjs/toolkit react-redux redux-persist next-redux-wrapper
 
 ---
 
-## Step 2: Create Product Type in Cart
+## Step 2: Create product type in the cart
 
 File: `app/types/cart.ts`
 
@@ -30,7 +30,7 @@ export interface ICartProduct {
 
 ---
 
-## Step 3: Create Cart Slice
+## Step 3: Create cart slice
 
 File: `app/store/reducers/CartSlice.ts`
 
@@ -212,7 +212,7 @@ export default cartSlice.reducer;
 
 ---
 
-## Step 4: Create Redux Store with Persistence
+## Step 4: Create Redux store with persistence
 
 File: `app/store/store.ts`
 
@@ -223,7 +223,7 @@ import { persistReducer } from 'redux-persist';
 import createWebStorage from 'redux-persist/lib/storage/createWebStorage';
 import cartSlice from './reducers/CartSlice';
 
-// SSR-compatible storage (noop on server)
+// SSR-compatible storage (noop on the server)
 const createNoopStorage = () => ({
   getItem: () => Promise.resolve(null),
   setItem: (_key: string, value: unknown) => Promise.resolve(value),
@@ -240,7 +240,7 @@ const cartReducer = persistReducer(
     key: 'cart-slice',
     storage,
     version: 1,
-    whitelist: ['productsData', 'total'], // products NOT persisted — loaded from API
+    whitelist: ['productsData', 'total'], // products are NOT persisted — loaded from API
   },
   cartSlice,
 );
@@ -263,7 +263,7 @@ export const wrapper = createWrapper<AppStore>(setupStore, { debug: false });
 
 ---
 
-## Step 5: Wrap Application in Provider
+## Step 5: Wrap the application in Provider
 
 File: `app/store/providers/StoreProvider.tsx`
 
@@ -311,7 +311,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ---
 
-## Step 6: Usage in Components
+## Step 6: Usage in components
 
 ```tsx
 'use client';
@@ -361,3 +361,192 @@ export function AddToCartButton({ product }: { product: any }) {
 5. serializableCheck: false — needed for redux-persist
 6. If favorites are needed — add FavoritesSlice similarly (whitelist: ['products'])
 ```
+
+---
+
+## Step 7: Playwright E2E tests
+
+> Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
+> For setting up Playwright — first `/setup-playwright`.
+
+### 7.1 Add `data-testid` to components
+
+For selector stability — add `data-testid` when generating cart components:
+
+```tsx
+// AddToCartButton (or similar button on product card)
+<button
+  data-testid="add-to-cart"
+  data-product-id={product.id}
+  onClick={() => dispatch(addProductToCart({ id: product.id, quantity: 1 }))}>
+  Add to Cart
+</button>
+
+// When the product is already in the cart
+<button data-testid="remove-from-cart" data-product-id={product.id}>
+  In Cart ({qty})
+</button>
+
+// CartDrawer / CartPage (cart page)
+<div data-testid="cart-root">
+  {items.length === 0 ? (
+    <p data-testid="cart-empty">Cart is empty</p>
+  ) : (
+    <ul data-testid="cart-items">
+      {items.map((item) => (
+        <li key={item.id} data-testid="cart-item" data-product-id={item.id}>
+          <span data-testid="cart-item-title">{item.title}</span>
+          <span data-testid="cart-item-qty">{item.quantity}</span>
+          <button data-testid="cart-qty-decrease" aria-label="Decrease">−</button>
+          <button data-testid="cart-qty-increase" aria-label="Increase">+</button>
+          <button data-testid="cart-item-remove" aria-label="Remove">×</button>
+        </li>
+      ))}
+    </ul>
+  )}
+  <div data-testid="cart-total">{total}</div>
+</div>
+
+// Product count in the header (if any)
+<span data-testid="cart-badge">{itemsCount}</span>
+```
+
+### 7.2 Gather test parameters and fill in `.env.local`
+
+**Algorithm (execute step by step, do not ask in one list):**
+
+1. **Path to the catalog/product cards** (where to click "Add to Cart") — ask: "What is the path to the page with the product list where there is an 'Add to Cart' button? (for example `/shop`, `/catalog`, `/products`)".
+   - No response → find it yourself through Glob (`app/**/shop/**/page.tsx`, `app/**/catalog/**/page.tsx`, `app/**/products/**/page.tsx`) and/or Grep for `AddToCartButton`/`data-testid="add-to-cart"`. Report: "Found products in `{path}` — using it".
+2. **Path to the cart page** — ask: "Where is the cart page? (for example `/cart`, `/basket`, or does the cart open as a drawer from any page?)".
+   - No response → Glob (`app/**/cart/**/page.tsx`, `app/**/basket/**/page.tsx`). If found — use the path; if not found — fallback to checking via `data-testid="cart-root"` on the same catalog page (drawer version).
+3. **Number of products on the page** — check yourself via the previously launched `/inspect-api products`: if `total >= 2` → tests for multiple products are included; if `total < 2` → the test "add 2 different products" is commented out. Report: "There are `{total}` products in the project — multiple addition test {enabled/disabled}".
+4. **Fill in `.env.local`** (yourself, through Edit/Write — do not ask the user to copy):
+
+```bash
+# e2e cart
+E2E_SHOP_PATH=/shop
+E2E_CART_PATH=/cart
+```
+
+If the cart page is not present (drawer version) — leave `E2E_CART_PATH` empty, the test will switch to checking the drawer on `E2E_SHOP_PATH`.
+
+### 7.3 Create `e2e/cart.spec.ts`
+
+> ⚠️ Tests work with the real OneEntry project — they click on the actual "Add to Cart" button and check persistence through `localStorage` and `page.reload()`.
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+const SHOP_PATH = process.env.E2E_SHOP_PATH || '/shop';
+const CART_PATH = process.env.E2E_CART_PATH || '';
+
+test.describe('Cart (Redux + persist)', () => {
+  test.beforeEach(async ({ page }) => {
+    // Clear localStorage to start with an empty cart
+    await page.goto(SHOP_PATH);
+    await page.evaluate(() => localStorage.clear());
+    await page.reload();
+    await page.getByTestId('add-to-cart').first().waitFor({ timeout: 10_000 });
+  });
+
+  test('click "Add to Cart" adds product and changes button', async ({ page }) => {
+    const addBtn = page.getByTestId('add-to-cart').first();
+    const productId = await addBtn.getAttribute('data-product-id');
+    await addBtn.click();
+
+    // The button on the same card switches to "in cart" state
+    await expect(
+      page.locator(`[data-testid="remove-from-cart"][data-product-id="${productId}"]`),
+    ).toBeVisible();
+  });
+
+  test('persistence: after reload, product remains in cart', async ({ page }) => {
+    const addBtn = page.getByTestId('add-to-cart').first();
+    const productId = await addBtn.getAttribute('data-product-id');
+    await addBtn.click();
+
+    await page.reload();
+    await expect(
+      page.locator(`[data-testid="remove-from-cart"][data-product-id="${productId}"]`),
+    ).toBeVisible({ timeout: 10_000 });
+
+    // localStorage contains saved productsData (redux-persist key = 'persist:cart-slice')
+    const persisted = await page.evaluate(() => localStorage.getItem('persist:cart-slice'));
+    expect(persisted).toBeTruthy();
+    expect(persisted).toContain('productsData');
+  });
+
+  test('cart page/drawer shows added product', async ({ page }) => {
+    const addBtn = page.getByTestId('add-to-cart').first();
+    const productId = await addBtn.getAttribute('data-product-id');
+    await addBtn.click();
+
+    if (CART_PATH) {
+      await page.goto(CART_PATH);
+    }
+    // On the same page (drawer) or on a separate /cart — check that the product is visible
+    const item = page.locator(`[data-testid="cart-item"][data-product-id="${productId}"]`);
+    await expect(item).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('quantity change: + increases, − decreases', async ({ page }) => {
+    const addBtn = page.getByTestId('add-to-cart').first();
+    const productId = await addBtn.getAttribute('data-product-id');
+    await addBtn.click();
+    if (CART_PATH) await page.goto(CART_PATH);
+
+    const item = page.locator(`[data-testid="cart-item"][data-product-id="${productId}"]`);
+    await expect(item).toBeVisible();
+    const qty = item.getByTestId('cart-item-qty');
+    await expect(qty).toHaveText('1');
+
+    await item.getByTestId('cart-qty-increase').click();
+    await expect(qty).toHaveText('2');
+
+    await item.getByTestId('cart-qty-decrease').click();
+    await expect(qty).toHaveText('1');
+  });
+
+  test('removing product clears the cart', async ({ page }) => {
+    const addBtn = page.getByTestId('add-to-cart').first();
+    const productId = await addBtn.getAttribute('data-product-id');
+    await addBtn.click();
+    if (CART_PATH) await page.goto(CART_PATH);
+
+    const item = page.locator(`[data-testid="cart-item"][data-product-id="${productId}"]`);
+    await expect(item).toBeVisible();
+    await item.getByTestId('cart-item-remove').click();
+
+    await expect(item).toHaveCount(0);
+    await expect(page.getByTestId('cart-empty')).toBeVisible();
+  });
+
+  // ⚠️ Uncomment if there are >= 2 products in the project
+  // test('adding two different products — two items in the cart', async ({ page }) => {
+  //   const buttons = page.getByTestId('add-to-cart');
+  //   await buttons.nth(0).click();
+  //   await buttons.nth(1).click();
+  //   if (CART_PATH) await page.goto(CART_PATH);
+  //   await expect(page.getByTestId('cart-item')).toHaveCount(2);
+  // });
+});
+```
+
+### 7.4 Report to the user about the decisions made
+
+Before completing the task — explicitly inform:
+
+```
+✅ e2e/cart.spec.ts created
+✅ data-testid added to AddToCartButton and CartDrawer/CartPage
+✅ .env.local updated (E2E_SHOP_PATH, E2E_CART_PATH)
+
+Decisions made automatically (if applicable):
+- Catalog path: {SHOP_PATH} — {user specified / found via Glob search}
+- Cart path: {CART_PATH / empty — drawer version} — {user specified / found / not found}
+- Multiple addition test: {enabled — {total} products in the project / commented out — less than 2 products}
+
+Run: npm run test:e2e -- cart.spec.ts
+```
+
+If the cart page is not found — tests work with the drawer version on the same catalog page (the check is done via `data-testid="cart-item"` regardless of the URL).

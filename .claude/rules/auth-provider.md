@@ -11,10 +11,10 @@ paths:
 
 ## auth and signUp — ONLY from Client Component (fingerprint)
 
-`auth()`, `signUp()`, `generateCode()`, `checkCode()`, `activateUser()`, `changePassword()` pass the **device fingerprint** of the user. On the server, the SDK also generates a fingerprint, but in `deviceInfo.browser` it will be `"Node.js/..."` instead of the user's actual browser. On the client, the fingerprint is built from the real characteristics of the browser and device.
+`auth()`, `signUp()`, `generateCode()`, `checkCode()`, `activateUser()`, `changePassword()` transmit the **fingerprint of the user's device**. On the server, the SDK also generates a fingerprint, but in `deviceInfo.browser` it will be `"Node.js/..."` instead of the user's actual browser. On the client, the fingerprint is built from the real characteristics of the browser and device.
 
 ```ts
-// ❌ UNDESIRABLE — through Server Action (deviceInfo.browser = "Node.js/...", not the real browser)
+// ❌ UNDESIRABLE — via Server Action (deviceInfo.browser = "Node.js/...", not the real browser)
 // app/actions/auth.ts → 'use server'
 export async function signIn(marker, authData) {
   return await getApi().AuthProvider.auth(marker, { authData }) // browser in fingerprint = Node.js
@@ -30,7 +30,7 @@ localStorage.setItem('accessToken', result.accessToken)
 localStorage.setItem('refreshToken', result.refreshToken)
 ```
 
-**Can be done through Server Action (fingerprint not needed):**
+**Can be done via Server Action (fingerprint not needed):**
 
 - `getAuthProviders()` / `getAuthProviderByMarker(marker)`
 - `logout(marker, token)` — refreshToken is passed as a parameter
@@ -107,50 +107,49 @@ AuthProvider.signUp(marker, body: ISignUpData, langCode?): Promise<ISignUpEntity
 **Critical rules:**
 
 - `authData` — **only login-credentials** (`{ marker, value }`, without empty strings): login identifier + password. NOT all form fields!
-- `formData` — profile fields (first name, last name, address, phone, etc.) in the format `{ marker, type, value }`
+- `formData` — profile fields (name, surname, address, phone, etc.) in the format `{ marker, type, value }`
 - `notificationData.email` — value of the field with the flag `isNotificationEmail: true` (or fallback to the login field)
 - `notificationData.phonePush` — array with the value of the field with the flag `isNotificationPhonePush: true` (skip if empty)
-- `notificationData.phoneSMS` — do not pass if there is no value (empty string → 400)
+- `notificationData.phoneSMS` — do not send if there is no value (empty string → 400)
 
 ### ⚠️ Field routing — by flags, NOT "everything in authData"
 
-Fields from `getFormByMarker()` come with routing flags: `isLogin`, `isSignUp`, `isNotificationEmail`, `isNotificationPhoneSMS`, `isNotificationPhonePush`. Each field already carries its role — **do not dump all filled fields into `authData`**, otherwise profile fields (first name, address) are lost and only login-credentials are sent to the server.
+Fields from `getFormByMarker()` come with flags: `isLogin`, `isPassword`, `isSignUp`, `isSignUpRequired`, `isNotificationEmail`, `isNotificationPhoneSMS`, `isNotificationPhonePush`. Each field already carries its role — **do not dump all filled fields into `authData`**, otherwise profile fields (name, address) are lost and only login credentials are sent to the server.
 
-| Field Role                                   | Where to send                                                      |
-|----------------------------------------------|-------------------------------------------------------------------|
-| `isLogin: true`                              | only `authData`                                                  |
-| `additionalFields.type.value === 'password'` | only `authData`                                                  |
-| `isNotificationEmail: true`                  | `notificationData.email` + `formData`                            |
-| `isNotificationPhoneSMS: true`               | `notificationData.phoneSMS` (skip if empty) + `formData`        |
-| `isNotificationPhonePush: true`              | `notificationData.phonePush` (array, if not empty) + `formData` |
-| everything else (first name, address, etc.)  | `formData` (profile data)                                        |
+| Field Role                       | Where to send                                                   |
+|-----------------------------------|----------------------------------------------------------------|
+| `isLogin: true`                   | only `authData`                                               |
+| `isPassword: true`                | only `authData`                                               |
+| `isNotificationEmail: true`       | `notificationData.email` + `formData`                         |
+| `isNotificationPhoneSMS: true`    | `notificationData.phoneSMS` (skip if empty) + `formData`     |
+| `isNotificationPhonePush: true`   | `notificationData.phonePush` (array, if not empty) + `formData` |
+| everything else (name, address, etc.) | `formData` (profile data)                                   |
 
-> ⚠️ **Login-credentials (`isLogin`, password) go ONLY in `authData`**, NOT in `formData`. Notification fields go IN both `notificationData` AND `formData`. All other fields — in `formData`.
-> ⚠️ `isSignUp: true` — this flag is for **visibility in UI** ("show this field in the registration form"), NOT for routing. Fields with `isSignUp: true` (e.g. `name_reg`) go into `formData`, not `authData`, unless they also have `isLogin: true`.
-> ⚠️ There is no separate flag for the password. Determine it through `additionalFields.type.value === 'password'` and always send it in `authData`. If the password is left in `formData` — login will break.
+> ⚠️ **Login-credentials (`isLogin`, `isPassword`) go ONLY in `authData`**, NOT in `formData`. Notification fields go IN both `notificationData` AND `formData`. All other fields — in `formData`.
+> ⚠️ `isSignUp: true` and `isSignUpRequired: true` — flags **only for the registration form**, NOT for routing: `isSignUp` shows the field in the registration UI, `isSignUpRequired` marks it as mandatory. Both are independent of each other and from `isPassword` / `isLogin`. Fields with them go in `formData`, unless `isLogin: true` or `isPassword: true` is additionally set.
+> ⚠️ The password is determined ONLY by the flag `isPassword: true` and is always routed to `authData`. If the password is left in `formData` — login will break. Do not use detection via `additionalFields.type.value === 'password'` — this is an outdated method.
+> ⚠️ `isSignUpRequired` — this is an independent indicator of "mandatory during registration". Do not confuse with `validators.requiredValidator.strict` — the validator remains a validator of the field (format, length, etc.) and does not determine "mandatory for signup".
 
 ```ts
 // Helpers (next to the form submit handler)
-type FormField = IAttributesSetsEntity & {
-  isLogin?: boolean | null
-  isSignUp?: boolean | null
-  isNotificationEmail?: boolean | null
-  isNotificationPhoneSMS?: boolean | null
-  isNotificationPhonePush?: boolean | null
-}
+// IFormAttribute already contains isLogin, isSignUp, isNotification*; extending with two new flags,
+// which the API returns, but the SDK interface does not declare yet
+import type { IFormAttribute } from 'oneentry/dist/forms/formsInterfaces'
 
-const isPasswordField = (f: FormField) =>
-  (f.additionalFields as Record<string, { value?: string }> | undefined)?.type?.value === 'password'
+const isLoginCredential = (f: IFormAttribute) => f.isLogin === true || f.isPassword === true
 
-const isLoginCredential = (f: FormField) => f.isLogin === true || isPasswordField(f)
-
-const isPureNotification = (f: FormField) => {
+const isPureNotification = (f: IFormAttribute) => {
   const isNotif =
     f.isNotificationEmail === true ||
     f.isNotificationPhoneSMS === true ||
     f.isNotificationPhonePush === true
-  // isSignUp: true → field visible in registration UI, so it is NOT "pure notification"
-  return isNotif && !isLoginCredential(f) && f.isSignUp !== true
+  // isSignUp / isSignUpRequired → the field is visible in the registration UI, so it is NOT "pure notification"
+  return (
+    isNotif &&
+    !isLoginCredential(f) &&
+    f.isSignUp !== true &&
+    f.isSignUpRequired !== true
+  )
 }
 
 // authData — only login-credentials
@@ -160,7 +159,7 @@ const authData = fields
   .map((f) => ({ marker: f.marker, value: values[f.marker] }))
 
 // formData — all fields EXCEPT login-credentials (they go only in authData)
-// Notification fields (phone, email_notifications) are INCLUDED in formData
+// Notification fields (phone, email_notifications) ARE INCLUDED in formData
 const formData = fields
   .filter((f) => !isLoginCredential(f))
   .filter((f) => values[f.marker]?.trim())
@@ -194,9 +193,10 @@ await getApi().AuthProvider.signUp(marker, {
 ### Field visibility by modes
 
 - **signin** — only login-credentials (`isLoginCredential(f)`)
-- **signup** — all fields except pure-notification, BUT fields with `isSignUp: true` are always shown, even if they are notification (`!isPureNotification(f) || f.isSignUp === true`); the value of the login field is reused as a fallback for `notificationData.email`
+- **signup** — all fields except pure-notification, BUT fields with `isSignUp: true` OR `isSignUpRequired: true` are always shown, even if they are notification (`!isPureNotification(f) || f.isSignUp === true || f.isSignUpRequired === true`); the value of the login field is reused as a fallback for `notificationData.email`
+- **required during registration** — determine by `isSignUpRequired === true` (this flag specifically, not `validators.requiredValidator.strict`). Validators remain a separate mechanism for checking format/length and do not account for "mandatory for signup".
 
-> ⚠️ `isSignUp: true` overrides `isPureNotification` for **visibility**. Example: `phone_reg` has `isNotificationPhonePush: true` AND `isSignUp: true` — it MUST be displayed in the registration form. Its value is routed IN both `formData` (profile) AND `notificationData.phonePush` (push notifications).
+> ⚠️ `isSignUp: true` and `isSignUpRequired: true` override `isPureNotification` for **visibility**. Example: `phone_reg` has `isNotificationPhonePush: true` AND `isSignUpRequired: true` — it MUST be displayed in the registration form and marked as mandatory. Its value is routed IN both `formData` (profile) AND `notificationData.phonePush` (push notifications).
 
 ```ts
 // ❌ INCORRECT — all fields in authData, name/address/phone are lost
@@ -211,7 +211,7 @@ const body = {
 const body = {
   formIdentifier: 'reg',
   authData,       // only login + password
-  formData,       // first name, address, phone, …
+  formData,       // name, address, phone, …
   notificationData,
 }
 ```
@@ -220,7 +220,7 @@ const body = {
 
 ## Getting provider markers and formIdentifier
 
-Do not guess markers (`"email"`, `"phone"`, etc.) — get the list from the API:
+Do not guess markers (`"email"`, `"phone"` etc.) — get the list from the API:
 
 ```ts
 const providers = await getApi().AuthProvider.getAuthProviders()
@@ -228,7 +228,7 @@ const providers = await getApi().AuthProvider.getAuthProviders()
 // providers[0].formIdentifier   — form marker with fields for this provider
 ```
 
-**Full structure of the provider response:**
+**Full structure of the provider's response:**
 
 ```json
 {
@@ -242,18 +242,18 @@ const providers = await getApi().AuthProvider.getAuthProviders()
 
 **`isCheckCode` — for account activation, NOT for login:**
 
-`isCheckCode: true` means that after **registration** the user must confirm the email via code (`activateUser()`). This flag does not affect the **login** process — `auth()` with email + password works normally in both cases.
+`isCheckCode: true` means that after **registration**, the user must confirm the email via a code (`activateUser()`). This flag does not affect the **login** process — `auth()` with email + password works normally in both cases.
 
 - `isCheckCode: true` → after `signUp()` call `activateUser(marker, email, code)`
 - `isCheckCode: false` → after `signUp()` the account is immediately active, `activateUser()` is not needed
 
 **Resending the code (MANDATORY when `isCheckCode: true`):**
 
-The user may not receive the code — **ALWAYS** add a "Resend Code" button in verification mode.
+The user may not receive the code — **ALWAYS** add a "Resend code" button in the verification mode.
 
 - Call: `generateCode(marker, email, eventIdentifier)` — directly from Client Component (fingerprint)
 - **`eventIdentifier`** — event marker from the OneEntry admin panel (Events section). **DO NOT guess** — check in the admin panel!
-- Cooldown: `config.systemCodeTlsSec` seconds (get from `getAuthProviderByMarker`). By default ~80 sec
+- Cooldown: `config.systemCodeTlsSec` seconds (get from `getAuthProviderByMarker`). By default ~80 seconds
 - The cooldown starts immediately after `signUp()` and after each resend
 - The button is disabled during the cooldown, showing a countdown
 
@@ -303,7 +303,7 @@ const result = await getApi().AuthProvider.auth(marker, { authData })
 3. Find the event related to the desired action (registration, password reset)
 4. Copy the `identifier` (marker) of that event
 
-**In the code — always extract into named constants with a comment:**
+**In code — always extract into named constants with a comment:**
 
 ```ts
 // Event markers from the OneEntry admin panel (Events section)
@@ -316,9 +316,9 @@ const EVENT_PASSWORD_RESET = 'password_reset'
 
 ---
 
-## Dynamic authorization form fields — MANDATORY PATTERN
+## Dynamic fields of the authorization form — MANDATORY PATTERN
 
-**NEVER** hardcode `<input name="email_reg">` or `<input name="password_reg">`. Always load fields through `getFormByMarker(formIdentifier)`.
+**NEVER** hardcode `<input name="email_reg">` or `<input name="password_reg">`. Always load fields via `getFormByMarker(formIdentifier)`.
 
 **Algorithm:**
 
@@ -329,29 +329,31 @@ const EVENT_PASSWORD_RESET = 'password_reset'
 
 ```ts
 // app/actions/auth.ts — 'use server'
-// getSignInFields can be through Server Action — Forms API, fingerprint not needed
-
-// Markers of auth fields (do not guess — get from the real API via /inspect-api)
-const AUTH_FIELD_MARKERS = ['email_reg', 'password_reg']
+// getSignInFields can be done via Server Action — Forms API, fingerprint not needed
 
 export async function getSignInFields() {
   const form = await getApi().Forms.getFormByMarker('reg') // formIdentifier from the provider
   if (isError(form)) return { error: form.message }
 
+  // For signin, only login-credentials are needed — filter by isLogin / isPassword flags
+  // (not by marker name, not by AUTH_FIELD_MARKERS)
   const fields = (form as any).attributes
-    .filter((a: any) => AUTH_FIELD_MARKERS.includes(a.marker))
+    .filter((a: any) => a.isLogin === true || a.isPassword === true)
     .sort((a: any, b: any) => a.position - b.position)
     .map((a: any) => ({
       marker: a.marker as string,
       type: a.type as string,
       label: (a.localizeInfos as any)?.title ?? a.marker,
-      required: !!(a.validators as any)?.requiredValidator?.strict,
+      isLogin: a.isLogin === true,
+      isPassword: a.isPassword === true,
+      // In signin, login and password are always required
+      required: true,
     }))
 
   return { fields }
 }
 
-// ⚠️ auth — NOT through Server Action, call directly from Client Component (fingerprint)
+// ⚠️ auth — NOT via Server Action, call directly from Client Component (fingerprint)
 ```
 
 **Calling auth in Client Component:**
@@ -367,25 +369,36 @@ localStorage.setItem('accessToken', result.accessToken)
 localStorage.setItem('refreshToken', result.refreshToken)
 ```
 
-**Dynamic rendering in Client Component:**
+**Dynamic render in Client Component:**
 
 ```tsx
-// Determine the type of <input> by marker (not by type from API — all fields have type: "string")
-function getInputType(marker: string) {
-  if (marker.includes('password') || marker.includes('pass')) return 'password'
-  if (marker.includes('email')) return 'email'
+// Determine the type of <input> by field flags (type from API — always "string", do not rely on it)
+function getInputType(f: {
+  marker: string
+  isPassword?: boolean | null
+  isLogin?: boolean | null
+  isNotificationEmail?: boolean | null
+  isNotificationPhoneSMS?: boolean | null
+  isNotificationPhonePush?: boolean | null
+}) {
+  if (f.isPassword === true) return 'password'
+  if (f.isNotificationEmail === true || f.isLogin === true) return 'email'
+  if (f.isNotificationPhoneSMS === true || f.isNotificationPhonePush === true) return 'tel'
+  // Last fallback — by marker name (when flags are not set)
+  const m = f.marker.toLowerCase()
+  if (m.includes('email') || m.includes('login')) return 'email'
   return 'text'
 }
 
-// Render field
+// Render field (required — by isSignUpRequired in registration mode, by isLogin/isPassword in signin)
 {fields.map((field) => (
   <div key={field.marker} className="input-group">
     <label htmlFor={field.marker}>{field.label}</label>
     <input
       id={field.marker}
       name={field.marker}
-      type={getInputType(field.marker)}
-      required={field.required}
+      type={getInputType(field)}
+      required={field.isSignUpRequired === true || field.isLogin === true || field.isPassword === true}
     />
   </div>
 ))}
@@ -404,11 +417,12 @@ const authData = fields
 const result = await getApi().AuthProvider.auth('email', { authData })
 ```
 
-**Where to get `AUTH_FIELD_MARKERS`:**
+**How to find login and password fields in the form:**
 
-- Run `/inspect-api auth-providers` → see the `formIdentifier` of the provider
-- Run `/inspect-api forms` → see the form fields with this `identifier`
-- Choose markers that are auth-credentials (email + password), not profile data (first name, phone, address)
+- Run `/inspect-api auth-providers` → check the `formIdentifier` of the provider
+- Run `/inspect-api forms` → check the form fields with this `identifier` and their flags
+- For signin, take fields with `isLogin === true` and `isPassword === true` — filter by flags, NOT by marker name and NOT by the list of AUTH_FIELD_MARKERS
+- Profile fields (name, phone, address) have both flags `false` → they are NOT needed for signin
 
 ---
 
@@ -416,15 +430,15 @@ const result = await getApi().AuthProvider.auth('email', { authData })
 
 ### Step 1: Redirect to the provider's authorization page
 
-Redirecting to Google (or another OAuth provider) is a **mandatory step**. Without it, you cannot obtain the `code`. `oauth()` requires the `code` — it cannot be obtained otherwise than through the provider's redirect.
+Redirecting to Google (or another OAuth provider) is a **mandatory step**. Without it, it is impossible to obtain the `code`. `oauth()` requires `code` — it cannot be obtained otherwise than through the provider's redirect.
 
-The base URL for authorization is stored in `config.oauthAuthUrl` of the provider (e.g., `"https://accounts.google.com/o/oauth2/v2/auth"`). Get it through `getAuthProviderByMarker`, then add query parameters:
+The base URL for authorization is stored in `config.oauthAuthUrl` of the provider (e.g., `"https://accounts.google.com/o/oauth2/v2/auth"`). Get it via `getAuthProviderByMarker`, then add query parameters:
 
 > Full pattern with button, callback page, and Server Action — skill **`/create-google-oauth`**
 
 ### Step 2: Exchange code for tokens (callback page)
 
-After redirecting, Google/etc. will return `?code=...` in the URL. Exchanging the code for tokens is **only through Server Action** (`'use server'`): `client_secret` must not reach the client.
+After the redirect, Google/etc. will return `?code=...` in the URL. Exchanging the code for tokens is **only through Server Action** (`'use server'`): `client_secret` must not reach the client.
 
 > Full pattern — skill **`/create-google-oauth`**
 

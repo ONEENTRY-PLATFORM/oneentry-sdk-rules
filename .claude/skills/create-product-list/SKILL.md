@@ -45,7 +45,7 @@ What to look for:
 ### 3.1 lib/filters.ts — types and parsing URL parameters
 
 > Adapt `FilterParams` to the real filters of the project.
-> Example with price, color, and availability. Add/remove fields as necessary.
+> Example with price, color, and availability. Add/remove fields as needed.
 
 ```typescript
 // lib/filters.ts
@@ -72,7 +72,7 @@ export function parseFilterParams(
 
 ### 3.2 app/actions/products.ts — Server Actions
 
-> Replace attribute markers (`'price'`, `'color'`, `'in_stock'`) with real ones from `/inspect-api`.
+> Replace the attribute markers (`'price'`, `'color'`, `'in_stock'`) with real ones from `/inspect-api`.
 
 ```typescript
 // app/actions/products.ts
@@ -87,20 +87,35 @@ export type { FilterParams } from '@/lib/filters';
 function buildFilterBody(filters?: FilterParams): any[] {
   const body: any[] = [];
   // ⚠️ Replace 'price' and 'color' with real attribute markers from /inspect-api!
+  // ⚠️ Replace 'in_stock' with the real statusMarker from /inspect-api product-statuses!
+  // `statusMarker` is applied to the entire request if present in ANY IFilterParams record.
+  // Verified: IProductsQuery.statusMarker is ignored by Products.getProducts — the filter must be in the body.
+  const statusMarker = filters?.inStockOnly ? 'in_stock' : undefined;
+
   if (filters?.minPrice != null)
-    body.push({ attributeMarker: 'price', conditionMarker: 'mth', conditionValue: filters.minPrice - 0.01 });
+    body.push({
+      attributeMarker: 'price', conditionMarker: 'mth', conditionValue: filters.minPrice - 0.01,
+      ...(statusMarker ? { statusMarker } : {}),
+    });
   if (filters?.maxPrice != null)
-    body.push({ attributeMarker: 'price', conditionMarker: 'lth', conditionValue: filters.maxPrice + 0.01 });
+    body.push({
+      attributeMarker: 'price', conditionMarker: 'lth', conditionValue: filters.maxPrice + 0.01,
+      ...(statusMarker ? { statusMarker } : {}),
+    });
   if (filters?.colors?.length)
-    body.push({ attributeMarker: 'color', conditionMarker: 'in', conditionValue: filters.colors.join(',') });
+    body.push({
+      attributeMarker: 'color', conditionMarker: 'in', conditionValue: filters.colors.join(','),
+      ...(statusMarker ? { statusMarker } : {}),
+    });
+  // Only status filter — no other conditions: add catch-all record to apply status
+  if (statusMarker && body.length === 0)
+    body.push({ attributeMarker: 'price', conditionMarker: 'mth', conditionValue: -1, statusMarker });
   return body;
 }
 
-function buildQuery(offset: number, limit: number, filters?: FilterParams): IProductsQuery {
-  const query: IProductsQuery = { offset, limit, sortOrder: 'ASC', sortKey: 'position' };
-  // ⚠️ Replace 'in_stock' with the real statusMarker from /inspect-api product-statuses!
-  if (filters?.inStockOnly) query.statusMarker = 'in_stock';
-  return query;
+function buildQuery(offset: number, limit: number): IProductsQuery {
+  // ⚠️ DO NOT put statusMarker here — it is ignored by Products.getProducts. Use IFilterParams body.
+  return { offset, limit, sortOrder: 'ASC', sortKey: 'position' };
 }
 
 // All products (without category)
@@ -193,7 +208,7 @@ export default async function ShopPage({
       initialProducts={initialData.items}
       totalProducts={initialData.total}
       locale={locale}
-      // categoryUrl should be passed only for category pages
+      // categoryUrl should only be passed for category pages
     />
   );
 }
@@ -202,7 +217,7 @@ export default async function ShopPage({
 ### 3.4 ShopView — Client Component, reads filters from URL
 
 > **⚠️ CRITICALLY IMPORTANT:** ShopView MUST read `activeFilters` and `gridKey`
-> from `useSearchParams`, and NOT receive them as props from the server component.
+> from `useSearchParams`, NOT receive as props from the server component.
 > Otherwise, `loadMore` in ProductGrid will use outdated filters.
 
 ```tsx
@@ -352,10 +367,157 @@ export function ProductGrid({
 ```md
 1. ShopView reads activeFilters and gridKey from useSearchParams — NOT from props from the server
 2. key={gridKey} on ProductGrid — remount on filter change instead of useEffect
-3. statusMarker (inStockOnly) — in query, NOT in filter body
+3. statusMarker (inStockOnly) — in IFilterParams body, NOT in IProductsQuery (SDK type accepts this field, but the API ignores it). If there are no other filter records — add catch-all `{ attributeMarker: 'price', conditionMarker: 'mth', conditionValue: -1, statusMarker }`
 4. conditionMarker 'mth'/'lth' for price — use -0.01/+0.01 to include boundaries
 5. params and searchParams in Next.js 15+ — are Promises, must use await
 6. Attribute markers (price, color) and statusMarker — check via /inspect-api
 7. isLoadingRef instead of useState(loading) — prevents duplicate requests
 8. category pageUrl — is a marker ("shoes"), not a route path ("/shop/category/shoes")
+```
+
+---
+
+## Step 5: Playwright E2E Tests
+
+> Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
+> To set up Playwright — first `/setup-playwright`.
+
+### 5.1 Add `data-testid` to Components
+
+```tsx
+// components/ShopView.tsx
+<div data-testid="shop-view">
+  {/* FilterPanel (optional) */}
+  <ProductGrid ... />
+</div>
+
+// components/ProductGrid.tsx
+{products.length === 0 && <div data-testid="shop-empty">No products found</div>}
+<div data-testid="shop-grid" className="grid ...">
+  {products.map((p) => (
+    <div key={p.id} data-testid="product-card" data-product-id={p.id}>
+      <p data-testid="product-title">{p.localizeInfos?.title}</p>
+    </div>
+  ))}
+</div>
+{hasMore && <div ref={loaderRef} data-testid="shop-loader">Loading...</div>}
+```
+
+### 5.2 Gather Test Parameters and Fill `.env.local`
+
+**Algorithm (execute step by step, do not ask all at once):**
+
+1. **Path of the catalog page** — ask: "What is the path of the catalog page? (for example `/shop`, `/en_US/shop`, `/catalog`)".
+   - Silent → find it yourself via Glob (`app/**/shop/**/page.tsx`, `app/**/catalog/**/page.tsx`). Report: "Found catalog at `{path}` — using it".
+2. **Filter values** (color/price) — **do not ask the user, choose yourself** using already known data from `/inspect-api`:
+   - Color: take the first `value` from the `listTitles` of the color attribute (obtained in `getProductFilterOptions`). Report: "For the color filter test, using `color={value}` — the first value from the project's listTitles".
+   - Price range: take `additional.prices.min` and `additional.prices.max`, narrow it to the middle (for example `min = ⌈(min+max)/2 - 10%⌉`, `max = ⌊(min+max)/2 + 10%⌋`) to ensure there are products. Report: "For the price filter test, using the range `{min}-{max}` (middle of the project's real range)".
+   - If `/inspect-api` is not available — leave variables empty, corresponding tests will include `test.skip`.
+3. **Number of products** — check yourself: the first request `getProducts({ limit: 1 })` will return `total`. If `total < 11` — comment out the infinite scroll test in the spec file. Report: "The project has only `{total}` products — infinite scroll test disabled".
+4. **Fill `.env.local`** (yourself, through Edit/Write — do not ask the user to insert):
+
+```bash
+E2E_SHOP_PATH=/shop
+E2E_FILTER_COLOR=1
+E2E_FILTER_MIN_PRICE=10
+E2E_FILTER_MAX_PRICE=1000
+```
+
+If any value could not be determined — leave it empty, the corresponding test will be `test.skip`.
+
+### 5.3 Create `e2e/catalog.spec.ts`
+
+> ⚠️ Tests work with the real OneEntry project. Filter values (prices, colors) and expected number of products depend on the project — set via env.
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+const SHOP_PATH = process.env.E2E_SHOP_PATH || '/shop'; // ← replace with the real path
+const FILTER_COLOR = process.env.E2E_FILTER_COLOR;       // for example "1" (value from listTitles)
+const FILTER_MIN_PRICE = process.env.E2E_FILTER_MIN_PRICE;
+const FILTER_MAX_PRICE = process.env.E2E_FILTER_MAX_PRICE;
+
+test.describe('Product Catalog', () => {
+  test('page renders product cards', async ({ page }) => {
+    await page.goto(SHOP_PATH);
+    await expect(page.getByTestId('shop-view')).toBeVisible();
+
+    const cards = page.getByTestId('product-card');
+    await expect(cards.first()).toBeVisible({ timeout: 10_000 });
+    expect(await cards.count()).toBeGreaterThan(0);
+  });
+
+  test('first page: no more than 10 products (limit)', async ({ page }) => {
+    await page.goto(SHOP_PATH);
+    await page.getByTestId('product-card').first().waitFor();
+    const count = await page.getByTestId('product-card').count();
+    expect(count).toBeLessThanOrEqual(10);
+  });
+
+  test('infinite scroll loads the next page', async ({ page }) => {
+    await page.goto(SHOP_PATH);
+    const cards = page.getByTestId('product-card');
+    await cards.first().waitFor();
+
+    const initialCount = await cards.count();
+    // If everything is on the first page — infinite scroll will not work (less than one limit)
+    test.skip(initialCount < 10, 'The project has less than 10 products — nothing to load');
+
+    // Scroll to sentinel — IntersectionObserver should pull more
+    await page.getByTestId('shop-loader').scrollIntoViewIfNeeded();
+    await expect.poll(async () => cards.count(), { timeout: 10_000 }).toBeGreaterThan(initialCount);
+  });
+
+  test('price filter changes URL and reloads the grid', async ({ page }) => {
+    test.skip(!FILTER_MIN_PRICE || !FILTER_MAX_PRICE, 'E2E_FILTER_MIN/MAX_PRICE not set');
+
+    await page.goto(`${SHOP_PATH}?minPrice=${FILTER_MIN_PRICE}&maxPrice=${FILTER_MAX_PRICE}`);
+    await expect(page).toHaveURL(new RegExp(`minPrice=${FILTER_MIN_PRICE}`));
+
+    const cards = page.getByTestId('product-card');
+    // Either there are products in the range, or empty-state
+    const hasCards = await cards.first().isVisible().catch(() => false);
+    const hasEmpty = await page.getByTestId('shop-empty').isVisible().catch(() => false);
+    expect(hasCards || hasEmpty).toBe(true);
+  });
+
+  test('color filter via URL applies to the grid', async ({ page }) => {
+    test.skip(!FILTER_COLOR, 'E2E_FILTER_COLOR not set');
+
+    await page.goto(`${SHOP_PATH}?colors=${FILTER_COLOR}`);
+    await expect(page).toHaveURL(new RegExp(`colors=${FILTER_COLOR}`));
+    // gridKey changes → ProductGrid remounts, without this loadMore would ignore the filter
+    const cards = page.getByTestId('product-card');
+    const hasCards = await cards.first().isVisible().catch(() => false);
+    const hasEmpty = await page.getByTestId('shop-empty').isVisible().catch(() => false);
+    expect(hasCards || hasEmpty).toBe(true);
+  });
+
+  test('inStockOnly filter works separately from others', async ({ page }) => {
+    await page.goto(`${SHOP_PATH}?inStockOnly=true`);
+    await expect(page).toHaveURL(/inStockOnly=true/);
+    const cards = page.getByTestId('product-card');
+    const hasCards = await cards.first().isVisible().catch(() => false);
+    const hasEmpty = await page.getByTestId('shop-empty').isVisible().catch(() => false);
+    expect(hasCards || hasEmpty).toBe(true);
+  });
+});
+```
+
+### 5.4 Report to the User on Decisions Made
+
+Before completing the task — explicitly inform:
+
+```
+✅ e2e/catalog.spec.ts created
+✅ data-testid added to ShopView / ProductGrid
+✅ .env.local updated (E2E_SHOP_PATH, E2E_FILTER_COLOR, E2E_FILTER_MIN_PRICE, E2E_FILTER_MAX_PRICE)
+
+Decisions made automatically:
+- Catalog path: {SHOP_PATH} — {user specified / found via Glob}
+- Color for filter: {FILTER_COLOR} — first value from listTitles of the color attribute
+- Price range: {MIN}-{MAX} — middle of the real range of the project (from additional.prices)
+- Infinite scroll: {test enabled — project has {total} products / disabled — less than 11 products}
+
+Run: npm run test:e2e -- catalog.spec.ts
 ```

@@ -43,11 +43,39 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 
 **Key fields:**
 
-- `attributes[]` — form fields for rendering. Sort by `position`
+- `attributes: IFormAttribute[]` — form fields for rendering. Sort by `position`
+- `localizeInfos: IFormLocalizeInfo` — form localization: `title`, as well as `titleForSite`, `successMessage`, `unsuccessMessage`, `urlAddress`, `database`, `script`
 - `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`
 - `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`
 - `validators[name].errorMessage` — custom error message text for the validator (set in admin panel)
-- `additionalFields` — SDK normalizes the array into `Record<marker, field>`. Contains UI metadata for the field: `placeholder`, `hint`, and others
+- `additionalFields: Record<marker, IFormAttributeAdditionalField>` — SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others
+
+**Types for form fields — import from `oneentry/dist/forms/formsInterfaces`:**
+
+```ts
+import type {
+  IFormsEntity,
+  IFormAttribute,
+  IFormAttributeAdditionalField,
+  IFormLocalizeInfo,
+} from 'oneentry/dist/forms/formsInterfaces'
+```
+
+> ⚠️ For form fields use `IFormAttribute`, not `IAttributesSetsEntity`. `IAttributesSetsEntity` is a type for AttributesSets API (`getAttributes`, `getAttributeSetByMarker`), it has a different structure and lacks form-specific flags (`isLogin`, `isSignUp`, `isNotification*`).
+
+**Using `localizeInfos` of the form:**
+
+```tsx
+// Success/error message from form settings in the admin panel
+if (result.success) {
+  setMessage(form.localizeInfos?.successMessage || 'Submitted')
+} else {
+  setMessage(form.localizeInfos?.unsuccessMessage || 'Submission failed')
+}
+
+// Form title for the site (different from internal title)
+const heading = form.localizeInfos?.titleForSite || form.localizeInfos?.title
+```
 
 **Using `additionalFields` when rendering a field:**
 
@@ -67,18 +95,20 @@ const hint = field.additionalFields?.hint?.value || ''
 
 **Mapping validator errors:**
 
-In case of an error `postFormsData` `IError.message` — an array of strings with field markers or messages. To display custom errors, build a map from the form:
+On error `postFormsData` `IError.message` — an array of strings with field markers or messages. To display custom errors, build a map from the form:
 
 ```ts
-// From form attributes we get custom validator errors
-function buildValidatorErrors(attributes: any[]): Record<string, string> {
+import type { IFormAttribute } from 'oneentry/dist/forms/formsInterfaces'
+
+// From form attributes, we get custom validator errors
+function buildValidatorErrors(attributes: IFormAttribute[]): Record<string, string> {
   const map: Record<string, string> = {}
   for (const attr of attributes) {
-    // Look for the first validator with errorMessage
+    // Find the first validator with errorMessage
     const errorMessage = Object.values(attr.validators || {})
       .map((v: any) => v?.errorMessage)
       .find(Boolean)
-    if (errorMessage) map[attr.marker] = errorMessage
+    if (errorMessage) map[attr.marker] = errorMessage as string
   }
   return map
 }
@@ -101,7 +131,7 @@ const formModuleConfigId = formModuleConfig?.id ?? 0
 const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? ''
 ```
 
-**Special field types:**
+**Special types of form fields:**
 
 - `spam` — captcha (reCAPTCHA v3). DO NOT render as `<input>`, use `<FormReCaptcha>`
 - `button` — submit button. Render as `<button type="submit">`
@@ -121,7 +151,7 @@ await getApi().FormData.postFormsData({
 })
 ```
 
-**All three identifiers are mandatory.** Get them from `getFormByMarker`:
+**All three identifiers are required.** Get them from `getFormByMarker`:
 
 ```ts
 const formModuleConfigId = form.moduleFormConfigs?.[0]?.id ?? 0
@@ -144,6 +174,8 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
 
 ### date, dateTime, time
 
+**Value format (what is sent in postFormsData / createOrder):**
+
 ```ts
 {
   marker: 'delivery_date',
@@ -156,19 +188,71 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
 }
 ```
 
+**⚠️ UI — NOT a regular `<input type="text">`**
+
+For fields `date` / `dateTime` / `time` **always** render the corresponding native picker or library calendar. A regular text input is prohibited: the user will enter a string, it will not pass validation and will not be assembled into the correct `{ fullDate, formattedValue, formatString }`.
+
+| `attribute.type` | Native input | Alternative |
+| --- | --- | --- |
+| `date` | `<input type="date">` | `react-datepicker`, `react-calendar` |
+| `dateTime` | `<input type="datetime-local">` | `react-datepicker` (showTimeSelect) |
+| `time` | `<input type="time">` | `react-datepicker` (showTimeSelectOnly) |
+
+**Rules for `formatString` from the schema** (defined in the admin panel via `additionalFields.formatString` or `validators`):
+
+- If a specific format is needed (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`) — take it from the attribute and use it when constructing `formattedValue`.
+- If the format is not specified — apply the default value for the type (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`).
+
+**Assembling value from the native input:**
+
+```ts
+// date
+const input = '2024-05-07' // value from <input type="date">
+const iso = new Date(input + 'T00:00:00Z').toISOString()
+const formatted = iso.slice(8, 10) + '-' + iso.slice(5, 7) + '-' + iso.slice(0, 4) // DD-MM-YYYY
+const value = { fullDate: iso, formattedValue: formatted, formatString: 'DD-MM-YYYY' }
+
+// dateTime
+const input = '2024-05-07T18:30' // value from <input type="datetime-local">
+const iso = new Date(input).toISOString()
+// formattedValue according to formatString from the attribute schema
+
+// time — sent with a reference date (usually today)
+const input = '14:30' // value from <input type="time">
+const [h, m] = input.split(':').map(Number)
+const d = new Date(); d.setUTCHours(h, m, 0, 0)
+const value = { fullDate: d.toISOString(), formattedValue: input, formatString: 'HH:mm' }
+```
+
+**Dynamic rendering of a field in the form (pattern):**
+
+```tsx
+if (attr.type === 'date') {
+  return <input type="date" id={attr.marker} value={dateStr} onChange={...} />
+}
+if (attr.type === 'dateTime') {
+  return <input type="datetime-local" id={attr.marker} value={dtStr} onChange={...} />
+}
+if (attr.type === 'time') {
+  return <input type="time" id={attr.marker} value={timeStr} onChange={...} />
+}
+```
+
+> ⚠️ Do not confuse with `timeInterval` — this is a list of available slots (see `.claude/rules/attribute-values.md`), rendered as a separate date+slot selector, not an input.
+
 ### text — value is an ARRAY with ONE object, only one of htmlValue/plainValue/mdValue
 
 ```ts
 // ❌ INCORRECT — passing a string
 { marker: 'message', type: 'text', value: 'Hello' }
 
-// ✅ CORRECT — array with one object, only one field
+// ✅ CORRECT — an array with one object, only one field
 { marker: 'message', type: 'text', value: [{ plainValue: 'Hello world' }] }
 { marker: 'message', type: 'text', value: [{ htmlValue: '<p>Hello</p>', params: { editorMode: 'html' } }] }
 { marker: 'message', type: 'text', value: [{ mdValue: '**Hello**' }] }
 ```
 
-### textWithHeader — the same as text + header field
+### textWithHeader — same as text + header field
 
 ```ts
 {
@@ -210,7 +294,7 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
     ['2025-02-11T16:00:00.000Z', '2025-02-11T18:00:00.000Z']
   ]
 }
-// value — array of arrays [startISO, endISO]
+// value — an array of arrays [startISO, endISO]
 ```
 
 ### image, groupOfImages — File object
@@ -248,7 +332,7 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 
 ---
 
-## Full flow: get form → submit data
+## Full flow: get form → send data
 
 ```ts
 // app/actions/forms.ts
@@ -266,11 +350,11 @@ export async function submitContactForm(formValues: Record<string, any>) {
   const formModuleConfig = form.moduleFormConfigs?.[0]
 
   // Take type from form attributes — do not guess!
-  const transformedFormData = form.attributes
-    .filter((attr: any) => attr.marker in formValues)
-    .map((attr: any) => ({
+  const transformedFormData = (form.attributes as IFormAttribute[])
+    .filter((attr) => attr.marker in formValues)
+    .map((attr) => ({
       marker: attr.marker,
-      type: attr.type,
+      type: attr.type as string,
       value: formValues[attr.marker],
     }))
 

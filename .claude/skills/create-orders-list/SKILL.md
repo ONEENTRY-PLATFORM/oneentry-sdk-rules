@@ -10,7 +10,7 @@ Creates a Client Component with a list of orders: loading through all storages, 
 
 ## Step 1: Create client utilities for orders
 
-> If `lib/orders.ts` already exists — read and supplement, do not duplicate.
+> If `lib/orders.ts` already exists — read and supplement it, do not duplicate.
 
 ```typescript
 // lib/orders.ts
@@ -92,7 +92,7 @@ export async function cancelOrder(
 - **previewImage** — can be an array or an object → normalize: `Array.isArray(img) ? img[0] : img`
 - **Sorting** by `createdDate` in descending order (newest first)
 - **Pagination** — client-side, through `visibleCount` + "Load more" button
-- **Repeat order** — `addToCart` for each item from `order.products`
+- **Repeat order** — `addToCart` for each product from `order.products`
 
 ### app/[locale]/(account)/orders/page.tsx
 
@@ -143,7 +143,7 @@ export default function OrdersPage() {
         return;
       }
       // ⚠️ Check hasActiveSession before reDefine
-      // Without checking — after login the SDK is already authorized, reDefine will replace the instance
+      // Without checking — after login, the SDK is already authorized, reDefine will replace the instance
       // → the first request will return 401 → removeItem('refresh-token') → logout
       if (!hasActiveSession()) {
         await reDefine(refreshToken, 'en_US');
@@ -222,7 +222,7 @@ export default function OrdersPage() {
     }
   };
 
-  // Add order items to cart (pass addToCart from CartContext)
+  // Add order products to cart (pass addToCart from CartContext)
   const handleRepeat = (order: IOrderByMarkerEntity) => {
     order.products.forEach((p) => {
       // addToCart(p.id) — connect CartContext if needed
@@ -337,17 +337,216 @@ function getProductImage(product: IOrderProducts): string | null {
 
 ## Step 3: Recall key rules
 
-✅ The orders page has been created. Key rules:
+✅ Orders page created. Key rules:
 
 ```md
 1. loadAllOrders/cancelOrder — call from Client Component, getApi() after reDefine()
 2. storageIdToMarker: storage.id → identifier — needed for cancelOrder
 3. Logout ONLY on 401/403
-4. previewImage can be an array or an object — normalize through Array.isArray()
+4. previewImage can be an array or an object — normalize using Array.isArray()
 5. Sort orders by createdDate in descending order
 6. Client-side pagination through visibleCount — do not reload the list
 7. cancelOrder updates status locally (setOrders), without reload
-8. Repeat order: addToCart(p.id) for each item from order.products
+8. Repeat order: addToCart(p.id) for each product from order.products
 9. statusIdentifier — marker, title only through STATUS_LABELS map (replace with real project markers)
 10. paymentAccountLocalizeInfos — locale-keyed: `localizeInfos?.[locale] || paymentAccountIdentifier`
 ```
+
+---
+
+## Step 4: Playwright E2E tests
+
+> Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
+> For Playwright setup — first `/setup-playwright`.
+
+### 4.1 Add `data-testid` to the component
+
+For selector stability — add `data-testid` when generating `app/[locale]/(account)/orders/page.tsx`:
+
+```tsx
+if (loading) return <div data-testid="orders-loading">Loading...</div>;
+
+if (!isLoggedIn) {
+  return (
+    <div data-testid="orders-login-required">
+      <p>Please log in to view your orders</p>
+    </div>
+  );
+}
+
+return (
+  <div data-testid="orders-page">
+    {orders.length === 0 && <p data-testid="orders-empty">No orders yet</p>}
+
+    {visibleOrders.map((order) => (
+      <div
+        key={`${order.storageId}-${order.id}`}
+        data-testid="order-item"
+        data-order-id={order.id}
+      >
+        <button data-testid="order-toggle" onClick={() => toggleOrder(order.id)}>
+          <span data-testid="order-date">{new Date(order.createdDate).toLocaleDateString()}</span>
+          <span data-testid="order-total">{order.currency}{Number(order.totalSum).toFixed(2)}</span>
+          <span data-testid="order-status">{STATUS_LABELS[order.statusIdentifier ?? ''] ?? order.statusIdentifier}</span>
+        </button>
+
+        {isOpen && (
+          <div data-testid="order-details">
+            {/* ... */}
+            {isCreated && (
+              <button
+                data-testid="order-cancel-btn"
+                disabled={cancelingIds.has(order.id)}
+                onClick={() => handleCancel(order)}
+              >
+                {cancelingIds.has(order.id) ? 'Canceling...' : 'Cancel order'}
+              </button>
+            )}
+            {isCanceled && (
+              <button data-testid="order-repeat-btn" onClick={() => handleRepeat(order)}>Repeat order</button>
+            )}
+          </div>
+        )}
+      </div>
+    ))}
+
+    {hasMore && (
+      <button data-testid="orders-load-more" onClick={() => setVisibleCount((c) => c + PAGE_SIZE)}>
+        Load more
+      </button>
+    )}
+  </div>
+);
+```
+
+### 4.2 Gather test parameters and fill in `.env.local`
+
+**Algorithm (perform step by step, do not ask in one list):**
+
+1. **Path to the orders page** — ask: "What is the path to the orders page? (e.g., `/orders`, `/en_US/account/orders`)". 
+   - Silent → find it yourself via Glob (`app/**/orders/**/page.tsx`, `app/**/account/**/orders/**/page.tsx`). Inform: "Found the orders page at `{path}` — using it".
+2. **Path to the login page** — needed for redirect test to check that an unauthorized user sees the login block.
+   - Ask: "Where is the login form located? (`/login`, `/auth`, etc.)". Silent → Glob by `app/**/login/**` / `app/**/auth/**` or Grep by `<AuthForm`. Inform what you found.
+3. **Test credentials** (authorized user who has at least one order in OneEntry):
+   - Ask: "Please provide the email and password of a test user who has at least one order. I will skip — tests for the order list/cancellation/pagination will be disabled through `test.skip`".
+   - If the user provides values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (via Edit/Write), check that `.env.local` is in `.gitignore`.
+   - If silent/refused → leave the variables empty with a comment. Inform: "Credentials not set — tests requiring authorization will be skipped through `test.skip`. Reason: without a test user with orders, the list/cancellation cannot be checked".
+4. **Status marker 'created' / 'canceled'** — check yourself via `/inspect-api` (orders section or order statuses in the admin panel): real identifiers may differ. If they differ — update `STATUS_LABELS` in the generated code and constants in the spec file. Inform: "Status markers: created=`{value}`, canceled=`{value}` — substituted in tests".
+
+**Example of filling in `.env.local` (do it yourself):**
+
+```bash
+# e2e orders
+E2E_ORDERS_PATH=/orders
+E2E_AUTH_PATH=/login
+# user with existing orders
+E2E_TEST_EMAIL=user@example.com
+E2E_TEST_PASSWORD=user-password
+```
+
+### 4.3 Create `e2e/orders.spec.ts`
+
+> ⚠️ Tests work with the real OneEntry project. A test user with existing orders is required — otherwise, pagination and cancellation cannot be checked.
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+const ORDERS_PATH = process.env.E2E_ORDERS_PATH || '/orders';
+const AUTH_PATH = process.env.E2E_AUTH_PATH || '/login';
+const TEST_EMAIL = process.env.E2E_TEST_EMAIL || '';
+const TEST_PASSWORD = process.env.E2E_TEST_PASSWORD || '';
+
+async function signIn(page: import('@playwright/test').Page) {
+  await page.goto(AUTH_PATH);
+  const fields = page.locator('[data-testid^="auth-field-"]');
+  await fields.nth(0).fill(TEST_EMAIL);
+  await fields.nth(1).fill(TEST_PASSWORD);
+  await page.getByTestId('auth-submit').click();
+  await expect(page.getByTestId('auth-success')).toBeVisible({ timeout: 10_000 });
+}
+
+test.describe('Orders Page', () => {
+  test('without authorization shows "Please log in" block', async ({ page, context }) => {
+    // Ensure no refresh-token
+    await context.clearCookies();
+    await page.addInitScript(() => window.localStorage.removeItem('refresh-token'));
+
+    await page.goto(ORDERS_PATH);
+    await expect(page.getByTestId('orders-login-required')).toBeVisible();
+  });
+
+  test.describe('Authorized user', () => {
+    test.skip(!TEST_EMAIL || !TEST_PASSWORD, 'E2E_TEST_EMAIL/PASSWORD not set');
+
+    test.beforeEach(async ({ page }) => {
+      await signIn(page);
+      await page.goto(ORDERS_PATH);
+      await expect(page.getByTestId('orders-page')).toBeVisible({ timeout: 10_000 });
+    });
+
+    test('renders list of orders (or empty-state)', async ({ page }) => {
+      const items = page.getByTestId('order-item');
+      const empty = page.getByTestId('orders-empty');
+      const hasItems = await items.first().isVisible().catch(() => false);
+      const hasEmpty = await empty.isVisible().catch(() => false);
+      expect(hasItems || hasEmpty).toBe(true);
+    });
+
+    test('clicking on an order expands details', async ({ page }) => {
+      const items = page.getByTestId('order-item');
+      test.skip((await items.count()) === 0, 'User has no orders — nothing to expand');
+
+      await items.first().getByTestId('order-toggle').click();
+      await expect(items.first().getByTestId('order-details')).toBeVisible();
+    });
+
+    test('the "Load more" button loads the next page', async ({ page }) => {
+      const loadMore = page.getByTestId('orders-load-more');
+      test.skip(!(await loadMore.isVisible().catch(() => false)), 'Fewer orders than one page — Load more not shown');
+
+      const before = await page.getByTestId('order-item').count();
+      await loadMore.click();
+      await expect.poll(async () => page.getByTestId('order-item').count(), { timeout: 5_000 })
+        .toBeGreaterThan(before);
+    });
+
+    test('cancelling an order changes status to "canceled" without reload', async ({ page }) => {
+      // Find the first order with status created (there is a cancel button)
+      const cancelBtn = page.getByTestId('order-cancel-btn').first();
+      test.skip(!(await cancelBtn.isVisible().catch(async () => {
+        // need to expand details first
+        const first = page.getByTestId('order-item').first();
+        if (await first.isVisible()) await first.getByTestId('order-toggle').click();
+        return cancelBtn.isVisible().catch(() => false);
+      })), 'No orders with status "created" — nothing to cancel');
+
+      const orderItem = cancelBtn.locator('xpath=ancestor::*[@data-testid="order-item"]').first();
+      await cancelBtn.click();
+
+      // The button goes into a disabled state — we expect that after the API response it will disappear / be replaced
+      await expect.poll(async () => orderItem.getByTestId('order-status').innerText(), { timeout: 10_000 })
+        .toMatch(/cancel/i);
+    });
+  });
+});
+```
+
+### 4.4 Report to the user about the decisions made
+
+Before completing the task — explicitly inform:
+
+```
+✅ e2e/orders.spec.ts created
+✅ data-testid added to OrdersPage
+✅ .env.local updated (E2E_ORDERS_PATH, E2E_AUTH_PATH, E2E_TEST_EMAIL, E2E_TEST_PASSWORD)
+
+Decisions made automatically:
+- Path to the orders page: {ORDERS_PATH} — {provided by user / found via Glob}
+- Path to the login page: {AUTH_PATH} — {provided / found via Glob}
+- Test credentials: {provided / left empty — tests for the authorized block will be test.skip}
+- Status markers: created=`{value}`, canceled=`{value}` — from /inspect-api
+
+Run: npm run test:e2e -- orders.spec.ts
+```
+
+If credentials are not set — tests for the authorized part are skipped, leaving only the test for redirecting unauthorized users.

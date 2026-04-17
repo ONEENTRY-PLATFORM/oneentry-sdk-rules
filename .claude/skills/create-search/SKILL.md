@@ -4,7 +4,7 @@ description: Create site search
 ---
 # /create-search — Site Search
 
-Argument: what to search for — `products` (products), `pages` (pages), `all` (everything).
+Argument: what to search for — `products` (goods), `pages` (pages), `all` (everything).
 
 ---
 
@@ -14,13 +14,13 @@ Argument: what to search for — `products` (products), `pages` (pages), `all` (
    - `products` — `searchProduct(query, locale)`
    - `pages` — `searchPage(name, url)`
    - `blocks` — `searchBlock(name)`
-   - multiple at once — parallel requests via `Promise.all`
+   - several at once — parallel requests via `Promise.all`
 
-2. **Where to display?**
+2. **Where is it displayed?**
    - Dropdown directly in the search bar — the most common case
    - Separate results page
 
-3. **Is there a layout?** — if yes, copy exactly
+3. **Is there a layout?** — if yes, copy it exactly
 
 ---
 
@@ -230,4 +230,180 @@ export default async function SearchPage({
 5. For products: product.localizeInfos?.title
 6. For pages: page.localizeInfos?.title || page.localizeInfos?.menuTitle
 7. Server Action returns [] on error — does not crash
+```
+
+---
+
+## Step 5: Playwright E2E tests
+
+> Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
+> To set up Playwright — first `/setup-playwright`.
+
+### 5.1 Add `data-testid` to the component
+
+```tsx
+// components/SearchBar.tsx
+<div ref={wrapperRef} data-testid="search-bar" style={{ position: 'relative' }}>
+  <form role="search" onSubmit={(e) => e.preventDefault()}>
+    <input
+      data-testid="search-input"
+      id="search-input"
+      type="search"
+      value={query}
+      onChange={...}
+      ...
+    />
+  </form>
+
+  {open && (
+    <div
+      data-testid="search-dropdown"
+      id="search-results"
+      role="region"
+      aria-live="polite"
+    >
+      {results.length === 0 && (
+        <div data-testid="search-empty">No results</div>
+      )}
+      {results.map((product) => (
+        <Link
+          key={product.id}
+          data-testid="search-result-item"
+          data-product-id={product.id}
+          href={...}
+        >
+          {product.localizeInfos?.title || 'Product'}
+        </Link>
+      ))}
+    </div>
+  )}
+</div>
+```
+
+### 5.2 Gather test parameters and fill in `.env.local`
+
+**Algorithm (execute step by step, do not ask in one list):**
+
+1. **Path of the page where the SearchBar is displayed** — ask: "On which page is the search bar displayed? (usually in Navbar on all pages — `/` or main catalog will do)". If silent → use `/` by default and inform: "Using `/` — SearchBar is expected in Navbar, available everywhere."
+2. **Test search query that will GUARANTEED find products** — choose yourself via `/inspect-api`:
+   - Get products: `getApi().Products.getProducts({ limit: 1 })`. Take the first word from `items[0].localizeInfos?.title` (a fragment of 3+ characters). For example, `title="Cosmo Sneakers"` → `SEARCH_HIT_QUERY=Cosmo`.
+   - Inform: "For the test 'there are results' I use the query `{query}` — a fragment of the title of the first product in the catalog."
+   - If there are no products or the SDK is unavailable — leave it empty, test `test.skip`.
+3. **Test empty query** (which has no results) — generate yourself: `zzzz-nonexistent-{rand}`. Do not save in `.env.local`, hardcode in the spec.
+4. **Path of the separate results page** (if created) — ask: "Should I create a separate results page `/search?q=...`? If yes — what path?". If silent → check via Glob (`app/**/search/**/page.tsx`). If not found → corresponding tests `test.skip`.
+
+**Example `.env.local`:**
+
+```bash
+E2E_SEARCH_PAGE=/
+E2E_SEARCH_HIT_QUERY=Cosmo
+E2E_SEARCH_RESULTS_PATH=/search
+```
+
+### 5.3 Create `e2e/search.spec.ts`
+
+> ⚠️ Tests work with the real OneEntry project. `SEARCH_HIT_QUERY` is taken from a real product, `SEARCH_MISS_QUERY` — a deliberately non-existent query.
+
+```typescript
+import { test, expect } from '@playwright/test';
+
+const SEARCH_PAGE = process.env.E2E_SEARCH_PAGE || '/';
+const SEARCH_HIT_QUERY = process.env.E2E_SEARCH_HIT_QUERY || '';
+const SEARCH_MISS_QUERY = 'zzzz-nonexistent-query-xyz';
+const SEARCH_RESULTS_PATH = process.env.E2E_SEARCH_RESULTS_PATH || '';
+
+test.describe('Site Search', () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto(SEARCH_PAGE);
+    await expect(page.getByTestId('search-bar')).toBeVisible({ timeout: 10_000 });
+  });
+
+  test('dropdown is closed by default (empty query)', async ({ page }) => {
+    await expect(page.getByTestId('search-dropdown')).not.toBeVisible();
+  });
+
+  test('input shows results after debounce', async ({ page }) => {
+    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY is not set');
+
+    await page.getByTestId('search-input').fill(SEARCH_HIT_QUERY);
+    // Debounce 300ms + network request — wait up to 5s
+    await expect(page.getByTestId('search-dropdown')).toBeVisible({ timeout: 5_000 });
+    const items = page.getByTestId('search-result-item');
+    expect(await items.count()).toBeGreaterThan(0);
+  });
+
+  test('non-existent query — no results / empty-state', async ({ page }) => {
+    await page.getByTestId('search-input').fill(SEARCH_MISS_QUERY);
+    // Wait for debounce to complete
+    await page.waitForTimeout(600);
+
+    const dropdownVisible = await page.getByTestId('search-dropdown').isVisible().catch(() => false);
+    if (dropdownVisible) {
+      // If dropdown opened — there should be empty-state or 0 items
+      const itemsCount = await page.getByTestId('search-result-item').count();
+      expect(itemsCount).toBe(0);
+    }
+    // Otherwise (most often) — dropdown is not open, which is also valid
+  });
+
+  test('clearing input closes dropdown', async ({ page }) => {
+    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY is not set');
+
+    const input = page.getByTestId('search-input');
+    await input.fill(SEARCH_HIT_QUERY);
+    await expect(page.getByTestId('search-dropdown')).toBeVisible({ timeout: 5_000 });
+
+    await input.fill('');
+    await expect(page.getByTestId('search-dropdown')).not.toBeVisible({ timeout: 3_000 });
+  });
+
+  test('Escape closes dropdown', async ({ page }) => {
+    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY is not set');
+
+    await page.getByTestId('search-input').fill(SEARCH_HIT_QUERY);
+    await expect(page.getByTestId('search-dropdown')).toBeVisible({ timeout: 5_000 });
+
+    await page.getByTestId('search-input').press('Escape');
+    await expect(page.getByTestId('search-dropdown')).not.toBeVisible();
+  });
+
+  test('clicking on a result closes dropdown and clears input', async ({ page }) => {
+    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY is not set');
+
+    await page.getByTestId('search-input').fill(SEARCH_HIT_QUERY);
+    await expect(page.getByTestId('search-dropdown')).toBeVisible({ timeout: 5_000 });
+
+    await page.getByTestId('search-result-item').first().click();
+    // After navigation, dropdown should not be visible
+    await expect(page.getByTestId('search-dropdown')).not.toBeVisible();
+  });
+});
+
+// If a separate results page `/search?q=...` is created
+test.describe('Search results page', () => {
+  test.skip(!SEARCH_RESULTS_PATH || !SEARCH_HIT_QUERY, 'E2E_SEARCH_RESULTS_PATH or E2E_SEARCH_HIT_QUERY is not set');
+
+  test('page shows results for the query from URL', async ({ page }) => {
+    await page.goto(`${SEARCH_RESULTS_PATH}?q=${encodeURIComponent(SEARCH_HIT_QUERY)}`);
+    await expect(page.locator('h1')).toContainText(SEARCH_HIT_QUERY);
+  });
+});
+```
+
+### 5.4 Report to the user about the decisions made
+
+Before completing the task — explicitly inform:
+
+```
+✅ e2e/search.spec.ts created
+✅ data-testid added to SearchBar
+✅ .env.local updated (E2E_SEARCH_PAGE, E2E_SEARCH_HIT_QUERY, E2E_SEARCH_RESULTS_PATH)
+
+Decisions made automatically:
+- Search page: {SEARCH_PAGE} — {specified by user / using `/` since SearchBar is usually in Navbar}
+- Query with results: {SEARCH_HIT_QUERY} — fragment of the title of the first product ("{title}") from getProducts
+- Query without results: zzzz-nonexistent-query-xyz — hardcoded in the spec
+- Results page: {PATH → test included / not found — test test.skip}
+
+Run: npm run test:e2e -- search.spec.ts
 ```

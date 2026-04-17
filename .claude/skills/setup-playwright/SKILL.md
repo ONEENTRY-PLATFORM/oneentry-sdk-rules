@@ -23,10 +23,11 @@ Read `package.json`. If `@playwright/test` is already in `devDependencies` — a
 ## Step 2: Install dependencies
 
 ```bash
-npm install -D @playwright/test
+npm install -D @playwright/test dotenv
 npx playwright install chromium
 ```
 
+> `dotenv` — to load `process.env.E2E_*` from `.env.local` in tests (the Playwright runner does not **read** `.env.local`, unlike the Next.js webServer).
 > For the full set of browsers: `npx playwright install` (without arguments).
 
 ---
@@ -37,6 +38,11 @@ Create `playwright.config.ts` in the root of the project:
 
 ```typescript
 import { defineConfig, devices } from '@playwright/test';
+import dotenv from 'dotenv';
+
+// ⚠️ The Playwright runner does not read .env.local itself — load it manually,
+// otherwise process.env.E2E_* in specs will be undefined
+dotenv.config({ path: '.env.local' });
 
 export default defineConfig({
   testDir: './e2e',
@@ -59,6 +65,7 @@ export default defineConfig({
     command: 'npm run dev',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
+    timeout: 120_000,  // Next.js cold start can be long
   },
 });
 ```
@@ -117,7 +124,7 @@ Check if `.mcp.json` exists. If not — create it:
 If the file already exists — add the `"playwright"` section to `mcpServers`.
 
 > After creating `.mcp.json`, tell the user:
-> **Restart Claude Code** to pick up the MCP server.
+> **Restart Claude Code** to activate the MCP server.
 
 ---
 
@@ -132,7 +139,7 @@ Check `.gitignore`. Add if not present:
 
 ---
 
-## Step 8: Test writing rules
+## Step 8: Rules for writing tests
 
 ### Test structure
 
@@ -151,7 +158,16 @@ e2e/
 - Test names in English (clear for the user)
 - Use `page.getByRole`, `page.getByText`, `page.getByTestId` — not CSS selectors
 - Add `data-testid` to key elements when creating components
-- Tests should be independent — do not rely on the state from the previous test
+- Tests should be independent — do not rely on the state from previous tests
+
+### ⚠️ Pitfalls (verified on a live project)
+
+1. **`.env.local` is not read by the Playwright runner** — load it via `dotenv.config({ path: '.env.local' })` in `playwright.config.ts` (see Step 3). Without this, `process.env.E2E_*` in specs = `undefined`, all conditional `test.skip(!ENV, ...)` will trigger skip.
+2. **Parallel login with the same test user causes a race** — two workers simultaneously call `AuthProvider.auth()`, the OneEntry refresh token is one-time → one of them fails due to timeout on `/profile`. Fix: for the describe block with authorized tests, add `test.describe.configure({ mode: 'serial' })`.
+3. **`notFound()` in Server Component with `force-dynamic` DOES NOT return HTTP 404** — renders not-found UI, but status=200. `expect(response?.status()).toBe(404)` will always fail. Check via UI: `await expect(page.getByTestId('product-page')).toHaveCount(0)` or by the text of the not-found page.
+4. **Strict mode violation** if the same `getByRole('link', { name: /login/i })` exists in the navbar and in the content placeholder — copy the search: `page.getByTestId('profile-unauthorized').getByRole('link', ...)`.
+
+> More details — `.claude/rules/playwright-e2e.md`.
 
 ### Authorization test pattern
 
@@ -162,14 +178,14 @@ test.describe('Authorization', () => {
   test('successful login by email', async ({ page }) => {
     await page.goto('/login');
     await page.getByRole('textbox', { name: /email/i }).fill('test@example.com');
-    await page.getByRole('button', { name: /log in/i }).click();
+    await page.getByRole('button', { name: /login/i }).click();
     // enter confirmation code...
     await expect(page).toHaveURL('/profile');
   });
 
   test('shows error for invalid data', async ({ page }) => {
     await page.goto('/login');
-    await page.getByRole('button', { name: /log in/i }).click();
+    await page.getByRole('button', { name: /login/i }).click();
     await expect(page.getByText(/required field/i)).toBeVisible();
   });
 });

@@ -35,6 +35,35 @@ const storages = await api.Orders.getAllOrdersStorage()
 ]
 ```
 
+### ⚠️ Choosing the order storage (storage) — UX rules
+
+`getAllOrdersStorage()` returns an array. Each storage has its own `formIdentifier` (order form) and its own set of `paymentAccountIdentifiers` — they **may differ** between storages.
+
+- **1 storage** — use automatically.
+- **2+ storages** — **must** ask the user which one to use (or let them choose in the UI). DO NOT hardcode `storages[0]` — different storages have different delivery fields and different payment methods, the user will get the wrong checkout.
+
+If there are 2+ storages and the user has not specified — ask explicitly, rather than silently substituting the first.
+
+### ⚠️ Choosing the payment method — UX rules
+
+`storage.paymentAccountIdentifiers` — the source of available payment methods for the storage (configured in the OneEntry admin panel). Apply as follows:
+
+- **0 linked accounts** — fallback to `Payments.getAccounts()` (all visible `isVisible && isUsed`). When creating an order, the server may reject an unlinked method — warn the user that the storage has no configured payment methods.
+- **1 linked** — use it automatically, do not show a choice.
+- **2+ linked** — **must** show ALL options in one block. DO NOT hardcode the first and do not hide options.
+
+If the user has not made a choice in the form — by default, substitute the first from the list. Never send `createOrder` without `paymentAccountIdentifier`.
+
+```ts
+const accounts = storage.paymentAccountIdentifiers ?? []
+const accountsToShow = accounts.length > 0
+  ? accounts
+  : await getApi().Payments.getAccounts().then(r => Array.isArray(r) ? r.filter(a => a.isVisible && a.isUsed) : [])
+
+// In the UI: if accountsToShow.length >= 2 — render choice
+// By default, selected accountsToShow[0].identifier
+```
+
 ### getAllOrdersByMarker → { items, total }
 
 ```ts
@@ -70,7 +99,7 @@ const total = result.total
 
 ⚠️ `currency` — often an empty string `""`. **Do not hardcode `$`**. Pattern: `{order.currency || ''}{Number(order.totalSum).toFixed(2)}`. For products in the order, use the currency of the parent order, as there is no currency field in `IOrderProducts`.
 
-⚠️ `statusIdentifier` — only the order status marker. Order statuses are set in the **project admin panel** — markers are unique for each project, do not hardcode. The title cannot be obtained through the SDK — build a map on the client side:
+⚠️ `statusIdentifier` — only the order status marker. Order statuses are set in the **project admin panel** — markers are unique for each project, do not hardcode. The title cannot be obtained via SDK — build a map on the client side:
 
 ```ts
 // Markers — real ones from your project (find out through the admin panel)
@@ -125,7 +154,7 @@ const session = await api.Payments.createSession(order.id, 'session', false) as 
 
 ```ts
 const sessions = await api.Payments.getSessionByOrderId(order.id) as any
-// sessions — an ARRAY, not an object!
+// sessions — AN ARRAY, not an object!
 const session = Array.isArray(sessions) ? sessions[0] : sessions
 // session.paymentUrl — URL (may be null if not ready yet)
 // session.status — "waiting" | "paid" | ...
@@ -136,7 +165,7 @@ const session = Array.isArray(sessions) ? sessions[0] : sessions
 For PayPal, `createSession` returns `paymentUrl: null` immediately.
 OneEntry creates a payment session asynchronously — polling is needed through `getSessionByOrderId`:
 
-**Full flow order + payment (call from client through getApi()):**
+**Full flow order + payment (call from client via getApi()):**
 
 ```ts
 // Client Component — after reDefine() the token is already set up
@@ -175,7 +204,7 @@ async function handleOrder(orderData: any) {
 }
 ```
 
-**Determining the payment system type:**
+**Determining the type of payment system:**
 
 ```ts
 // ⚠️ IMPORTANT: type is unreliable — both PayPal and Cash have type: "custom".
