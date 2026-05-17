@@ -35,16 +35,16 @@ const storages = await api.Orders.getAllOrdersStorage()
 ]
 ```
 
-### ⚠️ Choosing the order storage (storage) — UX rules
+### ⚠️ Selecting the Order Storage (storage) — UX Rules
 
 `getAllOrdersStorage()` returns an array. Each storage has its own `formIdentifier` (order form) and its own set of `paymentAccountIdentifiers` — they **may differ** between storages.
 
 - **1 storage** — use automatically.
-- **2+ storages** — **must** ask the user which one to use (or let them choose in the UI). DO NOT hardcode `storages[0]` — different storages have different delivery fields and different payment methods, the user will get the wrong checkout.
+- **2+ storages** — **must** ask the user which to use (or let them choose in the UI). DO NOT hardcode `storages[0]` — different storages have different delivery fields and different payment methods, the user will get the wrong checkout.
 
 If there are 2+ storages and the user has not specified — ask explicitly, rather than silently substituting the first.
 
-### ⚠️ Choosing the payment method — UX rules
+### ⚠️ Selecting the Payment Method — UX Rules
 
 `storage.paymentAccountIdentifiers` — the source of available payment methods for the storage (configured in the OneEntry admin panel). Apply as follows:
 
@@ -60,7 +60,7 @@ const accountsToShow = accounts.length > 0
   ? accounts
   : await getApi().Payments.getAccounts().then(r => Array.isArray(r) ? r.filter(a => a.isVisible && a.isUsed) : [])
 
-// In the UI: if accountsToShow.length >= 2 — render choice
+// In the UI: if accountsToShow.length >= 2 — render selection
 // By default, selected accountsToShow[0].identifier
 ```
 
@@ -99,7 +99,7 @@ const total = result.total
 
 ⚠️ `currency` — often an empty string `""`. **Do not hardcode `$`**. Pattern: `{order.currency || ''}{Number(order.totalSum).toFixed(2)}`. For products in the order, use the currency of the parent order, as there is no currency field in `IOrderProducts`.
 
-⚠️ `statusIdentifier` — only the order status marker. Order statuses are set in the **project admin panel** — markers are unique for each project, do not hardcode. The title cannot be obtained via SDK — build a map on the client side:
+⚠️ `statusIdentifier` — only the marker of the order status. Order statuses are set in the **project admin panel** — markers are unique for each project, do not hardcode. The title cannot be obtained through the SDK — build a map on the client side:
 
 ```ts
 // Markers — real ones from your project (find out through the admin panel)
@@ -131,9 +131,90 @@ await api.Orders.createOrder(storage.identifier, {
   ],
   products: [
     { productId: 123, quantity: 2 }
-  ]
+  ],
+  // Optionally: coupon code from previewOrder (see below)
+  // couponCode: 'SUMMER10'
 })
 ```
+
+### Order without products (table reservation, booking, application)
+
+`createOrder` is suitable not only for cart checkout. If a form of type `order` with an empty set of products is set up in the admin panel (for example, `booking_order` for table reservation, service application) — send `products: []`:
+
+```ts
+// app/actions/reservation.ts — 'use server'
+await getApi().Orders.createOrder('booking_order', {
+  formIdentifier: 'booking_order',                 // = marker of storage, forms and storage match
+  paymentAccountIdentifier: 'cash',                // if payment is not needed — still specify cash
+  formData: payload.formData as IOrdersFormData[], // dates, guests, name, contact
+  products: [],
+})
+```
+
+`storage.identifier` and `storage.formIdentifier` may match (like `booking_order` → `booking_order`) — this is normal, in the admin panel the storage is linked to one form.
+
+### Virtual product "delivery" — add before createOrder
+
+The cost of delivery in OneEntry is a regular product with a fixed price and `productId`. On the front end — extract its id into a constant and add it to `products[]` before sending:
+
+```ts
+// app/utils/constants.ts
+export const DELIVERY_PRODUCT_ID = 33; // ← find out through /inspect-api products, replace with your own
+
+// when assembling the order
+const orderProducts: IOrderProductData[] = cartProducts.map(p => ({
+  productId: p.id,
+  quantity: p.quantity ?? 1,
+}));
+
+if (!orderProducts.some(p => p.productId === DELIVERY_PRODUCT_ID)) {
+  orderProducts.push({ productId: DELIVERY_PRODUCT_ID, quantity: 1 });
+}
+```
+
+> If there is no delivery in the project — the constant is not needed. If there is — without it, `totalSum` will be calculated without delivery.
+
+---
+
+## previewOrder — coupon discount calculation BEFORE createOrder
+
+`Orders.previewOrder` validates the coupon, calculates the discount, checks applicability without creating an order in the database. Use for UX "apply promo code" in the cart:
+
+```ts
+const preview = await getApi().Orders.previewOrder({
+  products: [
+    { productId: 123, quantity: 2 },
+    { productId: DELIVERY_PRODUCT_ID, quantity: 1 },
+  ],
+  couponCode: 'SUMMER10',
+})
+
+if (isError(preview)) {
+  // statusCode=400 → no coupon or it has expired
+  // statusCode=200 + message → coupon exists, but is not applicable (MIN_CART_AMOUNT, applicability, maxAmount)
+  return { ok: false, error: preview.message }
+}
+
+const { totalSum, totalSumWithDiscount, currency } = preview as IOrderPreviewResponse
+
+// ⚠️ The server returned success, but the discount is zero → the coupon exists, but did not work
+// (for example, MIN_CART_AMOUNT not met or applicability did not intersect with the cart)
+if (totalSumWithDiscount >= totalSum) {
+  return { ok: false, error: 'Coupon does not apply to this cart' }
+}
+
+const discount = totalSum - totalSumWithDiscount
+// Save { code, totalSum, totalSumWithDiscount, currency } — show "Discount" line at checkout
+// and pass `couponCode` to createOrder
+```
+
+**Important:**
+
+- `previewOrder` does **not apply** the coupon — it only calculates. To include the discount in the order, pass `couponCode` to `createOrder`.
+- Applicability conditions (`applicability`, `maxAmount`, `MIN_CART_AMOUNT`) are set in the admin panel for each coupon — they are usually not passed to the front end, trust the server's response.
+- If there are `selected: false` items in the cart (UX where the user checks specific items) — filter them before `previewOrder` and `createOrder`. The server calculates the discount based on what was actually sent in `products[]`.
+
+See [`rules/mismatch-log.md`](mismatch-log.md): if coupons are not yet set up in the admin panel — item `C.7 Orders` (coupons / payment accounts / statuses) with coupon markers and their `applicability`.
 
 ---
 
@@ -145,7 +226,7 @@ Experimentally verified: `createSession` returns HTTP 201 for Stripe, Cash, and 
 
 ```ts
 const session = await api.Payments.createSession(order.id, 'session', false) as any
-// Stripe → session.paymentUrl = "https://checkout.stripe.com/..."  (URL exists)
+// Stripe → session.paymentUrl = "https://checkout.stripe.com/..."  (there is a URL)
 // Cash   → session.paymentUrl = null   (offline, redirect not needed)
 // PayPal → session.paymentUrl = null immediately, URL appears asynchronously
 ```
@@ -154,7 +235,7 @@ const session = await api.Payments.createSession(order.id, 'session', false) as 
 
 ```ts
 const sessions = await api.Payments.getSessionByOrderId(order.id) as any
-// sessions — AN ARRAY, not an object!
+// sessions — ARRAY, not an object!
 const session = Array.isArray(sessions) ? sessions[0] : sessions
 // session.paymentUrl — URL (may be null if not ready yet)
 // session.status — "waiting" | "paid" | ...
@@ -162,8 +243,8 @@ const session = Array.isArray(sessions) ? sessions[0] : sessions
 
 ### PayPal — asynchronous flow
 
-For PayPal, `createSession` returns `paymentUrl: null` immediately.
-OneEntry creates a payment session asynchronously — polling is needed through `getSessionByOrderId`:
+For PayPal, `createSession` immediately returns `paymentUrl: null`.
+OneEntry creates the payment session asynchronously — polling is needed via `getSessionByOrderId`:
 
 **Full flow order + payment (call from client via getApi()):**
 
@@ -204,7 +285,7 @@ async function handleOrder(orderData: any) {
 }
 ```
 
-**Determining the type of payment system:**
+**Determining the payment system type:**
 
 ```ts
 // ⚠️ IMPORTANT: type is unreliable — both PayPal and Cash have type: "custom".
@@ -214,7 +295,7 @@ const isStripe = selectedPayment === 'stripe'
 const isOnline = selectedPayment === 'stripe' || selectedPayment === 'paypal'
 
 // Cash and any other offline: isOnline = false → show success screen
-// PayPal: isOnline = true, !isStripe → polling through getSessionByOrderId
+// PayPal: isOnline = true, !isStripe → polling via getSessionByOrderId
 // Stripe: isOnline = true, isStripe → createSession
 ```
 

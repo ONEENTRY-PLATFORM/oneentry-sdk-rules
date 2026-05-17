@@ -36,20 +36,20 @@ const allImages = Object.values(attrs)
 ## Value Types (critically important!)
 
 | Type                                   | Access to value                                            |
-|---------------------------------------|-----------------------------------------------------------|
-| `string`, `integer`, `float`, `real`  | `attrs.marker?.value` (primitive)                          |
-| `text`                                | `attrs.marker?.value?.htmlValue` or `value.plainValue`   |
-| `textWithHeader`                      | `attrs.marker?.value?.header`, `value.htmlValue`          |
-| `image`                               | **depends on the entity** — see section below             |
-| `groupOfImages`                       | `attrs.marker?.value?.[0]?.downloadLink` (always an array)  |
-| `file`                                | `attrs.marker?.value?.downloadLink` (object)              |
-| `date`, `dateTime`, `time`            | `attrs.marker?.value?.fullDate` or `value.formattedValue`|
-| `list`                                | `attrs.marker?.value` (array of ids or objects with extended) |
-| `radioButton`                         | `attrs.marker?.value` (string-id)                         |
-| `entity`                              | `attrs.marker?.value` (array of markers)                   |
-| `json`                                | `JSON.parse(attrs.marker?.value || '{}')`                 |
-| `timeInterval`                        | `attrs.marker?.value` → `[[ISO, ISO], ...]`               |
-| `spam`                                | captcha — render `<FormReCaptcha>`, NOT `<input>`         |
+|----------------------------------------|-----------------------------------------------------------|
+| `string`, `integer`, `float`, `real`   | `attrs.marker?.value` (primitive)                          |
+| `text`                                 | `attrs.marker?.value?.htmlValue` or `value.plainValue`   |
+| `textWithHeader`                       | `attrs.marker?.value?.header`, `value.htmlValue`          |
+| `image`                                | **depends on the entity** — see section below             |
+| `groupOfImages`                        | `attrs.marker?.value?.[0]?.downloadLink` (always an array)  |
+| `file`                                 | `attrs.marker?.value?.downloadLink` (object)              |
+| `date`, `dateTime`, `time`             | `attrs.marker?.value?.fullDate` or `value.formattedValue`|
+| `list`                                 | `attrs.marker?.value` (array of ids or objects with extended) |
+| `radioButton`                          | `attrs.marker?.value` (string-id)                         |
+| `entity`                               | `attrs.marker?.value` (array of markers)                   |
+| `json`                                 | `JSON.parse(attrs.marker?.value || '{}')`                 |
+| `timeInterval`                         | `attrs.marker?.value` → `[[ISO, ISO], ...]`               |
+| `spam`                                 | captcha — render `<FormReCaptcha>`, NOT `<input>`         |
 
 ## ⚠️ image, groupOfImages — FIRST CHECK the actual structure via API
 
@@ -81,7 +81,7 @@ for (const [k, v] of Object.entries(attrs)) {
 
 ## ⚠️ image — structure depends on the entity type (verified with real data)
 
-> **Note:** Swagger documentation declares `image.value` as an object for all entities. The actual API returns different structures — trust real data, not Swagger.
+> **Note:** Swagger documentation declares `image.value` as an object for all entities. The real API returns different structures — trust real data, not Swagger.
 
 | Entity       | image valueType | Access                                 |
 |--------------|-----------------|----------------------------------------|
@@ -192,7 +192,7 @@ function filterIntervalsByDate(intervals: [string, string][], date: Date) {
   return intervals.filter(([s, e]) => new Date(s) < endOfDay && new Date(e) > startOfDay);
 }
 
-// Formatting time — from UTC hours!
+// Time formatting — from UTC hours!
 const h = new Date(startISO).getUTCHours();
 const m = new Date(startISO).getUTCMinutes();
 const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
@@ -208,14 +208,14 @@ const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
 
 `additionalFields` — arbitrary nested attributes that can be attached to **any** attribute in the admin panel. The content is fully defined by the developer/administrator. The only limitation is that the types of nested fields are taken from the standard set of OneEntry types (`string`, `integer`, `float`, `text`, `image`, `groupOfImages`, `date`, `list`, etc.).
 
-It appears in two contexts:
+Occurs in two contexts:
 
 - `attributeValues` of entities (Product, Page, Block) — values of nested fields
 - `attributes` of schemas (Forms, AttributesSets) — metadata of nested fields
 
 ### SDK Normalization
 
-The SDK automatically transforms `additionalFields` from an **array** (as returned by the API) into a **Record**, with the key being the `marker` of the field.
+The SDK automatically transforms `additionalFields` from **array** (as returned by the API) into **Record**, key — `marker` of the field.
 
 ```typescript
 // RAW API (rawData: true in config):
@@ -252,7 +252,7 @@ The SDK automatically transforms `additionalFields` from an **array** (as return
 
 ### Accessing Values
 
-> ⚠️ **Markers and meanings of `additionalFields` are defined in the admin panel** — they are unique for each project and attribute. Always check the real structure via `/inspect-api` or `console.log` before use. Do not guess markers.
+> ⚠️ **Markers and meaning of `additionalFields` are defined in the admin panel** — they are unique for each project and attribute. Always check the real structure via `/inspect-api` or `console.log` before use. Do not guess markers.
 
 ```typescript
 const attrs = entity.attributeValues || {}
@@ -265,7 +265,7 @@ console.log(attrs.someMarker?.additionalFields)
 // Step 2 — access by known marker:
 const fieldAValue = attrs.someMarker?.additionalFields?.fieldA?.value
 
-// Step 3 — the structure of value depends on the type of the nested field (the same rules as for main attributes):
+// Step 3 — the structure of value depends on the type of nested field (the same rules as for main attributes):
 // type "string"  → value — string
 // type "text"    → value.htmlValue / plainValue
 // type "image"   → value.downloadLink (or value[0].downloadLink — check!)
@@ -296,13 +296,42 @@ const hint        = field.additionalFields?.hint?.value || ''
 
 ### isIcon and isProductPreview
 
-These are flags **on the attribute itself** in `attributeValues`, NOT inside `additionalFields`:
+These are flags **on the attribute** in `attributeValues`, NOT inside `additionalFields`:
 
 ```typescript
 // { type: "image", value: {...}, isIcon: false, isProductPreview: true, additionalFields: {} }
 const previewAttr = Object.values(attrs).find((a: any) => a?.isProductPreview === true)
 const iconAttr    = Object.values(attrs).find((a: any) => a?.isIcon === true)
 ```
+
+## ⚠️ Final Rating — top-level field `rating`, NOT an attribute
+
+The aggregated rating of the entity (Products and others) is formed by OneEntry based on reviews (FormData) and is available in the **top-level field of the entity** `entity.rating?.value` (type `IRating`), and **not** in `attributeValues.rating`.
+
+```typescript
+// ✅ CORRECT — final rating from top-level field
+const ratingVal = product.rating?.value;  // number | null
+if (ratingVal != null) {
+  // show star + value
+} else {
+  // "Rating not yet formed" — no reviews yet
+}
+
+// ❌ INCORRECT — this is a phantom attribute, often remains in the schema
+// from the old implementation (before real reviews were connected).
+// Returns a hardcoded value, does not reflect real reviews.
+const ratingVal = attrs.rating?.value;
+```
+
+**Link with reviews:** the values of `rating` are recalculated on the OneEntry side from FormData reviews (see [`skills/create-reviews/SKILL.md`](../skills/create-reviews/SKILL.md)). Inside a single review (FormData record), the rating field is already a marker of the form schema (e.g., `review_rating` or `rating`), this is **another** field.
+
+| Context                               | Where it is located                          |
+|---------------------------------------|----------------------------------------------|
+| Final rating of the entity (aggregate) | `entity.rating?.value` (top-level)          |
+| Rating inside a single review (FormData) | `formData.find(f => f.marker === '<rating-marker>')?.value` |
+| ❌ `attrs.rating?.value`              | DO NOT use — phantom attribute                |
+
+> If `attributeValues` contains `rating` — this is likely a remnant before real reviews were connected. It is not necessary to delete it from the schema (it may break existing data), but in new code, use only `entity.rating`.
 
 ## For page blocks — localizeInfos as fallback
 

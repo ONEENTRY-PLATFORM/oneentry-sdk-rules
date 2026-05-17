@@ -7,14 +7,56 @@ paths:
   - "**/*.tsx"
 -->
 
-# Linter — Rules (eslint.config.mjs)
+# Linter and Prettier — Rules (eslint.config.mjs + .prettierrc)
 
-Config: `next/core-web-vitals` + `next/typescript`  
+ESLint config: `next/core-web-vitals` + `next/typescript`  
 This means: `@typescript-eslint/recommended` + Next.js specific rules.
 
 ## Mandatory Before Writing Code
 
-Read `eslint.config.mjs` to know the active rules. The code must pass the linter without errors and warnings.
+Read `eslint.config.mjs` and `.prettierrc` to know the active rules. The code must pass ESLint and Prettier **without errors, warnings, and without the need for auto-formatting** — consider both linter rules and formatting rules at the writing stage, not after.
+
+It is forbidden to write code "as convenient" with the expectation of subsequent `eslint --fix` / `prettier --write`. Each line should be ready for commit immediately.
+
+## Prettier (`.prettierrc`)
+
+Current project settings:
+
+```json
+{
+  "singleQuote": true,
+  "endOfLine": "auto",
+  "trailingComma": "all",
+  "tabWidth": 2,
+  "semi": true,
+  "plugins": ["prettier-plugin-tailwindcss"]
+}
+```
+
+What this means in practice:
+
+- **Single quotes** for strings in JS/TS (`'text'`, not `"text"`). In JSX attributes — double (default Prettier behavior).
+- **Semicolons are mandatory** at the end of statements.
+- **Trailing commas everywhere** where allowed by syntax (objects, arrays, function parameters, generics, imports).
+- **Indentation of 2 spaces**, not tabs.
+- **`endOfLine: "auto"`** — do not enforce a specific EOL, leave it as in the file.
+- **`prettier-plugin-tailwindcss`** — Tailwind classes must be in the canonical order of the plugin (layout → spacing → typography → colors → state variants). Do not sort manually "as it looks nice" — write in the order expected by the plugin so that Prettier does not rearrange them.
+
+```typescript
+// ❌ INCORRECT — double quotes, no ;, no trailing comma
+import { useState } from "react"
+const obj = {
+  a: 1,
+  b: 2
+}
+
+// ✅ CORRECT
+import { useState } from 'react';
+const obj = {
+  a: 1,
+  b: 2,
+};
+```
 
 ## Key Rules
 
@@ -25,7 +67,7 @@ Read `eslint.config.mjs` to know the active rules. The code must pass the linter
 
 ### React Hooks
 
-- `react-hooks/rules-of-hooks` — hooks can only be called at the top level of a component
+- `react-hooks/rules-of-hooks` — hooks only at the top level of the component
 - `react-hooks/exhaustive-deps` — all dependencies of `useEffect` must be in the deps array
 
 ```typescript
@@ -59,5 +101,5 @@ import Link from 'next/link'
 
 ### Server/Client Components
 
-- Do not import server modules in `'use client'` files
+- Do not import server modules into `'use client'` files
 - `'use server'` Server Actions cannot be called directly for auth methods with fingerprint (see `rules/auth-provider.md`)
