@@ -1,308 +1,156 @@
 ---
 name: create-cart-manager
-description: Create cart manager with Redux and persistence
+description: Create cart manager on the native server cart API (Users.getCart/addCartItem/...) — guest + user, cross-device sync, React Context with optimistic updates
 ---
-# Create Cart Manager (Redux + persist)
+# Create Cart Manager (Server Cart API)
 
-Creates a Redux slice for the cart with persistence, store, and types. The cart stores a list of products with quantities and survives page reloads.
+Creates a cart manager on the **native server API** OneEntry (`Users.getCart/setCart/addCartItem/removeCartItem`). The cart is stored on the server and synchronized between devices — for both authorized users and guests (by `guestId`). It does not require Redux/redux-persist.
 
----
+> ℹ️ **Server Cart vs Redux+localStorage.** The server API is cross-device, survives device changes, and is immediately ready for checkout. If you need a purely client-side offline cart without a network — that’s a different pattern (Redux+persist), but by default, we use the server API.
 
-## Step 1: Install dependencies
-
-```bash
-npm install @reduxjs/toolkit react-redux redux-persist next-redux-wrapper
-```
+> ⚠️ Cart methods work for **user OR guest**. In the browser, the guest id is created and stored automatically (`localStorage` key `oneentry_guest_id`) — no setup is needed. Therefore, we manage the cart from the **Client Component** via `getApi()` (like orders/profile in this project). More details about guest mode — `03-sdk-init.md`.
 
 ---
 
-## Step 2: Create product type in the cart
+## Step 1: Data Type and Structure
 
-File: `app/types/cart.ts`
+Cart from the server: `ICartResponse = { items: ICartItem[], total }`, where `ICartItem = { productId, qty, addedAt? }`. Only `productId` + `qty` are stored — full product data is loaded separately.
 
 ```typescript
-export interface ICartProduct {
-  id: number;
-  quantity: number;
-  selected: boolean;
-}
+// app/types/cart.ts
+import type { ICartItem } from 'oneentry/dist/users/usersInterfaces';
+export type { ICartItem };
 ```
 
 ---
 
-## Step 3: Create cart slice
+## Step 2: CartContext — Provider with Optimistic Updates
 
-File: `app/store/reducers/CartSlice.ts`
+File: `app/context/CartContext.tsx`
 
-```typescript
-'use client';
-
-import { createSelector, createSlice } from '@reduxjs/toolkit';
-import type { PayloadAction, WritableDraft } from '@reduxjs/toolkit';
-import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces';
-import type { ICartProduct } from '@/app/types/cart';
-
-type CartState = {
-  products: IProductsEntity[];       // full product data (loaded from API)
-  productsData: ICartProduct[];      // id + quantity + selected (persisted)
-  total: number;
-  version: number;
-};
-
-const initialState: CartState = {
-  products: [],
-  productsData: [],
-  total: 0,
-  version: 0,
-};
-
-export const cartSlice = createSlice({
-  name: 'cart-slice',
-  initialState,
-  reducers: {
-    addProductToCart(
-      state: WritableDraft<CartState>,
-      action: PayloadAction<{ id: number; quantity: number; selected?: boolean }>,
-    ) {
-      const index = state.productsData.findIndex((p) => p.id === action.payload.id);
-      if (index === -1) {
-        state.productsData.push({
-          id: action.payload.id,
-          quantity: Math.max(1, action.payload.quantity),
-          selected: action.payload.selected ?? true,
-        });
-      } else {
-        state.productsData[index]!.quantity = Math.max(
-          1,
-          state.productsData[index]!.quantity + action.payload.quantity,
-        );
-      }
-    },
-
-    increaseProductQty(
-      state: WritableDraft<CartState>,
-      action: PayloadAction<{ id: number; units: number }>,
-
-    ) {
-      const index = state.productsData.findIndex((p) => p.id === action.payload.id);
-      if (index === -1) {
-        state.productsData.push({ id: action.payload.id, quantity: 1, selected: true });
-        return;
-      }
-      state.productsData[index]!.quantity = Math.min(
-        state.productsData[index]!.quantity + 1,
-        action.payload.units,
-      );
-    },
-
-    decreaseProductQty(
-      state: WritableDraft<CartState>,
-      action: PayloadAction<{ id: number }>,
-
-    ) {
-      const index = state.productsData.findIndex((p) => p.id === action.payload.id);
-      if (index === -1) return;
-      if (state.productsData[index]!.quantity <= 1) {
-        state.productsData = state.productsData.filter((p) => p.id !== action.payload.id);
-      } else {
-        state.productsData[index]!.quantity -= 1;
-      }
-    },
-
-    setProductQty(
-      state: WritableDraft<CartState>,
-      action: PayloadAction<{ id: number; quantity: number; units: number }>,
-
-    ) {
-      if (action.payload.quantity <= 0) {
-        state.productsData = state.productsData.filter((p) => p.id !== action.payload.id);
-        return;
-      }
-      const qty = Math.min(action.payload.quantity, action.payload.units);
-      const index = state.productsData.findIndex((p) => p.id === action.payload.id);
-      if (index !== -1) {
-        state.productsData[index]!.quantity = qty;
-      } else {
-        state.productsData.push({ id: action.payload.id, quantity: qty, selected: true });
-      }
-    },
-
-    removeProduct(state: WritableDraft<CartState>, action: PayloadAction<number>) {
-      state.productsData = state.productsData.filter((p) => p.id !== action.payload);
-    },
-
-    removeAllProducts(state: WritableDraft<CartState>) {
-      state.productsData = [];
-      state.products = [];
-    },
-
-    addProductsToCart(
-      state: WritableDraft<CartState>,
-      action: PayloadAction<IProductsEntity[]>,
-
-    ) {
-      state.products = action.payload;
-    },
-
-    deselectProduct(state: WritableDraft<CartState>, action: PayloadAction<number>) {
-      const index = state.productsData.findIndex((p) => p.id === action.payload);
-      if (index !== -1) {
-        state.productsData[index]!.selected = !state.productsData[index]!.selected;
-      }
-    },
-
-    setCartVersion(state: WritableDraft<CartState>, action: PayloadAction<number>) {
-      state.version = action.payload;
-    },
-  },
-});
-
-// Selectors
-export const selectCartData = (state: { cartReducer: CartState }) =>
-  state.cartReducer.productsData;
-
-export const selectCartItems = (state: { cartReducer: CartState }) =>
-  state.cartReducer.products;
-
-export const selectIsInCart = (
-  state: { cartReducer: CartState },
-  productId: number,
-) => state.cartReducer.productsData.some((p) => p.id === productId);
-
-export const selectCartItemQty = (
-  state: { cartReducer: CartState },
-  productId: number,
-) => state.cartReducer.productsData.find((p) => p.id === productId)?.quantity ?? 0;
-
-export const selectCartVersion = (state: { cartReducer: CartState }) =>
-  state.cartReducer.version;
-
-// Total is calculated based on attributes — clarify price/sale markers with the user!
-export const selectCartTotal = createSelector(
-  (state: { cartReducer: CartState }) => state.cartReducer.productsData,
-  (state: { cartReducer: CartState }) => state.cartReducer.products,
-  (productsData, products) =>
-    productsData.reduce((total, item) => {
-      if (!item.selected) return total;
-      const product = products.find((p) => p.id === item.id);
-      if (!product) return total;
-      const price =
-        (product.attributeValues as any)?.sale?.value ||
-        (product.attributeValues as any)?.price?.value ||
-        product.price ||
-        0;
-      return total + Number(price) * item.quantity;
-    }, 0),
-);
-
-export const {
-  addProductToCart,
-  addProductsToCart,
-  increaseProductQty,
-  decreaseProductQty,
-  setProductQty,
-  removeProduct,
-  deselectProduct,
-  removeAllProducts,
-  setCartVersion,
-} = cartSlice.actions;
-
-export default cartSlice.reducer;
-```
-
----
-
-## Step 4: Create Redux store with persistence
-
-File: `app/store/store.ts`
-
-```typescript
-import { combineReducers, configureStore } from '@reduxjs/toolkit';
-import { createWrapper } from 'next-redux-wrapper';
-import { persistReducer } from 'redux-persist';
-import createWebStorage from 'redux-persist/lib/storage/createWebStorage';
-import cartSlice from './reducers/CartSlice';
-
-// SSR-compatible storage (noop on the server)
-const createNoopStorage = () => ({
-  getItem: () => Promise.resolve(null),
-  setItem: (_key: string, value: unknown) => Promise.resolve(value),
-  removeItem: () => Promise.resolve(),
-});
-
-const storage =
-  typeof window !== 'undefined'
-    ? createWebStorage('local')
-    : createNoopStorage();
-
-const cartReducer = persistReducer(
-  {
-    key: 'cart-slice',
-    storage,
-    version: 1,
-    whitelist: ['productsData', 'total'], // products are NOT persisted — loaded from API
-  },
-  cartSlice,
-);
-
-const rootReducer = combineReducers({ cartReducer });
-
-export const setupStore = () =>
-  configureStore({
-    reducer: rootReducer,
-    middleware: (getDefaultMiddleware) =>
-      getDefaultMiddleware({ serializableCheck: false }),
-  });
-
-export type RootState = ReturnType<typeof rootReducer>;
-export type AppStore = ReturnType<typeof setupStore>;
-export type AppDispatch = AppStore['dispatch'];
-
-export const wrapper = createWrapper<AppStore>(setupStore, { debug: false });
-```
-
----
-
-## Step 5: Wrap the application in Provider
-
-File: `app/store/providers/StoreProvider.tsx`
+Each mutating server method (`addCartItem`/`removeCartItem`/`setCart`) **returns the updated cart** — we use it as the source of truth. `addCartItem` is an **upsert**: `{ productId, qty }` sets the quantity (not increment).
 
 ```tsx
 'use client';
 
-import { useRef } from 'react';
-import { Provider } from 'react-redux';
-import { PersistGate } from 'redux-persist/integration/react';
-import { persistStore } from 'redux-persist';
-import { setupStore } from '../store';
+import {
+  createContext, useContext, useEffect, useState, useCallback, useMemo,
+} from 'react';
+import { getApi, isError } from '@/lib/oneentry';
+import type { ICartItem } from '@/app/types/cart';
 
-export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const storeRef = useRef<ReturnType<typeof setupStore>>();
-  if (!storeRef.current) {
-    storeRef.current = setupStore();
-  }
-  const persistor = persistStore(storeRef.current);
+type CartContextValue = {
+  items: ICartItem[];
+  count: number;                                   // total number of items
+  loading: boolean;
+  isInCart: (productId: number) => boolean;
+  qtyOf: (productId: number) => number;
+  add: (productId: number, qty?: number) => Promise<void>;
+  setQty: (productId: number, qty: number) => Promise<void>;
+  remove: (productId: number) => Promise<void>;
+  clear: () => Promise<void>;
+  reload: () => Promise<void>;
+};
 
-  return (
-    <Provider store={storeRef.current}>
-      <PersistGate loading={null} persistor={persistor}>
-        {children}
-      </PersistGate>
-    </Provider>
+const CartContext = createContext<CartContextValue | null>(null);
+
+export function CartProvider({ children }: { children: React.ReactNode }) {
+  const [items, setItems] = useState<ICartItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Apply server response (ICartResponse) as new state
+  const apply = useCallback((res: unknown) => {
+    const r = res as { items?: ICartItem[] };
+    if (!isError(res) && Array.isArray(r?.items)) setItems(r.items);
+  }, []);
+
+  const reload = useCallback(async () => {
+    setLoading(true);
+    const res = await getApi().Users.getCart();
+    apply(res);
+    setLoading(false);
+  }, [apply]);
+
+  useEffect(() => { reload(); }, [reload]);
+
+  const qtyOf = useCallback(
+    (productId: number) => items.find((i) => i.productId === productId)?.qty ?? 0,
+    [items],
   );
+  const isInCart = useCallback((productId: number) => qtyOf(productId) > 0, [qtyOf]);
+
+  // add: upsert qty (default +1 to current)
+  const add = useCallback(async (productId: number, qty = 1) => {
+    const next = (qtyOf(productId) || 0) + qty;
+    const prev = items;
+    setItems((cur) => {                                  // optimistic
+      const idx = cur.findIndex((i) => i.productId === productId);
+      if (idx === -1) return [...cur, { productId, qty: next }];
+      const copy = [...cur]; copy[idx] = { ...copy[idx], qty: next }; return copy;
+    });
+    const res = await getApi().Users.addCartItem({ productId, qty: next });
+    if (isError(res)) setItems(prev); else apply(res);   // rollback on error
+  }, [items, qtyOf, apply]);
+
+  // setQty: <=0 → remove
+  const setQty = useCallback(async (productId: number, qty: number) => {
+    if (qty <= 0) {
+      const prev = items;
+      setItems((cur) => cur.filter((i) => i.productId !== productId));
+      const res = await getApi().Users.removeCartItem(productId);
+      if (isError(res)) setItems(prev); else apply(res);
+      return;
+    }
+    const prev = items;
+    setItems((cur) => cur.map((i) => (i.productId === productId ? { ...i, qty } : i)));
+    const res = await getApi().Users.addCartItem({ productId, qty }); // upsert
+    if (isError(res)) setItems(prev); else apply(res);
+  }, [items, apply]);
+
+  const remove = useCallback(async (productId: number) => {
+    const prev = items;
+    setItems((cur) => cur.filter((i) => i.productId !== productId));
+    const res = await getApi().Users.removeCartItem(productId);
+    if (isError(res)) setItems(prev); else apply(res);
+  }, [items, apply]);
+
+  const clear = useCallback(async () => {
+    const prev = items;
+    setItems([]);
+    const res = await getApi().Users.setCart({ items: [] });          // full replacement
+    if (isError(res)) setItems(prev); else apply(res);
+  }, [items, apply]);
+
+  const count = useMemo(() => items.reduce((s, i) => s + (i.qty ?? 0), 0), [items]);
+
+  const value: CartContextValue = {
+    items, count, loading, isInCart, qtyOf, add, setQty, remove, clear, reload,
+  };
+  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+}
+
+export function useCart() {
+  const ctx = useContext(CartContext);
+  if (!ctx) throw new Error('useCart must be used within <CartProvider>');
+  return ctx;
 }
 ```
 
-In `app/layout.tsx`:
+> The main rule: after each mutation, apply the server response as truth (`apply(res)`) and roll back to `prev` on `IError`. Optimistic updates — for instant UI, server response — final synchronization.
+
+---
+
+## Step 3: Wrap the Application in the Provider
 
 ```tsx
-import { StoreProvider } from '@/app/store/providers/StoreProvider';
+// app/layout.tsx
+import { CartProvider } from '@/app/context/CartContext';
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html>
       <body>
-        <StoreProvider>{children}</StoreProvider>
+        <CartProvider>{children}</CartProvider>
       </body>
     </html>
   );
@@ -311,36 +159,20 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ---
 
-## Step 6: Usage in components
+## Step 4: "Add to Cart" Button
 
 ```tsx
 'use client';
+import { useCart } from '@/app/context/CartContext';
 
-import { useDispatch, useSelector } from 'react-redux';
-import {
-  addProductToCart,
-  removeProduct,
-  selectIsInCart,
-  selectCartItemQty,
-  selectCartTotal,
-} from '@/app/store/reducers/CartSlice';
-import type { AppDispatch, RootState } from '@/app/store/store';
-
-export function AddToCartButton({ product }: { product: any }) {
-  const dispatch = useDispatch<AppDispatch>();
-  const isInCart = useSelector((state: RootState) =>
-    selectIsInCart(state, product.id),
-  );
-  const qty = useSelector((state: RootState) =>
-    selectCartItemQty(state, product.id),
-  );
-
-  return isInCart ? (
-    <button onClick={() => dispatch(removeProduct(product.id))}>
-      In Cart ({qty})
+export function AddToCartButton({ productId }: { productId: number }) {
+  const { isInCart, qtyOf, add, remove } = useCart();
+  return isInCart(productId) ? (
+    <button data-testid="remove-from-cart" data-product-id={productId} onClick={() => remove(productId)}>
+      In Cart ({qtyOf(productId)})
     </button>
   ) : (
-    <button onClick={() => dispatch(addProductToCart({ id: product.id, quantity: 1 }))}>
+    <button data-testid="add-to-cart" data-product-id={productId} onClick={() => add(productId, 1)}>
       Add to Cart
     </button>
   );
@@ -349,78 +181,121 @@ export function AddToCartButton({ product }: { product: any }) {
 
 ---
 
+## Step 5: Cart Page (Loading Full Products)
+
+The server only stores `productId` + `qty`. Full product data is loaded via `Products.getProductsByIds`:
+
+```tsx
+'use client';
+import { useEffect, useState } from 'react';
+import { useCart } from '@/app/context/CartContext';
+import { getProductsByIds } from '@/app/actions/products'; // Server Action (see below)
+
+export function CartPage() {
+  const { items, count, setQty, remove, clear } = useCart();
+  const [products, setProducts] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!items.length) { setProducts([]); return; }
+    getProductsByIds(items.map((i) => i.productId)).then(setProducts);
+  }, [items]);
+
+  if (!items.length) return <p data-testid="cart-empty">Cart is empty</p>;
+
+  return (
+    <div data-testid="cart-root">
+      <ul data-testid="cart-items">
+        {items.map((item) => {
+          const product = products.find((p) => p.id === item.productId);
+          return (
+            <li key={item.productId} data-testid="cart-item" data-product-id={item.productId}>
+              <span data-testid="cart-item-title">{product?.localizeInfos?.title ?? `#${item.productId}`}</span>
+              <button data-testid="cart-qty-decrease" onClick={() => setQty(item.productId, item.qty - 1)}>−</button>
+              <span data-testid="cart-item-qty">{item.qty}</span>
+              <button data-testid="cart-qty-increase" onClick={() => setQty(item.productId, item.qty + 1)}>+</button>
+              <button data-testid="cart-item-remove" onClick={() => remove(item.productId)}>×</button>
+            </li>
+          );
+        })}
+      </ul>
+      <div data-testid="cart-total">Items: {count}</div>
+      <button onClick={clear}>Clear</button>
+    </div>
+  );
+}
+```
+
+Server Action for loading products (public method — can be called from the server):
+
+```typescript
+// app/actions/products.ts
+'use server';
+import { getApi, isError } from '@/lib/oneentry';
+
+export async function getProductsByIds(ids: number[]) {
+  if (!ids.length) return [];
+  const result = await getApi().Products.getProductsByIds(ids.join(','));
+  return isError(result) ? [] : result;
+}
+```
+
+> ⚠️ Do NOT take the total amount (money) from `cart.total` — this is the number of items. Calculate the price based on product attributes (`price`/`sale`) after loading, or via `Orders.previewOrder` at checkout (see [`rules/orders.md`](../../rules/orders.md)).
+
+---
+
+## Step 6: Merging Guest Cart Upon Login (Optional)
+
+After authorization, the SDK switches from `guestId` to user token — these are **different carts**. If you need to preserve the guest cart, merge it into the user cart immediately after `reDefine`:
+
+```ts
+// call ONCE immediately after successful login, before reloading the user cart
+async function mergeGuestCartIntoUser(guestItems: { productId: number; qty: number }[]) {
+  if (!guestItems.length) return;
+  const userCart = await getApi().Users.getCart();
+  if (isError(userCart)) return;
+  // merging: summing qty by productId
+  const map = new Map<number, number>();
+  for (const i of [...userCart.items, ...guestItems]) {
+    map.set(i.productId, (map.get(i.productId) ?? 0) + i.qty);
+  }
+  await getApi().Users.setCart({
+    items: [...map.entries()].map(([productId, qty]) => ({ productId, qty })),
+  });
+}
+```
+
+> Read the guest cart via `getCart()` BEFORE `reDefine` (while the guest id is active), then after `reDefine` — merge and call `reload()` on the context.
+
+---
+
 ## Important Details
 
 ```md
-✅ Cart manager created. Key rules:
+✅ A cart manager has been created on the server API. Key rules:
 
-1. productsData (id + qty) is persisted — products (full data) are NOT persisted
-2. Load products from API when mounting CartPage by id from productsData
-3. selectCartTotal — clarify attribute markers price/sale with the user!
-4. On the server, storage = noop (no localStorage) — PersistGate handles hydration
-5. serializableCheck: false — needed for redux-persist
-6. If favorites are needed — add FavoritesSlice similarly (whitelist: ['products'])
+1. The cart is on the server (Users.*) — cross-device, works for user and guest (guest id auto in the browser)
+2. addCartItem({ productId, qty }) — UPSERT (sets qty), not increment
+3. Each mutating method returns the updated cart — apply it as truth, roll back to prev on IError
+4. The server only stores productId+qty — load full products via getProductsByIds
+5. cart.total — number of items, NOT the sum of money; calculate price based on attributes / previewOrder
+6. After login, guest and user — different carts; if necessary, merge via setCart (Step 6)
+7. On the server (SSR/Server Action), guest id is NOT auto — explicit setGuestId from cookie is needed (see 03-sdk-init.md)
 ```
 
 ---
 
-## Step 7: Playwright E2E tests
+## Step 7: Playwright E2E Tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> For setting up Playwright — first `/setup-playwright`.
+> For Playwright setup — first `/setup-playwright`.
 
-### 7.1 Add `data-testid` to components
+> ⚠️ Persistence is now **server-side**: after `reload()`, the cart is saved since the guest id in `localStorage` (`oneentry_guest_id`) is stable and the server stores the cart under it. The test reload checks exactly this (not `persist:cart-slice`).
 
-For selector stability — add `data-testid` when generating cart components:
+### 7.1 `data-testid` already in components (Steps 4–5)
 
-```tsx
-// AddToCartButton (or similar button on product card)
-<button
-  data-testid="add-to-cart"
-  data-product-id={product.id}
-  onClick={() => dispatch(addProductToCart({ id: product.id, quantity: 1 }))}>
-  Add to Cart
-</button>
+`add-to-cart`, `remove-from-cart`, `cart-root`, `cart-items`, `cart-item`, `cart-item-qty`, `cart-qty-increase/decrease`, `cart-item-remove`, `cart-empty`, `cart-total`.
 
-// When the product is already in the cart
-<button data-testid="remove-from-cart" data-product-id={product.id}>
-  In Cart ({qty})
-</button>
-
-// CartDrawer / CartPage (cart page)
-<div data-testid="cart-root">
-  {items.length === 0 ? (
-    <p data-testid="cart-empty">Cart is empty</p>
-  ) : (
-    <ul data-testid="cart-items">
-      {items.map((item) => (
-        <li key={item.id} data-testid="cart-item" data-product-id={item.id}>
-          <span data-testid="cart-item-title">{item.title}</span>
-          <span data-testid="cart-item-qty">{item.quantity}</span>
-          <button data-testid="cart-qty-decrease" aria-label="Decrease">−</button>
-          <button data-testid="cart-qty-increase" aria-label="Increase">+</button>
-          <button data-testid="cart-item-remove" aria-label="Remove">×</button>
-        </li>
-      ))}
-    </ul>
-  )}
-  <div data-testid="cart-total">{total}</div>
-</div>
-
-// Product count in the header (if any)
-<span data-testid="cart-badge">{itemsCount}</span>
-```
-
-### 7.2 Gather test parameters and fill in `.env.local`
-
-**Algorithm (execute step by step, do not ask in one list):**
-
-1. **Path to the catalog/product cards** (where to click "Add to Cart") — ask: "What is the path to the page with the product list where there is an 'Add to Cart' button? (for example `/shop`, `/catalog`, `/products`)".
-   - No response → find it yourself through Glob (`app/**/shop/**/page.tsx`, `app/**/catalog/**/page.tsx`, `app/**/products/**/page.tsx`) and/or Grep for `AddToCartButton`/`data-testid="add-to-cart"`. Report: "Found products in `{path}` — using it".
-2. **Path to the cart page** — ask: "Where is the cart page? (for example `/cart`, `/basket`, or does the cart open as a drawer from any page?)".
-   - No response → Glob (`app/**/cart/**/page.tsx`, `app/**/basket/**/page.tsx`). If found — use the path; if not found — fallback to checking via `data-testid="cart-root"` on the same catalog page (drawer version).
-3. **Number of products on the page** — check yourself via the previously launched `/inspect-api products`: if `total >= 2` → tests for multiple products are included; if `total < 2` → the test "add 2 different products" is commented out. Report: "There are `{total}` products in the project — multiple addition test {enabled/disabled}".
-4. **Fill in `.env.local`** (yourself, through Edit/Write — do not ask the user to copy):
+### 7.2 `.env.local` Parameters
 
 ```bash
 # e2e cart
@@ -428,11 +303,11 @@ E2E_SHOP_PATH=/shop
 E2E_CART_PATH=/cart
 ```
 
-If the cart page is not present (drawer version) — leave `E2E_CART_PATH` empty, the test will switch to checking the drawer on `E2E_SHOP_PATH`.
+(Find paths as before: ask the user → fallback to Glob by `app/**/shop|catalog|cart/**/page.tsx`.)
 
-### 7.3 Create `e2e/cart.spec.ts`
+### 7.3 `e2e/cart.spec.ts`
 
-> ⚠️ Tests work with the real OneEntry project — they click on the actual "Add to Cart" button and check persistence through `localStorage` and `page.reload()`.
+> ⚠️ Tests work with the real OneEntry project: the guest cart is created on the server under the auto guest id. In `beforeEach`, we clear `localStorage` (reset guest id → new empty cart).
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -440,11 +315,10 @@ import { test, expect } from '@playwright/test';
 const SHOP_PATH = process.env.E2E_SHOP_PATH || '/shop';
 const CART_PATH = process.env.E2E_CART_PATH || '';
 
-test.describe('Cart (Redux + persist)', () => {
+test.describe('Cart (server API, guest mode)', () => {
   test.beforeEach(async ({ page }) => {
-    // Clear localStorage to start with an empty cart
     await page.goto(SHOP_PATH);
-    await page.evaluate(() => localStorage.clear());
+    await page.evaluate(() => localStorage.clear()); // reset guest id → new cart
     await page.reload();
     await page.getByTestId('add-to-cart').first().waitFor({ timeout: 10_000 });
   });
@@ -453,100 +327,67 @@ test.describe('Cart (Redux + persist)', () => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();
-
-    // The button on the same card switches to "in cart" state
     await expect(
       page.locator(`[data-testid="remove-from-cart"][data-product-id="${productId}"]`),
-    ).toBeVisible();
+    ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('persistence: after reload, product remains in cart', async ({ page }) => {
+  test('persistence: after reload the cart is saved (server-side)', async ({ page }) => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();
-
-    await page.reload();
     await expect(
       page.locator(`[data-testid="remove-from-cart"][data-product-id="${productId}"]`),
     ).toBeVisible({ timeout: 10_000 });
 
-    // localStorage contains saved productsData (redux-persist key = 'persist:cart-slice')
-    const persisted = await page.evaluate(() => localStorage.getItem('persist:cart-slice'));
-    expect(persisted).toBeTruthy();
-    expect(persisted).toContain('productsData');
+    await page.reload();
+    // the cart was restored from the server under the same guest id
+    await expect(
+      page.locator(`[data-testid="remove-from-cart"][data-product-id="${productId}"]`),
+    ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('cart page/drawer shows added product', async ({ page }) => {
-    const addBtn = page.getByTestId('add-to-cart').first();
-    const productId = await addBtn.getAttribute('data-product-id');
-    await addBtn.click();
-
-    if (CART_PATH) {
-      await page.goto(CART_PATH);
-    }
-    // On the same page (drawer) or on a separate /cart — check that the product is visible
-    const item = page.locator(`[data-testid="cart-item"][data-product-id="${productId}"]`);
-    await expect(item).toBeVisible({ timeout: 10_000 });
-  });
-
-  test('quantity change: + increases, − decreases', async ({ page }) => {
+  test('changing quantity: + increases, − decreases', async ({ page }) => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();
     if (CART_PATH) await page.goto(CART_PATH);
 
     const item = page.locator(`[data-testid="cart-item"][data-product-id="${productId}"]`);
-    await expect(item).toBeVisible();
+    await expect(item).toBeVisible({ timeout: 10_000 });
     const qty = item.getByTestId('cart-item-qty');
     await expect(qty).toHaveText('1');
-
     await item.getByTestId('cart-qty-increase').click();
     await expect(qty).toHaveText('2');
-
     await item.getByTestId('cart-qty-decrease').click();
     await expect(qty).toHaveText('1');
   });
 
-  test('removing product clears the cart', async ({ page }) => {
+  test('removing a product clears the cart', async ({ page }) => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();
     if (CART_PATH) await page.goto(CART_PATH);
 
     const item = page.locator(`[data-testid="cart-item"][data-product-id="${productId}"]`);
-    await expect(item).toBeVisible();
+    await expect(item).toBeVisible({ timeout: 10_000 });
     await item.getByTestId('cart-item-remove').click();
-
     await expect(item).toHaveCount(0);
     await expect(page.getByTestId('cart-empty')).toBeVisible();
   });
-
-  // ⚠️ Uncomment if there are >= 2 products in the project
-  // test('adding two different products — two items in the cart', async ({ page }) => {
-  //   const buttons = page.getByTestId('add-to-cart');
-  //   await buttons.nth(0).click();
-  //   await buttons.nth(1).click();
-  //   if (CART_PATH) await page.goto(CART_PATH);
-  //   await expect(page.getByTestId('cart-item')).toHaveCount(2);
-  // });
 });
 ```
 
-### 7.4 Report to the user about the decisions made
-
-Before completing the task — explicitly inform:
+### 7.4 Report to the User
 
 ```
-✅ e2e/cart.spec.ts created
-✅ data-testid added to AddToCartButton and CartDrawer/CartPage
+✅ e2e/cart.spec.ts created (server cart, guest mode)
+✅ data-testid in AddToCartButton and CartPage
 ✅ .env.local updated (E2E_SHOP_PATH, E2E_CART_PATH)
 
 Decisions made automatically (if applicable):
-- Catalog path: {SHOP_PATH} — {user specified / found via Glob search}
-- Cart path: {CART_PATH / empty — drawer version} — {user specified / found / not found}
-- Multiple addition test: {enabled — {total} products in the project / commented out — less than 2 products}
+- Catalog path: {SHOP_PATH} — {specified / found via Glob}
+- Cart path: {CART_PATH / empty — drawer} — {specified / found / not found}
 
 Run: npm run test:e2e -- cart.spec.ts
 ```
-
-If the cart page is not found — tests work with the drawer version on the same catalog page (the check is done via `data-testid="cart-item"` regardless of the URL).

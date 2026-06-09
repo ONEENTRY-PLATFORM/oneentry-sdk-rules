@@ -47,8 +47,10 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 - `localizeInfos: IFormLocalizeInfo` — form localization: `title`, as well as `titleForSite`, `successMessage`, `unsuccessMessage`, `urlAddress`, `database`, `script`
 - `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`
 - `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`
-- `validators[name].errorMessage` — custom error message text for the validator (set in admin panel)
+- `validators[name].errorMessage` — custom error text for the validator (set in admin panel)
 - `additionalFields: Record<marker, IFormAttributeAdditionalField>` — SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others
+- `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — form type (the typo `sing_in_up` — from the API, it is as it is). Choose behavior based on it: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings
+- `moduleFormConfigs[].exceptionIds?: string[]` — list of excluded identifiers in the module config (for example, entities for which the form does not apply)
 
 **Types for form fields — import from `oneentry/dist/forms/formsInterfaces`:**
 
@@ -61,9 +63,9 @@ import type {
 } from 'oneentry/dist/forms/formsInterfaces'
 ```
 
-> ⚠️ For form fields use `IFormAttribute`, not `IAttributesSetsEntity`. `IAttributesSetsEntity` is a type for AttributesSets API (`getAttributes`, `getAttributeSetByMarker`), it has a different structure and lacks form-specific flags (`isLogin`, `isSignUp`, `isNotification*`).
+> ⚠️ For form fields use `IFormAttribute`, not `IAttributesSetsEntity`. `IAttributesSetsEntity` is the type for AttributesSets API (`getAttributes`, `getAttributeSetByMarker`), it has a different structure and lacks form-specific flags (`isLogin`, `isSignUp`, `isNotification*`).
 
-**Using `localizeInfos` of the form:**
+**Using form `localizeInfos`:**
 
 ```tsx
 // Success/error message from form settings in the admin panel
@@ -73,7 +75,7 @@ if (result.success) {
   setMessage(form.localizeInfos?.unsuccessMessage || 'Submission failed')
 }
 
-// Form title for the site (different from internal title)
+// Form title for the site (differs from internal title)
 const heading = form.localizeInfos?.titleForSite || form.localizeInfos?.title
 ```
 
@@ -95,12 +97,12 @@ const hint = field.additionalFields?.hint?.value || ''
 
 **Mapping validator errors:**
 
-On error `postFormsData` `IError.message` — an array of strings with field markers or messages. To display custom errors, build a map from the form:
+In case of an error `postFormsData` `IError.message` — an array of strings with field markers or messages. To display custom errors, build a map from the form:
 
 ```ts
 import type { IFormAttribute } from 'oneentry/dist/forms/formsInterfaces'
 
-// From form attributes, we get custom validator errors
+// From form attributes we get custom validator errors
 function buildValidatorErrors(attributes: IFormAttribute[]): Record<string, string> {
   const map: Record<string, string> = {}
   for (const attr of attributes) {
@@ -190,7 +192,7 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
 
 **⚠️ UI — NOT a regular `<input type="text">`**
 
-For fields `date` / `dateTime` / `time` **always** render the corresponding native picker or library calendar. A regular text input is prohibited: the user will enter a string, it will not pass validation and will not be assembled into the correct `{ fullDate, formattedValue, formatString }`.
+For `date` / `dateTime` / `time` fields, **always** render the corresponding native picker or library calendar. A regular text input is prohibited: the user will enter a string, it will not pass validation and will not be assembled into the correct `{ fullDate, formattedValue, formatString }`.
 
 | `attribute.type` | Native input | Alternative |
 | --- | --- | --- |
@@ -200,10 +202,10 @@ For fields `date` / `dateTime` / `time` **always** render the corresponding nati
 
 **Rules for `formatString` from the schema** (defined in the admin panel via `additionalFields.formatString` or `validators`):
 
-- If a specific format is needed (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`) — take it from the attribute and use it when constructing `formattedValue`.
+- If a specific format is needed (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`) — take it from the attribute and use it when building `formattedValue`.
 - If the format is not specified — apply the default value for the type (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`).
 
-**Assembling value from the native input:**
+**Assembling value from native input:**
 
 ```ts
 // date
@@ -215,7 +217,7 @@ const value = { fullDate: iso, formattedValue: formatted, formatString: 'DD-MM-Y
 // dateTime
 const input = '2024-05-07T18:30' // value from <input type="datetime-local">
 const iso = new Date(input).toISOString()
-// formattedValue according to formatString from the attribute schema
+// formattedValue by formatString from the attribute schema
 
 // time — sent with a reference date (usually today)
 const input = '14:30' // value from <input type="time">
@@ -224,7 +226,7 @@ const d = new Date(); d.setUTCHours(h, m, 0, 0)
 const value = { fullDate: d.toISOString(), formattedValue: input, formatString: 'HH:mm' }
 ```
 
-**Dynamic rendering of a field in the form (pattern):**
+**Dynamic field rendering in the form (pattern):**
 
 ```tsx
 if (attr.type === 'date') {
@@ -238,7 +240,7 @@ if (attr.type === 'time') {
 }
 ```
 
-> ⚠️ Do not confuse with `timeInterval` — this is a list of available slots (see `.claude/rules/attribute-values.md`), rendered as a separate date+slot selector, not an input.
+> ⚠️ Do not confuse with `timeInterval` — this is a list of available slots (see `.claude/rules/attribute-values.md`), rendered as a separate date+slot selector, not as an input.
 
 ### text — value is an ARRAY with ONE object, only one of htmlValue/plainValue/mdValue
 
@@ -246,7 +248,7 @@ if (attr.type === 'time') {
 // ❌ INCORRECT — passing a string
 { marker: 'message', type: 'text', value: 'Hello' }
 
-// ✅ CORRECT — an array with one object, only one field
+// ✅ CORRECT — array with one object, only one field
 { marker: 'message', type: 'text', value: [{ plainValue: 'Hello world' }] }
 { marker: 'message', type: 'text', value: [{ htmlValue: '<p>Hello</p>', params: { editorMode: 'html' } }] }
 { marker: 'message', type: 'text', value: [{ mdValue: '**Hello**' }] }
@@ -274,7 +276,7 @@ if (attr.type === 'time') {
 { marker: 'color', type: 'radioButton', value: ['red'] }
 ```
 
-### entity — numeric ids for pages, strings with prefix for products
+### entity — numeric ids for pages, strings with a prefix for products
 
 ```ts
 // Pages — numeric ids
@@ -294,13 +296,13 @@ if (attr.type === 'time') {
     ['2025-02-11T16:00:00.000Z', '2025-02-11T18:00:00.000Z']
   ]
 }
-// value — an array of arrays [startISO, endISO]
+// value — array of arrays [startISO, endISO]
 ```
 
 ### image, groupOfImages — File object
 
 ```ts
-// A File object is needed (not a URL string!)
+// Needs a File object (not a URL string!)
 const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png')
 { marker: 'photo', type: 'image', value: [file] }
 { marker: 'gallery', type: 'groupOfImages', value: [file1, file2] }
@@ -338,7 +340,7 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 // app/actions/forms.ts
 'use server'
 
-// ⚠️ message from validators — an array of strings, always normalize
+// ⚠️ message from validators — array of strings, always normalize
 function normalizeError(message: string | string[]): string {
   return Array.isArray(message) ? message.join('; ') : message
 }
@@ -375,7 +377,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
 ---
 
-## Response from postFormsData
+## Response postFormsData
 
 ```json
 {
@@ -388,10 +390,13 @@ export async function submitContactForm(formValues: Record<string, any>) {
     "isUserAdmin": false,
     "formModuleId": 2,
     "userIdentifier": null,
-    "parentId": null
+    "parentId": null,
+    "fingerprint": null
   },
   "actionMessage": "Message about successful data processing"
 }
 ```
 
 `result.formData.id` — id of the created record.
+
+> ⚠️ `fingerprint` — now `string | null`. For anonymous submissions and submissions via app-token (without user session) it comes as `null`. Do not rely on its presence — check for `null` before use.

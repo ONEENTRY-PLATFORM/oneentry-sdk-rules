@@ -22,20 +22,20 @@ export default async function Page({
   params: Promise<{ locale: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { locale } = await params;     // ← mandatory!
-  const sp = await searchParams;       // ← mandatory!
+  const { locale } = await params;     // ← required!
+  const sp = await searchParams;       // ← required!
 }
 ```
 
 ## pageUrl = marker, NOT route path
 
 ```typescript
-// ❌ INCORRECT — passing the full route path
+// ❌ INCORRECT — you pass the full route path
 getApi().Pages.getPageByUrl('shop/category/about', locale)
 
 // ✅ CORRECT — only the marker from the pageUrl field in OneEntry
 getApi().Pages.getPageByUrl('about', locale)
-// URL in the app: /shop/category/about
+// URL in the application: /shop/category/about
 // pageUrl in OneEntry: "about"
 ```
 
@@ -78,3 +78,8 @@ return <h1>About Us</h1>
 // ✅ CORRECT — content from CMS
 return <h1>{page.localizeInfos?.title}</h1>
 ```
+
+> Related rules:
+>
+> - `.claude/rules/performance.md` — `force-static` + `revalidate`, wrapping `useSearchParams` in `<Suspense>`, passing Promise in layout instead of `await`, `Promise.all` for independent fetches.
+> - `.claude/rules/performance-streaming.md` — `loading.tsx` for each route segment, local `<Suspense>` around slow blocks, PPR via `experimental.ppr: 'incremental'`, cannot stream `generateMetadata`.
