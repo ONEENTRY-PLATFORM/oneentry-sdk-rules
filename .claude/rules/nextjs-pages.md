@@ -22,15 +22,15 @@ export default async function Page({
   params: Promise<{ locale: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { locale } = await params;     // ← required!
-  const sp = await searchParams;       // ← required!
+  const { locale } = await params;     // ← mandatory!
+  const sp = await searchParams;       // ← mandatory!
 }
 ```
 
 ## pageUrl = marker, NOT route path
 
 ```typescript
-// ❌ INCORRECT — you pass the full route path
+// ❌ INCORRECT — passing the full route path
 getApi().Pages.getPageByUrl('shop/category/about', locale)
 
 // ✅ CORRECT — only the marker from the pageUrl field in OneEntry
@@ -55,7 +55,7 @@ export default async function MyPage({
   // Parallel requests — faster
   const [page, blocks] = await Promise.all([
     getApi().Pages.getPageByUrl('my-page-marker', locale),
-    getApi().Pages.getBlocksByPageUrl('my-page-marker'),
+    getApi().Pages.getBlocksByPageUrl('my-page-marker', locale),
   ]);
 
   if (isError(page)) notFound();

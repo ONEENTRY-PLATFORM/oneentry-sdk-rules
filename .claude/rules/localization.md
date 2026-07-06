@@ -37,7 +37,8 @@ getApi().Pages.getPageByUrl('home', locale)
 
 ## langCode — optional parameter
 
-`langCode` is set during the initialization `defineOneEntry(url, { langCode })` and is used by default. Pass `locale` explicitly only in the multilingual route `app/[locale]/`.
+`langCode` is set when initializing `defineOneEntry(url, { token, langCode })` (`token` is required — from 1.0.154 SDK throws `Error` if it's missing) and is used by default.
+Pass `locale` explicitly only in the multilingual route `app/[locale]/`.
 
 ```typescript
 // Monolingual project — langCode is not needed explicitly
@@ -67,7 +68,9 @@ const lang = getLang() // 'en_US' or another SDK initialization language
 ```typescript
 page.localizeInfos?.title        // title
 page.localizeInfos?.htmlContent  // HTML content (for dangerouslySetInnerHTML)
-page.localizeInfos?.content      // plain text
+
+// plain text — runtime field plainContent, which is not in type ILocalizeInfo → needs casting
+const plain = (page.localizeInfos as { plainContent?: string | null })?.plainContent
 
 // Blocks: localizeInfos as fallback if there are no attributes
 const title = attrs.title?.value || block.localizeInfos?.title || ''
@@ -77,13 +80,13 @@ const title = attrs.title?.value || block.localizeInfos?.title || ''
 
 ## UI String Dictionary — `static_content` AttributeSet + `t()` helper
 
-For UI microcopy (`"Add to cart"`, `"No reviews yet"`, section headers) — create an AttributeSet in the admin panel with the marker `static_content`. Each attribute inside is a pair `marker → value` for one locale. On the front end — a single helper `t(marker, fallback)`.
+For UI microcopy (`"Add to cart"`, `"No reviews yet"`, section headers) — create an AttributeSet in the admin panel with the marker `static_content`. Each attribute inside is a pair `marker → value` for one locale. On the frontend — a single helper `t(marker, fallback)`.
 
 **Why this way, and not `<h2>Add to cart</h2>` in JSX:**
 
 - The user edits microcopy through the admin panel without touching the code.
 - One source of truth for each string — no duplicates of `"Add to cart"` in 5 files.
-- Translating to another locale — adding a new localization in the admin panel, no code release.
+- Translating to another locale — adding a new localization in the admin panel, no code release needed.
 
 **Implementation (Server Component):**
 
@@ -102,14 +105,16 @@ const getCachedData = async <T>(key: string, fetchFn: () => Promise<T>): Promise
   return data;
 };
 
-const fetchDictionary = async (): Promise<IAttributeValues> => {
+// locale is required in a multilingual route: without it getAttributesByMarker takes the language
+// of SDK initialization (this.state.lang) and will return one language for all locales.
+const fetchDictionary = async (locale?: string): Promise<IAttributeValues> => {
   try {
-    const attributes = await getApi().AttributesSets.getAttributesByMarker('static_content');
+    const attributes = await getApi().AttributesSets.getAttributesByMarker('static_content', locale);
     if (!Array.isArray(attributes)) return {} as IAttributeValues;
 
     const dict = {} as IAttributeValues;
     for (const raw of attributes as unknown as Array<{ marker: string; value?: unknown; initialValue?: string }>) {
-      // value may come empty {} if the value for the current locale is not set — fallback to initialValue (default from admin)
+      // value may come empty {} if the value for the current locale is not set — fallback to initialValue (default from admin panel)
       const isEmpty = raw.value == null || (typeof raw.value === 'object' && Object.keys(raw.value as object).length === 0);
       dict[raw.marker] = { ...raw, value: isEmpty ? (raw.initialValue ?? '') : raw.value } as unknown as IAttributeValue;
     }
@@ -119,16 +124,18 @@ const fetchDictionary = async (): Promise<IAttributeValues> => {
   }
 };
 
-export const getDictionary = async (): Promise<IAttributeValues> =>
-  getCachedData('dictionary', fetchDictionary);
+// Cache key includes locale, otherwise the first requested language will "stick" for all locales.
+export const getDictionary = async (locale?: string): Promise<IAttributeValues> =>
+  getCachedData(locale ? `dictionary:${locale}` : 'dictionary', () => fetchDictionary(locale));
 
 /**
  * Server-side helper for reading a dictionary string by marker.
+ * In a multilingual route, pass locale from params.
  *
- * Usage: `const title = await t('featured_objects', 'Featured objects');`
+ * Usage: `const title = await t('featured_objects', 'Featured objects', locale);`
  */
-export const t = async (marker: string, fallback: string): Promise<string> => {
-  const dict = await getDictionary();
+export const t = async (marker: string, fallback: string, locale?: string): Promise<string> => {
+  const dict = await getDictionary(locale);
   const value = dict?.[marker]?.value;
   return typeof value === 'string' && value.length > 0 ? value : fallback;
 };
@@ -137,19 +144,20 @@ export const t = async (marker: string, fallback: string): Promise<string> => {
 **Usage:**
 
 ```tsx
-// app/page.tsx — Server Component
+// app/[locale]/page.tsx — Server Component
 import { t } from '@/app/dictionaries';
 
-export default async function HomePage() {
+export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
+  const { locale } = await params;
   return (
     <section>
-      <h2>{await t('featured_objects', 'Featured objects')}</h2>
-      <p>{await t('home_intro', 'Welcome — order delivery in one tap.')}</p>
+      <h2>{await t('featured_objects', 'Featured objects', locale)}</h2>
+      <p>{await t('home_intro', 'Welcome — order delivery in one tap.', locale)}</p>
     </section>
   );
 }
 ```
 
-**If the marker is not in the admin panel** — `t()` returns fallback. Add an item to [`MISMATCH-LOG.md`](mismatch-log.md) (section C.4) with the table `marker | type | title | notes`, so the user can create the missing markers in the AttributeSet `static_content`.
+**If the marker is not in the admin panel** — `t()` returns fallback. Add an entry in [`MISMATCH-LOG.md`](mismatch-log.md) (section C.4) with the table `marker | type | title | notes`, so the user can create the missing markers in the AttributeSet `static_content`.
 
-> For Client Components — extract the dictionary via React Context (`<DictionaryProvider value={dict}>`) or through props from the nearest Server Component, rather than calling the SDK on the client.
+> For Client Components — extract the dictionary through React Context (`<DictionaryProvider value={dict}>`) or through props from the nearest Server Component, rather than calling the SDK on the client.

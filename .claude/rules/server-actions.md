@@ -12,8 +12,8 @@ Server Actions are **one of the patterns**, not the only way to call the SDK. Th
 
 | Operation | Recommended Approach | Reason |
 | --- | --- | --- |
-| Public data (Pages, Products, Menus) | Server Component directly / Server Action / Client Component | Depends on the rendering strategy (SSR/SSG/CSR) |
-| Authorization (auth, signUp, generateCode) | **Client Component directly** | ⚠️ The SDK passes the device fingerprint — on the client, the fingerprint is unique for each user device |
+| Public data (Pages, Products, Menus) | Server Component directly / Server Action / Client Component | Depends on rendering strategy (SSR/SSG/CSR) |
+| Authorization (auth, signUp, generateCode) | **Client Component directly** | ⚠️ The SDK sends the device fingerprint — on the client, the fingerprint is unique for each user device |
 | User data (Orders, Users) | Client Component via `getApi()` after `reDefine()` | The token is managed by `saveFunction` automatically |
 | Mutations (form submissions, order creation) | Server Action | Server-side validation |
 
@@ -54,9 +54,11 @@ export async function myAction(...) {
 }
 ```
 
-## ⚠️ AuthProvider — NOT through Server Action
+## ⚠️ AuthProvider — NOT via Server Action
 
-Methods `auth`, `signUp`, `generateCode`, `checkCode` **should be called directly from Client Component** — the SDK passes the device fingerprint. On the server, in `deviceInfo.browser`, it will be `"Node.js/..."` instead of the user's actual browser.
+Methods `auth`, `signUp`, `generateCode`, `checkCode` **should be called directly from Client Component** — the SDK sends the device fingerprint. On the server, `deviceInfo.browser` will be `"Node.js/..."` instead of the user's actual browser, and the refresh token tied to the server fingerprint will not be updated from the browser.
+
+Exception (SDK ≥ 1.0.155): server call is allowed with passing the browser fingerprint through `deviceMetadata` (main case — OAuth code exchange). Pattern — `03-sdk-init.md`, section "Device metadata", and `rules/auth-provider.md`.
 
 ```typescript
 // ❌ INCORRECT — auth in Server Action
@@ -73,7 +75,7 @@ const result = await getApi().AuthProvider.auth('email', { authData }); // finge
 
 > Detailed rules: `.claude/rules/auth-provider.md`
 
-## User-authorized Methods (Orders, Users, Payments, Events)
+## User-authorized Methods (Orders, Users, Payments, Events, Subscriptions, WS)
 
 Call **directly from Client Component** via `getApi()` — after `reDefine(refreshToken, locale)` has been called (usually in AuthContext during initialization):
 
@@ -81,7 +83,7 @@ Call **directly from Client Component** via `getApi()` — after `reDefine(refre
 'use client';
 import { getApi, isError } from '@/lib/oneentry';
 
-// ✅ Direct call from client — token already set up via reDefine()
+// ✅ Direct call from client — token is already set up via reDefine()
 const user = await getApi().Users.getUser();
 if (isError(user)) return;
 
@@ -97,11 +99,11 @@ const orders = await getApi().Orders.getAllOrdersByMarker('storage');
 | Pages, Products, Menus, Blocks | Server Component / Server Action / Client | `getApi()` |
 | Forms (getFormByMarker) | Server Component / Server Action / Client | `getApi()` |
 | FormData (postFormsData) | Server Action or Client Component | `getApi()` |
-| Orders, Users, Payments, Events | Client Component | `getApi()` after `reDefine()` |
+| Orders, Users, Payments, Events, Subscriptions, WS | Client Component | `getApi()` after `reDefine()` |
 
 ## Server Component Wrappers — An Alternative to Server Actions for Read Operations
 
-For read operations in Server Components, it is more convenient to create regular async functions (not Server Actions) that return a standard response shape. This allows the use of Next.js cache and avoids the overhead of `'use server'`.
+For read operations in Server Components, it is more convenient to create regular async functions (not Server Actions) that return a standard response shape. This allows using Next.js cache and avoids the overhead of `'use server'`.
 
 ```typescript
 // app/api/server/products/getProducts.ts — NOT a Server Action, just an async function
@@ -118,7 +120,7 @@ export const getProducts = async (filters?: IFilterParams[]) => {
 const { items, total, isError: hasError } = await getProducts(filters)
 ```
 
-**When to Use Server Action vs. Wrapper:**
+**When to Use Server Action, When to Use Wrapper:**
 
 | Criterion              | Server Action `'use server'` | Server Component Wrapper |
 |-----------------------|------------------------------|--------------------------|
@@ -141,7 +143,7 @@ import { getApi, isError } from '@/lib/oneentry';
 
 // Search — client call
 async function handleSearch(query: string) {
-  const results = await getApi().Products.searchProducts({ name: query });
+  const results = await getApi().Products.searchProduct(query); // langCode is optional (default from SDK config)
   if (isError(results)) return [];
   return results;
 }
@@ -149,5 +151,5 @@ async function handleSearch(query: string) {
 
 > Related rules:
 >
-> - `.claude/rules/performance.md` — composition `unstable_cache(impl, [keyParts], { revalidate, tags })` over React `cache()` for server fetchers; `Promise.all` for independent calls within a single server action.
+> - `.claude/rules/performance.md` — composition of `unstable_cache(impl, [keyParts], { revalidate, tags })` over React `cache()` for server fetchers; `Promise.all` for independent calls within a single server action.
 > - `.claude/rules/performance-bundle.md` — `@oneentry/web-sdk` is imported **only** in server-action / server-component files; importing in `'use client'` pulls +80 KB gzipped into each client chunk.

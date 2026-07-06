@@ -9,9 +9,18 @@ paths:
 
 # Authorization Tokens — OneEntry Rules
 
-## saveFunction — automatic saving of refreshToken
+## How the SDK Works with Tokens (SDK ≥ 1.0.152)
 
-`saveFunction` in the SDK config is a passive callback that the SDK automatically calls on each token rotation via `/refresh`. It allows you not to manually track token updates.
+- `defineOneEntry(url, config)` only places `config.auth.refreshToken` in state — **there is no `/refresh` request when creating the instance**.
+- **Proactive refresh on the first request:** if there is a `refreshToken` in state, no `accessToken`, and `customAuth` is not enabled, then **before** sending the request, the SDK itself calls `POST /users/refresh`, places both tokens in state, calls `saveFunction`, substitutes `Authorization`, and removes `x-guest-id`. The result: the first user-auth request goes as a clean pair `POST /refresh 200 → 200` — **without a spurious `401` in the console**.
+- The reactive path `401 → refresh → retry` is preserved **only** for the expiration of the access token in the middle of a session. If the proactive refresh has already failed, the reactive one does not start — there will be no second knowingly dead `/refresh`.
+- Refresh **single-flight**: parallel requests of one instance share one internal refresh and do not burn a one-time token. Deduplication only covers the internal mechanism — **explicit** parallel `AuthProvider.refresh` calls are not deduplicated.
+- `customAuth: true` disables both proactive and reactive refresh — a mode of complete manual token management; it does not participate in automatic session initialization.
+- **Device binding:** The API binds the refresh token to the `x-device-metadata` header (fingerprint); the SDK sends it on every POST and on `/refresh`. With SDK ≥ 1.0.155, the string can be overridden: `config.deviceMetadata` in `defineOneEntry` or `setDeviceMetadata(str)` in any module (`''` — reset to computed fingerprint); the actually sent string is returned by `getDeviceMetadata()`.
+
+## saveFunction — Automatic Saving of refreshToken
+
+`saveFunction` in the SDK config is a passive callback that the SDK automatically calls on each token rotation via `/refresh`. It allows you not to manually track the token update.
 
 ```typescript
 // lib/oneentry.ts
@@ -23,35 +32,140 @@ const saveFunction = async (refreshToken: string) => {
 
 defineOneEntry(url, {
   token: appToken,
-  auth: { saveFunction }, // ← SDK calls this on every /refresh
+  auth: { saveFunction }, // ← SDK calls this on each successful /refresh
 })
 ```
 
-Thanks to `saveFunction`, the token is always up to date in `localStorage` — there is no need to return `newToken` from functions manually.
+Thanks to `saveFunction`, the token is always up to date in `localStorage` — there is no need to return `newToken` from functions manually. **Important:** `saveFunction` is called **only on successful** refresh — on failure, the SDK does not touch the storage (see "Clearing Dead Token").
 
 ## Token Storage (Client)
 
 ```typescript
-// After successful login (key with a hyphen!)
+// After auth() (email login) it is NOT necessary to save manually —
+// auth() itself places both tokens in state and calls saveFunction.
+
+// After oauth() — save manually (oauth tokens are NOT saved in state and saveFunction is not called):
 localStorage.setItem('refresh-token', result.refreshToken)
 
 // After logout
 localStorage.removeItem('refresh-token')
 ```
 
-> `saveFunction` automatically updates `'refresh-token'` on each rotation — manual saving is only needed after the first login.
+> Key — with a hyphen: `'refresh-token'`. Further, `saveFunction` updates it automatically on each rotation.
 
-## reDefine — initializing user-auth session
+## reDefine — Session Initialization from localStorage
 
-In AuthContext during initialization: read `'refresh-token'` from localStorage, check `hasActiveSession`, call `reDefine`. Then all `getApi().Users.*`, `getApi().Orders.*`, etc. work automatically.
+`reDefine(refreshToken, langCode?)` is `defineOneEntry(url, { ..., auth: { refreshToken, saveFunction } })`, where `saveFunction` is closed from the `lib/oneentry.ts` module (the second parameter of the wrapper — language, see `03-sdk-init.md`). It itself **does not** refresh — it only places `refreshToken` in state; the access token will be obtained proactively by the SDK before the first request. Therefore, the initialization pattern: `reDefine(refresh)` + `getUser()`, catch the dead token by **envelope** (not by `catch`) and clear.
 
-`reDefine` does **not** refresh when creating an instance — it only puts `refreshToken` in state. The SDK proactively gets the access token **before the first** user-auth request (SDK ≥ 1.0.152): if there is a `refreshToken` in state but no `accessToken`, the SDK first calls `/refresh`, then sends the request. The result: `reDefine(refresh)` + first `getApi().Users.*` → clean `200` **without** a spurious `401` in the console. The provider marker is taken from `localStorage.getItem('authProviderMarker')` — **must be saved upon login:**
+```typescript
+import { clearTokens, isError, reDefine } from '@/lib/oneentry';
+
+const initRef = useRef(false);
+
+useEffect(() => {
+  if (initRef.current) return; // StrictMode guard
+  initRef.current = true;
+
+  const init = async () => {
+    const refresh =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('refresh-token')
+        : null;
+    if (!refresh) {
+      setIsLoading(false);
+      return;
+    }
+    try {
+      // The very first request will make a proactive /refresh (without 401),
+      // saveFunction will save the rotated token in localStorage.
+      reDefine(refresh);
+      const res = await getApi().Users.getUser();
+      if (isError(res)) {
+        // isShell: true (default) — SDK does NOT throw, the error comes in the envelope.
+        if (res.statusCode === 401 || res.statusCode === 403) {
+          clearTokens(); // dead refresh token — clear it, otherwise 400 on each load
+        }
+        return;
+      }
+      setUser(res);
+    } catch {
+      clearTokens();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  init();
+}, []);
+```
+
+The provider marker is passed through `auth.providerMarker` (default in SDK — `'email'`): proactive refresh builds the URL `/marker/{providerMarker}/users/refresh` specifically from it. It is **mandatory to save at login:**
 
 ```typescript
 localStorage.setItem('authProviderMarker', AUTH_PROVIDER); // save in AuthForm after auth()
 ```
 
-**`hasActiveSession` and `syncTokens` must be exported from `lib/oneentry.ts`:**
+### Clearing Dead Token — Application's Responsibility
+
+On refresh failure, the SDK only returns an error envelope / `false`; `saveFunction` is called **only on success**. The stale token remains in `localStorage`, and on each load, the pair `POST /refresh (400)` + the original request (401 envelope) is repeated — until the application cleans the storage itself.
+
+`isShell: true` (default) → the SDK returns an envelope, and **does not throw** — `try/catch` will not catch the dead token. Clear by response code:
+
+```typescript
+// lib/oneentry.ts
+export function clearTokens(): void {
+  if (typeof window !== 'undefined') {
+    localStorage.removeItem('refresh-token');
+  }
+}
+
+// in any auth-dependent fetch (init, fetchUser):
+if (isError(res) && (res.statusCode === 401 || res.statusCode === 403)) {
+  clearTokens();
+}
+```
+
+### Alternative: Explicit `AuthProvider.refresh` on Initialization
+
+`AuthProvider.refresh(marker, token)` itself places both `accessToken` **and** `refreshToken` in state and calls `saveFunction` — after it, neither `syncTokens` nor manual `localStorage.setItem` is needed. It provides more explicit detection of a dead token (`/refresh 400 → clearTokens`, `getUser` is not even called), but this is an optional approach, not a necessity.
+
+**Trap:** explicit `refresh()` goes through the same request pipeline. If the instance is created **with** `auth.refreshToken` (as in `reDefine`) and the access token is still absent, before the explicit `POST /refresh`, the proactive internal refresh will trigger with the same token from state — the token is rotated, and the explicit request will go with an already burned token → `400`. The application will call `clearTokens()` on this 400 during an active session. The explicit pattern is safe **only** on an instance created without `auth.refreshToken` (then the proactive refresh does not trigger).
+
+## login() — What to Do After auth() / oauth()
+
+**After `auth()` nothing needs to be synchronized:** `AuthProvider.auth()` itself places both tokens in the state of the current instance and calls `saveFunction` — `syncTokens` and manual `localStorage.setItem('refresh-token', ...)` after it are redundant. However, **`oauth()` does NOT save tokens in state** — you need to set them manually after it.
+
+⚠️ **Trap of server-side `oauth()`:** if the code exchange is performed in a Server Action / route handler without passing the browser's fingerprint, the issued refresh token is bound to the server's Node fingerprint — the proactive `/refresh` from the browser will receive `400` → 401 envelope → `clearTokens()` will log out the active session. Correctly (SDK ≥ 1.0.155): in the browser, take the string `getApi().AuthProvider.getDeviceMetadata()`, pass it to the Server Action, and there create a per-request instance `defineOneEntry(url, { token, deviceMetadata })` before `oauth()` — then the token is refreshed from the browser. See `rules/auth-provider.md` (OAuth section) and `/create-google-oauth`.
+
+```typescript
+// ✅ email login: auth() has already placed everything in state and saved the refresh token
+const login = async () => {
+  localStorage.setItem('authProviderMarker', AUTH_PROVIDER)
+  setIsAuth(true)
+  await fetchUser()
+}
+
+// ✅ oauth login: set tokens from the response in the current instance manually
+const loginOAuth = async (token: { accessToken: string; refreshToken: string }) => {
+  localStorage.setItem('refresh-token', token.refreshToken)
+  syncTokens(token.accessToken, token.refreshToken) // setAccessToken + setRefreshToken
+  setIsAuth(true)
+  await fetchUser()
+}
+
+// ❌ REDUNDANT — reDefine() in login() creates a new instance without accessToken
+// → SDK will proactively make an unnecessary /refresh and unnecessarily rotate the just issued
+//   token. There is no spurious 401 anymore (≥ 1.0.152), but this is an unnecessary round-trip.
+const login = async (token: ...) => {
+  if (!hasActiveSession()) {
+    await reDefine(token.refreshToken)
+  }
+  await fetchUser()
+}
+```
+
+`reDefine` is **only** for initialization from localStorage when the page loads, not for `login()`.
+
+**`hasActiveSession` and `syncTokens` — export from `lib/oneentry.ts`:**
 
 ```typescript
 // lib/oneentry.ts
@@ -62,8 +176,7 @@ export function hasActiveSession(): boolean {
   return !!authProvider?.state?.accessToken;
 }
 
-// Synchronizes both tokens directly in the current instance
-// Use in login() instead of reDefine() — avoids 401 on the first request
+// Sets both tokens directly in the current instance (needed after oauth())
 export function syncTokens(accessToken: string, refreshToken: string): void {
   apiInstance.AuthProvider.setAccessToken(accessToken);
   apiInstance.AuthProvider.setRefreshToken(refreshToken);
@@ -72,60 +185,7 @@ export function syncTokens(accessToken: string, refreshToken: string): void {
 
 > ❌ `(apiInstance as any).state?.accessToken` — always `undefined`, the SDK does not have `.state` at the top level!
 
-**`syncTokens` in `login()` — a mandatory pattern:**
-
-```typescript
-// ✅ CORRECT — in AuthContext login()
-// Instead of hasActiveSession() + reDefine() use syncTokens
-// Tokens are taken from the auth() / oauth() response and immediately set in the current instance
-const login = async (token: { accessToken: string; refreshToken: string }) => {
-  localStorage.setItem('refresh-token', token.refreshToken)
-  syncTokens(token.accessToken, token.refreshToken)  // ← ready accessToken, without unnecessary /refresh
-  setIsAuth(true)
-  await fetchUser()
-}
-
-// ⚠️ WORSE — reDefine() creates a new instance without accessToken
-// → The SDK proactively will make an unnecessary /refresh and unnecessarily rotate the freshly issued
-//   token. No spurious 401 anymore (≥ 1.0.152), but this is an extra round-trip.
-const login = async (token: ...) => {
-  if (!hasActiveSession()) {
-    await reDefine(token.refreshToken)  // new instance without accessToken
-  }
-  await fetchUser()
-}
-```
-
-**`reDefine` — only for initialization from localStorage when the page loads:**
-
-```typescript
-import { reDefine, hasActiveSession, syncTokens } from '@/lib/oneentry';
-
-// useEffect on load — only here reDefine is needed
-const refresh = localStorage.getItem('refresh-token')
-if (!refresh) { setIsAuth(false); return }
-
-if (!hasActiveSession()) {
-  await reDefine(refresh)  // ← restoring session from localStorage
-}
-```
-
-**Common mistake — using reDefine in login():**
-
-```typescript
-// ⚠️ REDUNDANT — after auth() the SDK has already received accessToken; reDefine resets it
-// and forces the SDK to go to /refresh again (extra request, rotation of the fresh token)
-if (!hasActiveSession()) {
-  await reDefine(token.refreshToken) // new instance without accessToken
-}
-await fetchUser() // 200 (after proactive /refresh — but it's not needed here)
-
-// ✅ BETTER — reuse tokens from the auth() response, without unnecessary /refresh
-syncTokens(token.accessToken, token.refreshToken)
-await fetchUser() // → 200 immediately, without calling /refresh
-```
-
-## updateUserState — writing user.state to the server
+## updateUserState — Writing user.state to the Server
 
 After changing cart/favorites in Redux — synchronize with the server via Server Action:
 
@@ -153,13 +213,13 @@ export async function updateUserState({
 }
 ```
 
-> AuthContext calls `updateUserState` when changing `isAuth`, `user`, `productsInCart`, `favoritesIds`.
+> AuthContext calls `updateUserState` when `isAuth`, `user`, `productsInCart`, `favoritesIds` change.
 
-## StrictMode — protection against double refresh
+## StrictMode — Protection Against Double auth Calls
 
-React StrictMode in dev runs `useEffect` twice. **Important:** single-flight in the SDK (≥ 1.0.152) deduplicates simultaneous refreshes within *one* instance, but `reDefine` creates a **new** instance with its own state each time — two consecutive `reDefine` will lead to two independent `/refresh`, the second will fail (refresh token is one-time) → logout. Therefore, `useRef` guard is still mandatory.
+React StrictMode in dev runs `useEffect` twice. Single-flight in the SDK deduplicates only **internal** refresh (proactive/reactive). Two parallel **explicit** `AuthProvider.refresh`/`auth` from double execution — this results in two independent POSTs with one one-time token → the second `400` → logout. For the pattern `reDefine` + `getUser`, double execution does not burn the token (both requests will share one proactive refresh), but the guard should still be left: it prevents unnecessary pairs of requests and race conditions in `setState`.
 
-**Always add `useRef` guard in components with auth-init:**
+**Always add a `useRef` guard in components with auth-init:**
 
 ```typescript
 const initRef = useRef(false);
@@ -171,27 +231,27 @@ useEffect(() => {
   const init = async () => {
     const refresh = localStorage.getItem('refresh-token');
     if (refresh && !hasActiveSession()) {
-      await reDefine(refresh, 'en_US');
+      reDefine(refresh);
     }
-    // ... loading data
+    // ... load data
   };
   init();
 }, []);
 ```
 
-## Race condition — logout only on confirmed 401/403
+## Race Condition — Log Out Only on Confirmed 401/403
 
-The SDK (≥ 1.0.152) deduplicates simultaneous refreshes within one instance (single-flight) — a race of parallel requests from one `getApi()` no longer burns the token. But between tabs/reloads (fresh context reads the token from localStorage), a race is still possible — hence the rule remains:
+The SDK (≥ 1.0.152) deduplicates simultaneous refreshes within one instance (single-flight) — a race of parallel requests of one `getApi()` no longer burns the token. However, between tabs/reloads (a fresh context reads the token from localStorage), a race is still possible — hence the rule remains:
 
 ```typescript
-// Client Component: logout only on confirmed auth error
+// Client Component: log out only on confirmed auth error
 const result = await getApi().Users.getUser()
-if (isError(result) && (result as any).statusCode === 401) {
-  localStorage.removeItem('refresh-token')
+if (isError(result) && ((result as any).statusCode === 401 || (result as any).statusCode === 403)) {
+  clearTokens()
   window.dispatchEvent(new Event('auth-change'))
 }
 ```
 
 > Related rules:
 >
-> - `.claude/rules/performance-rtk.md` — `pollingInterval` for `getMe`, `reDefine` pattern within RTK Query auth flow, protection against race condition when updating the token with parallel RTK requests.
+> - `.claude/rules/performance-rtk.md` — `pollingInterval` for `getMe`, the pattern `reDefine` within the RTK Query auth flow, protection against race conditions when updating the token with parallel RTK requests.

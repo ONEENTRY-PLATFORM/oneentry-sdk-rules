@@ -34,9 +34,9 @@ What to look for:
 5. **Is there a layout for the card/grid?** — if yes, copy it exactly
 
 > **🛒 The "Add to Cart" button in cards is ALWAYS by default.**
-> When creating the catalog, product cards must contain an "Add to Cart" button.
+> When creating a catalog, product cards must contain an "Add to Cart" button.
 > If the cart is not yet implemented — first run `/create-cart-manager`.
-> The "Add to Favorites" button is added **only at the user's request**.
+> The "Add to Favorites" button is added **only upon user request**.
 
 ---
 
@@ -45,7 +45,7 @@ What to look for:
 ### 3.1 lib/filters.ts — types and parsing URL parameters
 
 > Adapt `FilterParams` to the real filters of the project.
-> Example with price, color, and availability. Add/remove fields as needed.
+> Example with price, color, and availability. Add/remove fields as necessary.
 
 ```typescript
 // lib/filters.ts
@@ -72,14 +72,14 @@ export function parseFilterParams(
 
 ### 3.2 app/actions/products.ts — Server Actions
 
-> Replace the attribute markers (`'price'`, `'color'`, `'in_stock'`) with real ones from `/inspect-api`.
+> Replace attribute markers (`'price'`, `'color'`, `'in_stock'`) with real ones from `/inspect-api`.
 
 ```typescript
 // app/actions/products.ts
 'use server';
 
 import { getApi, isError } from '@/lib/oneentry';
-import type { IProductsEntity, IProductsQuery } from 'oneentry/dist/products/productsInterfaces';
+import type { IProductsEntity, IProductsQueryBase } from 'oneentry/dist/products/productsInterfaces';
 import type { FilterParams } from '@/lib/filters';
 
 export type { FilterParams } from '@/lib/filters';
@@ -88,8 +88,10 @@ function buildFilterBody(filters?: FilterParams): any[] {
   const body: any[] = [];
   // ⚠️ Replace 'price' and 'color' with real attribute markers from /inspect-api!
   // ⚠️ Replace 'in_stock' with the real statusMarker from /inspect-api product-statuses!
-  // `statusMarker` is applied to the entire request if present in ANY IFilterParams record.
-  // Verified: IProductsQuery.statusMarker is ignored by Products.getProducts — the filter must be in the body.
+  // `statusMarker` applies to the entire request if present in ANY IFilterParams record.
+  // With oneentry 1.0.154, statusMarker is absent in the query type of listing methods (getProducts /
+  // getProductsEmptyPage / getProductsByPageId / getProductsByPageUrl) — passing it will cause a TS error.
+  // Status filtering — only through IFilterParams body records.
   const statusMarker = filters?.inStockOnly ? 'in_stock' : undefined;
 
   if (filters?.minPrice != null)
@@ -113,8 +115,8 @@ function buildFilterBody(filters?: FilterParams): any[] {
   return body;
 }
 
-function buildQuery(offset: number, limit: number): IProductsQuery {
-  // ⚠️ DO NOT put statusMarker here — it is ignored by Products.getProducts. Use IFilterParams body.
+function buildQuery(offset: number, limit: number): IProductsQueryBase {
+  // ⚠️ DO NOT place statusMarker here — with 1.0.154 it is not in IProductsQueryBase (TS error). Use IFilterParams body.
   return { offset, limit, sortOrder: 'ASC', sortKey: 'position' };
 }
 
@@ -128,7 +130,7 @@ export async function getProducts(
   const result = await getApi().Products.getProducts(
     buildFilterBody(filters),
     locale,
-    buildQuery(offset, limit, filters),
+    buildQuery(offset, limit),
   );
   if (isError(result)) return { items: [] as IProductsEntity[], total: 0, error: result.message };
   return { items: result.items as IProductsEntity[], total: result.total as number };
@@ -146,7 +148,7 @@ export async function getProductsByCategory(
     categoryUrl,
     buildFilterBody(filters),
     locale,
-    buildQuery(offset, limit, filters),
+    buildQuery(offset, limit),
   );
   if (isError(result)) return { items: [] as IProductsEntity[], total: 0, error: result.message };
   return { items: result.items as IProductsEntity[], total: result.total as number };
@@ -181,6 +183,8 @@ export async function getProductFilterOptions(locale = 'en_US', categoryUrl?: st
   return { prices, colors };
 }
 ```
+
+> **Price Fixation (optional, SDK ≥ 1.0.154):** if the project uses price fixation, pass `signPrice: '<order storage marker>'` (e.g. `'orders'`) in the query — `getProducts`/`getProductsByPageUrl` will return each product with the `signedPrice` field (`IProductsEntity.signedPrice`), and the catalog will show fixed prices. Note: the server cart from `/create-cart-manager` only stores `{ productId, qty }` and does not carry `signedPrice`, and the signature is valid for a limited time. Therefore, in the order line (`IOrderProductData.signedPrice`), get the fresh `signedPrice` at checkout: `Products.getProductsByIds(ids, langCode, { signPrice })` by `productId` from the cart, then pass `signedPrice` in `products[]` when `Orders.createOrder` — coordinate with `/create-checkout`.
 
 ### 3.3 Server Page — reads searchParams, renders ShopView
 
@@ -217,7 +221,7 @@ export default async function ShopPage({
 ### 3.4 ShopView — Client Component, reads filters from URL
 
 > **⚠️ CRITICALLY IMPORTANT:** ShopView MUST read `activeFilters` and `gridKey`
-> from `useSearchParams`, NOT receive as props from the server component.
+> from `useSearchParams`, NOT receive them as props from the server component.
 > Otherwise, `loadMore` in ProductGrid will use outdated filters.
 
 ```tsx
@@ -367,9 +371,9 @@ export function ProductGrid({
 ```md
 1. ShopView reads activeFilters and gridKey from useSearchParams — NOT from props from the server
 2. key={gridKey} on ProductGrid — remount on filter change instead of useEffect
-3. statusMarker (inStockOnly) — in IFilterParams body, NOT in IProductsQuery (SDK type accepts this field, but the API ignores it). If there are no other filter records — add catch-all `{ attributeMarker: 'price', conditionMarker: 'mth', conditionValue: -1, statusMarker }`
+3. statusMarker (inStockOnly) — only in IFilterParams body records: with 1.0.154 the field is not in the query type of listing methods (IProductsQueryBase) — TypeScript will reject it. If there are no other filter records — add catch-all `{ attributeMarker: 'price', conditionMarker: 'mth', conditionValue: -1, statusMarker }`
 4. conditionMarker 'mth'/'lth' for price — use -0.01/+0.01 to include boundaries
-5. params and searchParams in Next.js 15+ — are Promises, must use await
+5. params and searchParams in Next.js 15+ — are Promises, await is required
 6. Attribute markers (price, color) and statusMarker — check via /inspect-api
 7. isLoadingRef instead of useState(loading) — prevents duplicate requests
 8. category pageUrl — is a marker ("shoes"), not a route path ("/shop/category/shoes")
@@ -403,18 +407,18 @@ export function ProductGrid({
 {hasMore && <div ref={loaderRef} data-testid="shop-loader">Loading...</div>}
 ```
 
-### 5.2 Gather Test Parameters and Fill `.env.local`
+### 5.2 Collect Test Parameters and Fill `.env.local`
 
-**Algorithm (execute step by step, do not ask all at once):**
+**Algorithm (perform step by step, do not ask in one list):**
 
-1. **Path of the catalog page** — ask: "What is the path of the catalog page? (for example `/shop`, `/en_US/shop`, `/catalog`)".
+1. **Path of the catalog page** — ask: "What is the path of the catalog page? (e.g. `/shop`, `/en_US/shop`, `/catalog`)".
    - Silent → find it yourself via Glob (`app/**/shop/**/page.tsx`, `app/**/catalog/**/page.tsx`). Report: "Found catalog at `{path}` — using it".
 2. **Filter values** (color/price) — **do not ask the user, choose yourself** using already known data from `/inspect-api`:
    - Color: take the first `value` from the `listTitles` of the color attribute (obtained in `getProductFilterOptions`). Report: "For the color filter test, using `color={value}` — the first value from the project's listTitles".
-   - Price range: take `additional.prices.min` and `additional.prices.max`, narrow it to the middle (for example `min = ⌈(min+max)/2 - 10%⌉`, `max = ⌊(min+max)/2 + 10%⌋`) to ensure there are products. Report: "For the price filter test, using the range `{min}-{max}` (middle of the project's real range)".
-   - If `/inspect-api` is not available — leave variables empty, corresponding tests will include `test.skip`.
+   - Price range: take `additional.prices.min` and `additional.prices.max`, narrow it to the middle (e.g. `min = ⌈(min+max)/2 - 10%⌉`, `max = ⌊(min+max)/2 + 10%⌋`) to ensure there are products. Report: "For the price filter test, using the range `{min}-{max}` (middle of the project's real range)".
+   - If `/inspect-api` is not available — leave the variables empty, corresponding tests will include `test.skip`.
 3. **Number of products** — check yourself: the first request `getProducts({ limit: 1 })` will return `total`. If `total < 11` — comment out the infinite scroll test in the spec file. Report: "The project has only `{total}` products — infinite scroll test disabled".
-4. **Fill `.env.local`** (yourself, through Edit/Write — do not ask the user to insert):
+4. **Fill `.env.local`** (yourself, via Edit/Write — do not ask the user to insert):
 
 ```bash
 E2E_SHOP_PATH=/shop
@@ -433,7 +437,7 @@ If any value could not be determined — leave it empty, the corresponding test 
 import { test, expect } from '@playwright/test';
 
 const SHOP_PATH = process.env.E2E_SHOP_PATH || '/shop'; // ← replace with the real path
-const FILTER_COLOR = process.env.E2E_FILTER_COLOR;       // for example "1" (value from listTitles)
+const FILTER_COLOR = process.env.E2E_FILTER_COLOR;       // e.g. "1" (value from listTitles)
 const FILTER_MIN_PRICE = process.env.E2E_FILTER_MIN_PRICE;
 const FILTER_MAX_PRICE = process.env.E2E_FILTER_MAX_PRICE;
 
@@ -461,7 +465,7 @@ test.describe('Product Catalog', () => {
 
     const initialCount = await cards.count();
     // If everything is on the first page — infinite scroll will not work (less than one limit)
-    test.skip(initialCount < 10, 'The project has less than 10 products — nothing to load');
+    test.skip(initialCount < 10, 'There are less than 10 products in the project — nothing to load');
 
     // Scroll to sentinel — IntersectionObserver should pull more
     await page.getByTestId('shop-loader').scrollIntoViewIfNeeded();
@@ -515,9 +519,9 @@ Before completing the task — explicitly inform:
 
 Decisions made automatically:
 - Catalog path: {SHOP_PATH} — {user specified / found via Glob}
-- Color for filter: {FILTER_COLOR} — first value from listTitles of the color attribute
-- Price range: {MIN}-{MAX} — middle of the real range of the project (from additional.prices)
-- Infinite scroll: {test enabled — project has {total} products / disabled — less than 11 products}
-
+- Color for filter: {FILTER_COLOR} — first value from the listTitles of the color attribute
+- Price range: {MIN}-{MAX} — middle of the project's real range (from additional.prices)
+- Infinite scroll: {test enabled — there are {total} products in the project / disabled — less than 11 products}
+  
 Run: npm run test:e2e -- catalog.spec.ts
 ```

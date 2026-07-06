@@ -4,11 +4,11 @@ description: Create cart manager on the native server cart API (Users.getCart/ad
 ---
 # Create Cart Manager (Server Cart API)
 
-Creates a cart manager on the **native server API** OneEntry (`Users.getCart/setCart/addCartItem/removeCartItem`). The cart is stored on the server and synchronized between devices — for both authorized users and guests (by `guestId`). It does not require Redux/redux-persist.
+Creates a cart manager on the **native server API** OneEntry (`Users.getCart/setCart/addCartItem/removeCartItem`). The cart is stored on the server and synchronized between devices — for authorized users and for guests (by `guestId`). It does not require Redux/redux-persist.
 
-> ℹ️ **Server Cart vs Redux+localStorage.** The server API is cross-device, survives device changes, and is immediately ready for checkout. If you need a purely client-side offline cart without a network — that’s a different pattern (Redux+persist), but by default, we use the server API.
+> ℹ️ **Server Cart vs Redux+localStorage.** The server API is cross-device, survives device changes, and is immediately ready for checkout. If you need a purely client-side offline cart without a network — that is a different pattern (Redux+persist), but by default, we use the server API.
 
-> ⚠️ Cart methods work for **user OR guest**. In the browser, the guest id is created and stored automatically (`localStorage` key `oneentry_guest_id`) — no setup is needed. Therefore, we manage the cart from the **Client Component** via `getApi()` (like orders/profile in this project). More details about guest mode — `03-sdk-init.md`.
+> ⚠️ Cart methods work for **user OR guest**. In the browser, the guest id is created and stored automatically (`localStorage` key `oneentry_guest_id`) — no setup is needed. Therefore, we manage the cart from the **Client Component** through `getApi()` (like orders/profile in this project). Detailed information about guest mode — `03-sdk-init.md`.
 
 ---
 
@@ -58,7 +58,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<ICartItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Apply server response (ICartResponse) as new state
+  // Apply the server response (ICartResponse) as new state
   const apply = useCallback((res: unknown) => {
     const r = res as { items?: ICartItem[] };
     if (!isError(res) && Array.isArray(r?.items)) setItems(r.items);
@@ -79,7 +79,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   );
   const isInCart = useCallback((productId: number) => qtyOf(productId) > 0, [qtyOf]);
 
-  // add: upsert qty (default +1 to current)
+  // add: upsert qty (by default +1 to current)
   const add = useCallback(async (productId: number, qty = 1) => {
     const next = (qtyOf(productId) || 0) + qty;
     const prev = items;
@@ -136,7 +136,7 @@ export function useCart() {
 }
 ```
 
-> The main rule: after each mutation, apply the server response as truth (`apply(res)`) and roll back to `prev` on `IError`. Optimistic updates — for instant UI, server response — final synchronization.
+> The main rule: after each mutation, apply the server response as truth (`apply(res)`) and roll back to `prev` on `IError`. Optimistic updates — for instant UI, the server response — final synchronization.
 
 ---
 
@@ -183,7 +183,7 @@ export function AddToCartButton({ productId }: { productId: number }) {
 
 ## Step 5: Cart Page (Loading Full Products)
 
-The server only stores `productId` + `qty`. Full product data is loaded via `Products.getProductsByIds`:
+The server only stores `productId` + `qty`. Full product data is loaded through `Products.getProductsByIds`:
 
 ```tsx
 'use client';
@@ -239,13 +239,15 @@ export async function getProductsByIds(ids: number[]) {
 }
 ```
 
-> ⚠️ Do NOT take the total amount (money) from `cart.total` — this is the number of items. Calculate the price based on product attributes (`price`/`sale`) after loading, or via `Orders.previewOrder` at checkout (see [`rules/orders.md`](../../rules/orders.md)).
+> ⚠️ Do NOT take the total amount (money) from `cart.total` — this is the number of items. Calculate the price based on product attributes (`price`/`sale`) after loading, or through `Orders.previewOrder` at checkout (see [`rules/orders.md`](../../rules/orders.md)).
+
+> 🔒 **Price Fixation at Checkout (SDK ≥ 1.0.154).** To ensure the price in the order matches the one shown in the cart, load products with the parameter `signPrice`: `Products.getProductsByIds(ids, langCode, { signPrice: '<order storage marker, e.g. "orders">' })` — each product will return with a `signedPrice` field (JWT with fixed price), which is passed to the order item: `products: [{ productId, quantity, signedPrice }]` (`IOrderProductData.signedPrice`). Note: `userQuery` is the third argument, so you need to explicitly pass the second one (`langCode`). The fixation and passing of `signedPrice` in the order — in the skill `/create-checkout`.
 
 ---
 
-## Step 6: Merging Guest Cart Upon Login (Optional)
+## Step 6: Merging Guest Cart upon Login (Optional)
 
-After authorization, the SDK switches from `guestId` to user token — these are **different carts**. If you need to preserve the guest cart, merge it into the user cart immediately after `reDefine`:
+After authorization, the SDK switches from `guestId` to user token — these are **different carts**. If you need to save the guest cart, merge it into the user cart immediately after `reDefine`:
 
 ```ts
 // call ONCE immediately after successful login, before reloading the user cart
@@ -253,7 +255,7 @@ async function mergeGuestCartIntoUser(guestItems: { productId: number; qty: numb
   if (!guestItems.length) return;
   const userCart = await getApi().Users.getCart();
   if (isError(userCart)) return;
-  // merging: summing qty by productId
+  // merge: sum qty by productId
   const map = new Map<number, number>();
   for (const i of [...userCart.items, ...guestItems]) {
     map.set(i.productId, (map.get(i.productId) ?? 0) + i.qty);
@@ -264,7 +266,7 @@ async function mergeGuestCartIntoUser(guestItems: { productId: number; qty: numb
 }
 ```
 
-> Read the guest cart via `getCart()` BEFORE `reDefine` (while the guest id is active), then after `reDefine` — merge and call `reload()` on the context.
+> Read the guest cart through `getCart()` BEFORE `reDefine` (while the guest id is active), then after `reDefine` — merge and call `reload()` on the context.
 
 ---
 
@@ -273,12 +275,12 @@ async function mergeGuestCartIntoUser(guestItems: { productId: number; qty: numb
 ```md
 ✅ A cart manager has been created on the server API. Key rules:
 
-1. The cart is on the server (Users.*) — cross-device, works for user and guest (guest id auto in the browser)
+1. The cart on the server (Users.*) — cross-device, works for user and guest (guest id auto in the browser)
 2. addCartItem({ productId, qty }) — UPSERT (sets qty), not increment
-3. Each mutating method returns the updated cart — apply it as truth, roll back to prev on IError
-4. The server only stores productId+qty — load full products via getProductsByIds
-5. cart.total — number of items, NOT the sum of money; calculate price based on attributes / previewOrder
-6. After login, guest and user — different carts; if necessary, merge via setCart (Step 6)
+3. Each mutating method returns the updated cart — apply it as truth, rollback to prev on IError
+4. The server only stores productId+qty — load full products through getProductsByIds
+5. cart.total — number of items, NOT the amount of money; calculate the price based on attributes / previewOrder
+6. After login, guest and user — different carts; if necessary, merge through setCart (Step 6)
 7. On the server (SSR/Server Action), guest id is NOT auto — explicit setGuestId from cookie is needed (see 03-sdk-init.md)
 ```
 
@@ -287,9 +289,9 @@ async function mergeGuestCartIntoUser(guestItems: { productId: number; qty: numb
 ## Step 7: Playwright E2E Tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> For Playwright setup — first `/setup-playwright`.
+> To set up Playwright — first `/setup-playwright`.
 
-> ⚠️ Persistence is now **server-side**: after `reload()`, the cart is saved since the guest id in `localStorage` (`oneentry_guest_id`) is stable and the server stores the cart under it. The test reload checks exactly this (not `persist:cart-slice`).
+> ⚠️ Persistence is now **server-side**: after `reload()`, the cart is saved, as the guest id in `localStorage` (`oneentry_guest_id`) is stable and the server stores the cart under it. The test reload checks exactly this (not `persist:cart-slice`).
 
 ### 7.1 `data-testid` already in components (Steps 4–5)
 
@@ -332,7 +334,7 @@ test.describe('Cart (server API, guest mode)', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('persistence: after reload the cart is saved (server-side)', async ({ page }) => {
+  test('persistence: after reload, the cart is saved (server-side)', async ({ page }) => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();
@@ -363,7 +365,7 @@ test.describe('Cart (server API, guest mode)', () => {
     await expect(qty).toHaveText('1');
   });
 
-  test('removing a product clears the cart', async ({ page }) => {
+  test('removing product clears the cart', async ({ page }) => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();

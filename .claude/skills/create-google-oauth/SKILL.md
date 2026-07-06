@@ -12,7 +12,7 @@ description: Google OAuth authorization via OneEntry
 
 ---
 
-> ### To set up Google OAuth, you need to perform several steps in the Google Cloud Console:
+> ### To set up Google OAuth, you need to complete several steps in the Google Cloud Console:
 >
 > **1. Create a project (if you don't have one)**
 > - Open [console.cloud.google.com](https://console.cloud.google.com)
@@ -27,7 +27,7 @@ description: Google OAuth authorization via OneEntry
 > **3. Create an OAuth 2.0 client**
 > - **APIs & Services** → **Credentials** → **+ Create Credentials** → **OAuth 2.0 Client ID**
 > - Application type: **Web application**
-> - Name: any (e.g., "My App Web")
+> - Name: any (for example "My App Web")
 > - **Authorized JavaScript origins**: add `http://localhost:3000`
 > - **Authorized redirect URIs**: add `http://localhost:3000/auth/callback`
 > - Click **Create**
@@ -37,7 +37,7 @@ description: Google OAuth authorization via OneEntry
 > - (Or open the created client and copy from there)
 >
 > ---
-> **When you're ready, send me:**
+> **When ready, send me:**
 > - `Client ID` (looks like `123456789-abc...apps.googleusercontent.com`)
 > - `Client Secret` (looks like `GOCSPX-...`)
 > - `Redirect URI` that you added (by default: `http://localhost:3000/auth/callback`)
@@ -61,7 +61,7 @@ Read the current `.env.local` (or create it if it doesn't exist). Add/update the
 ```env
 NEXT_PUBLIC_GOOGLE_CLIENT_ID=<Client ID from user>
 GOOGLE_CLIENT_SECRET=<Client Secret from user>
-NEXT_PUBLIC_APP_URL=<origin from Redirect URI, e.g., http://localhost:3000>
+NEXT_PUBLIC_APP_URL=<origin from Redirect URI, e.g. http://localhost:3000>
 ```
 
 > `NEXT_PUBLIC_APP_URL` — only the origin without the path (`http://localhost:3000`, not `http://localhost:3000/auth/callback`).
@@ -80,7 +80,7 @@ If the redirect_uri from the user's response differs from `${APP_URL}/auth/callb
 
 ### 3. Ensure the callback page exists
 
-Check for the presence of `app/auth/callback/page.tsx`. If it doesn't exist — create it (see Step 4 below).
+Check for the presence of `app/auth/callback/page.tsx`. If not — create it (see Step 4 below).
 
 ### 4. Inform the user
 
@@ -90,7 +90,7 @@ After writing the files, say:
 > - Client ID: `...first 20 characters...`
 > - Redirect URI: `http://localhost:3000/auth/callback`
 >
-> ⚠️ Restart the dev server (`npm run dev`) so that Next.js picks up the new environment variables.
+> ⚠️ Restart the dev server (`npm run dev`) for Next.js to pick up the new environment variables.
 
 ---
 
@@ -134,19 +134,30 @@ In Google Cloud Console → **APIs & Services** → **Credentials** → the requ
 
 ---
 
-## Step 3: Server Action — exchange code for tokens
+## Step 3: Server Action — code exchange for tokens
 
 ```typescript
 // app/actions/auth.ts
 'use server'
 
-import { getApi, isError } from '@/lib/oneentry'
+import { defineOneEntry } from 'oneentry'
+import { isError } from '@/lib/oneentry'
 import type { IAuthEntity } from 'oneentry/dist/auth-provider/authProvidersInterfaces'
 
 export async function googleOAuthAction(
   code: string,
+  deviceMetadata: string, // ← browser fingerprint from the callback page (Step 4)
 ): Promise<{ token: IAuthEntity } | { error: string }> {
-  const result = await getApi().AuthProvider.oauth('google_web', { // ← marker from step 1
+  // An empty string will silently substitute the server fingerprint — the token will not refresh from the browser
+  if (!deviceMetadata) return { error: 'deviceMetadata not passed from the callback page' }
+
+  // Per-request instance: deviceMetadata in config, shared getApi()-singleton is not mutated
+  const api = defineOneEntry(process.env.NEXT_PUBLIC_ONEENTRY_URL as string, {
+    token: process.env.NEXT_PUBLIC_ONEENTRY_TOKEN as string,
+    deviceMetadata, // ← refresh token will be tied to the browser fingerprint
+  })
+
+  const result = await api.AuthProvider.oauth('google_web', { // ← marker from step 1
     client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID as string,
     client_secret: process.env.GOOGLE_CLIENT_SECRET as string,     // ← server secret!
     code,
@@ -166,6 +177,20 @@ export async function googleOAuthAction(
 **`oauth()` — Server Action** (not Client Component): `client_secret` must not reach the browser.
 `oauth()` handles both login and registration — separate flows are not needed.
 
+**Why `deviceMetadata` (SDK ≥ 1.0.155):** The API ties refresh tokens to the header
+`x-device-metadata` (the SDK sends it on every POST and on refresh). Without passing the browser
+fingerprint, the server's `oauth()` will substitute the Node fingerprint — the issued refresh token
+will not be updated from the browser: both refresh upon access token expiration
+(`login(token)` → `syncTokens()` → 401 → refresh 4xx), and session recovery upon
+page reload (`reDefine` → proactive refresh).
+
+**Why a per-request instance instead of `setDeviceMetadata` on `getApi()`:** The `apiInstance` from
+`lib/oneentry.ts` is a modular singleton, shared by parallel requests. The pattern
+`setDeviceMetadata(dm)` → `oauth()` → `setDeviceMetadata('')` — is a race: parallel
+OAuth callbacks will overwrite each other's fingerprints. A short-lived local instance for one
+stateless POST — a conscious exception to the rule "one instance through getApi()"
+(`defineOneEntry` does not make network requests).
+
 ---
 
 ## Step 4: Callback page
@@ -177,6 +202,7 @@ export async function googleOAuthAction(
 import { useEffect, useRef, useState } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/components/auth/AuthContext'
+import { getApi } from '@/lib/oneentry'
 import { googleOAuthAction } from '@/app/actions/auth'
 
 export default function AuthCallbackPage() {
@@ -200,7 +226,11 @@ export default function AuthCallbackPage() {
     }
 
     ;(async () => {
-      const result = await googleOAuthAction(code)
+      // Browser fingerprint for tying the refresh token (SDK >= 1.0.155).
+      // getDeviceMetadata() — public method of each module (AuthProvider, Users, ...),
+      // it is NOT on the root object getApi().
+      const deviceMetadata = getApi().AuthProvider.getDeviceMetadata()
+      const result = await googleOAuthAction(code, deviceMetadata)
       if ('error' in result) {
         setError(result.error)
         setTimeout(() => router.push('/'), 3000)
@@ -234,12 +264,11 @@ export default function AuthCallbackPage() {
 ```tsx
 // Client Component ('use client')
 import { getApi, isError } from '@/lib/oneentry'
-import type { IAuthProvidersEntity } from 'oneentry/dist/auth-provider/authProvidersInterfaces'
 
 const handleGoogleLogin = async () => {
   const provider = await getApi().AuthProvider.getAuthProviderByMarker('google_web') // ← marker from step 1
   if (isError(provider)) return
-  const baseUrl = (provider as IAuthProvidersEntity & { config: { oauthAuthUrl: string | null } }).config.oauthAuthUrl
+  const baseUrl = provider.config.oauthAuthUrl // type is already string | null — no cast needed
   if (!baseUrl) return
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback`
   window.location.href =
@@ -266,9 +295,11 @@ Button → getAuthProviderByMarker → config.oauthAuthUrl + query-params → wi
     ↓
 Google OAuth page (user logs in)
     ↓
-redirect_uri?code=XXX → /auth/callback
+redirect_uri?code=XXX → /auth/callback → getApi().AuthProvider.getDeviceMetadata()
     ↓
-googleOAuthAction(code) → AuthProvider.oauth() → IAuthEntity { accessToken, refreshToken }
+googleOAuthAction(code, deviceMetadata) → oauth() on per-request instance with deviceMetadata
+    ↓
+IAuthEntity { accessToken, refreshToken } — refresh token tied to the browser fingerprint
     ↓
 login(token) → AuthContext → syncTokens() → profile
 ```
@@ -306,19 +337,19 @@ For selector stability — add `data-testid` to the Google login button and on t
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Path to the page with the Google login button** — ask: "On which page is the Google login button located? (e.g., `/login`, `/auth`)".
-   - If they don't respond → find it yourself using Grep for `getTestId('google-login-button'|'google_web'|handleGoogleLogin` or `data-testid="google-login-button"` in `app/**`/`components/**`. Inform: "Found the button on `{path}` — using it".
+1. **Path to the page with the Google login button** — ask: "On which page is the Google login button located? (e.g. `/login`, `/auth`)".
+   - If silent → find it yourself via Grep for `getTestId('google-login-button'|'google_web'|handleGoogleLogin` or `data-testid="google-login-button"` in `app/**`/`components/**`. Inform: "Found the button at `{path}` — using it".
 2. **Provider marker** — take it from `/inspect-api auth-providers` (Step 1 of this skill) — provider with `"type": "oauth"` + Google. Inform: "Using marker `{identifier}` from `/inspect-api auth-providers`".
 3. **Real OAuth authorization** — ask: "Do you need to test the full OAuth flow with a real Google account? (a test Google account will be required, headless mode is not suitable)".
-   - By default (user is silent / refused) → **DO NOT** run real OAuth. We only check: click → redirect to `accounts.google.com`, callback with an error in the URL → show error. This covers 80% of UX scenarios without real credentials.
-   - If yes → add `E2E_GOOGLE_TEST_EMAIL` / `E2E_GOOGLE_TEST_PASSWORD` to `.env.local` and uncomment the block `test.describe('Real OAuth')`. Inform the user: "The full OAuth flow is unstable in headless mode — Google detects automation. I recommend only testing the redirect".
+   - By default (user is silent / refused) → **DO NOT** run real OAuth. Check only: click → redirect to `accounts.google.com`, callback with an error in the URL → show error. This covers 80% of UX scenarios without real credentials.
+   - If yes → add `E2E_GOOGLE_TEST_EMAIL` / `E2E_GOOGLE_TEST_PASSWORD` to `.env.local` and uncomment the block `test.describe('Real OAuth')`. Inform the user: "The full OAuth flow is unstable in headless mode — Google detects automation. I recommend leaving only the redirect test".
 
 **Example of filling in `.env.local` (do it yourself, do not ask the user to copy):**
 
 ```bash
 # e2e google oauth — path to the page with the button
 E2E_LOGIN_PATH=/login
-# (optional) Test Google account for the full flow — ONLY ADD IF THE USER REQUESTED
+# (optional) Test Google account for the full flow — ADD ONLY IF THE USER REQUESTED
 # E2E_GOOGLE_TEST_EMAIL=
 # E2E_GOOGLE_TEST_PASSWORD=
 ```
@@ -340,7 +371,7 @@ test.describe('Google OAuth', () => {
     await expect(page.getByTestId('google-login-button')).toBeVisible();
   });
 
-  test('click redirects to accounts.google.com with the required query parameters', async ({ page }) => {
+  test('click redirects to accounts.google.com with the correct query parameters', async ({ page }) => {
     await page.goto(LOGIN_PATH);
 
     // Catch the redirect to Google before full navigation (to avoid loading the real Google UI)
@@ -368,7 +399,7 @@ test.describe('Google OAuth', () => {
   });
 });
 
-// ⚠️ The real OAuth flow — Google detects headless automation, tests are unstable.
+// ⚠️ Real OAuth flow — Google detects headless automation, tests are unstable.
 // Uncomment only if the user explicitly requested and added E2E_GOOGLE_TEST_EMAIL/PASSWORD.
 // test.describe('Real OAuth (experimental)', () => {
 //   test.skip(!GOOGLE_EMAIL || !GOOGLE_PASSWORD, 'E2E_GOOGLE_TEST_EMAIL/PASSWORD not set');
@@ -397,14 +428,14 @@ Before completing the task — explicitly inform:
 ✅ data-testid added to the Google login button and on the callback page
 ✅ .env.local updated (E2E_LOGIN_PATH)
 
-Automatically made decisions (if applicable):
+Decisions made automatically (if applicable):
 - Path to the page with the button: {LOGIN_PATH} — {specified by user / found via Grep by data-testid="google-login-button"}
 - Provider marker: {identifier} — taken from /inspect-api auth-providers
 - Real OAuth flow: test.describe('Real OAuth') left commented out.
   Reason: Google detects headless browsers and blocks automated logins — tests are unstable.
   If a full flow is needed — add E2E_GOOGLE_TEST_EMAIL/PASSWORD and uncomment the block.
 - Testing: (1) visibility of the button, (2) redirect to accounts.google.com with correct query parameters,
-  (3) callback without code — show error, (4) callback with error=access_denied — show error.
+  (3) callback without code — showing an error, (4) callback with error=access_denied — showing an error.
 
 Run: npm run test:e2e -- google-oauth.spec.ts
 ```

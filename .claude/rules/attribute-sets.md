@@ -9,9 +9,14 @@ paths:
 
 # Working with attributeSets — OneEntry Rules
 
-## What the AttributesSets methods return
+## What AttributesSets Methods Return
 
-`getAttributes`, `getAttributesByMarker`, `getAttributeSetByMarker`, `getSingleAttributeByMarkerSet` return a **schema of attributes** — a structure of fields (marker, type, listTitles, validators). **These are NOT the values of entity attributes.**
+AttributesSets methods return **schema/metadata**, not the attribute values of entities. Distinguish between two forms of response (terminology as in `pages/14-modules-reference.md`):
+
+- **Attribute** (`IAttributesSetsEntity` = `{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`): `getAttributesByMarker(setMarker)` → array of attributes of the set; `getSingleAttributeByMarkerSet(setMarker, attrMarker)` → one attribute.
+- **Set** (`IAttributeSetsEntity` = `{ id, identifier, title, schema, type: { id, type }, position }`): `getAttributeSetByMarker(setMarker)` → one set object; `getAttributes()` → `IAttributesSetsResponse` (`{ total, items: IAttributeSetsEntity[] }`) — paginated list of sets.
+
+> `getAttributesByMarker` is incorrectly typed in d.ts as `IAttributeSetsEntity[]`, but actually returns **attributes** — read attribute fields.
 
 ```ts
 // ❌ INCORRECT — attributeSet does not contain actual values of products/pages
@@ -27,24 +32,24 @@ const price = product.attributeValues.price?.value // actual value
 
 ---
 
-## Structure of the attribute object (schema)
+## Structure of the Attribute Object (Schema)
 
 ```ts
 {
   type: "string" | "text" | "image" | "list" | ..., // attribute type
-  value: {},              // always empty in the schema (except for timeInterval with Receive values enabled)
-  marker: "product_name", // unique identifier — used in the attributeValues of the entity
+  value: {},              // always empty in the schema (except timeInterval with Receive values enabled)
+  marker: "product_name", // unique identifier — used in attributeValues of the entity
   position: 1,            // display order
   listTitles: [...],      // options for radioButton and list
   validators: {...},      // validation rules
-  localizeInfos: { title: "Product Name" }, // human-readable name
-  additionalFields: [...] // nested attributes
+  localizeInfos: { title: "Product Name" }, // human-readable title
+  additionalFields: {...} // nested attributes (Record, key = marker; array only when rawData)
 }
 ```
 
 ---
 
-## listTitles — options (radioButton, list)
+## listTitles — Options (radioButton, list)
 
 Use `listTitles` to display filter or form options:
 
@@ -64,35 +69,32 @@ const swatches = options.map((opt: any) => ({
 }))
 ```
 
-**Important:** `value` in listTitles is the option ID (string). This is the value stored in `attributeValues` of the entity when selecting `radioButton` or `list`.
+**Important:** `value` in listTitles — option identifier; type `number | string`, and for `entity` attributes — object `IListTitleEntityValue` (`{ id, depth, parentId, position, isPinned }`). For `radioButton` / `list` this is usually a string-ID, and it is stored in `attributeValues` of the entity upon selection.
 
 ---
 
-## additionalFields — nested attributes
+## additionalFields — Nested Attributes
 
-`additionalFields` is configured in the admin panel on the attribute. In the schema (AttributesSets / Forms), it is an **array** of nested attributes. The SDK normalizes it into `Record<marker, field>` when querying entities (Products, Pages, Blocks).
+`additionalFields` is configured in the admin panel on the attribute. The **Raw** API returns it as an array, but the SDK normalizes it to `Record<marker, field>` **in all contexts** — both in `attributeValues` of entities (Products, Pages, Blocks), and in the schema from `getAttributesByMarker` / `getSingleAttributeByMarkerSet`, and in form attributes. The array remains only when `rawData: true` in the config.
 
 ```ts
-// Attribute schema from getAttributesByMarker — additionalFields array (not normalized):
-{
-  type: "string",
-  marker: "some_field",
-  additionalFields: [
-    { type: "string", marker: "fieldA", value: "..." },
+// RAW API (rawData: true) — array:
+{ type: "string", marker: "some_field", additionalFields: [
+    { type: "string",  marker: "fieldA", value: "..." },
     { type: "integer", marker: "fieldB", value: 0 }
-  ]
-}
+] }
 
-// In the attributeValues of the entity (normalized by SDK into Record, key = marker):
-entity.attributeValues.some_field?.additionalFields
+// Default (rawData: false) — both in schema and entity the same Record (key = marker):
+attr.additionalFields
 // → { fieldA: { type: "string", value: "...", ... }, fieldB: { type: "integer", value: 0, ... } }
+// Empty → {} (not [])
 ```
 
-> ⚠️ The markers of `additionalFields` are fully defined in the admin panel and are unique for each project. **Do not guess** — always inspect via `/inspect-api` or `console.log`. In the schema (AttributesSets), `additionalFields` is an array. In the `attributeValues` of the entity — a normalized SDK object (Record). Do not confuse contexts.
+> ⚠️ Markers of `additionalFields` are defined in the admin panel and are unique to the project. **Do not guess** — inspect via `/inspect-api` or `console.log`. The form is the same in the schema and in `attributeValues` (Record); there is no difference between "array in schema / object in entity".
 
 ---
 
-## validators — structure
+## validators — Structure
 
 ```ts
 // requiredValidator — required field
@@ -112,7 +114,7 @@ Use `validators` when dynamically generating forms (for example, a field is requ
 
 ---
 
-## Naming rules for markers
+## Naming Rules for Markers
 
 - Only lowercase letters and `_` (no spaces)
 - Does not start with a digit
@@ -131,7 +133,7 @@ attrs['2nd_price']?.value
 
 ---
 
-## When to use AttributesSets
+## When to Use AttributesSets
 
 | Scenario                                       | Method                                                  |
 |------------------------------------------------|--------------------------------------------------------|
@@ -140,4 +142,4 @@ attrs['2nd_price']?.value
 | Get a single attribute by marker                | `getSingleAttributeByMarkerSet(setMarker, attrMarker)` |
 | Get all attribute sets                          | `getAttributes()`                                      |
 
-**DO NOT use AttributesSets to get values of products/pages.** For that, use `Products.getProducts()`, `Pages.getPageByUrl()`, etc. — they have `attributeValues` with actual data.
+**DO NOT use AttributesSets to get values of products/pages.** For that, use `Products.getProducts()`, `Pages.getPageByUrl()` etc. — they have `attributeValues` with real data.

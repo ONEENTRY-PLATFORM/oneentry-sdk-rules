@@ -6,13 +6,17 @@ description: Create a server action
 
 ## Step 1: Define the module and target file
 
-Break down the argument into `Module` and `method`. Determine the file:
-| Module                                  | File                      | Type                     |
-|-----------------------------------------|---------------------------|-------------------------|
-| `Forms`                                 | `app/actions/forms.ts`    | public (getApi)         |
-| `AuthProvider`                          | `app/actions/auth.ts`     | public (getApi)         |
-| `Pages`, `Products`, `Menus`, `Blocks`  | `app/actions/<module>.ts` | public (getApi)         |
-| `Orders`, `Users`, `Payments`, `Events` | Client Component          | user-auth (getApi after reDefine) |
+Break down the argument into `Module` and `method`. Define the file:
+| Module | File | Type |
+| --- | --- | --- |
+| `Forms` | `app/actions/forms.ts` | public (getApi) |
+| `FormData` | `app/actions/forms-data.ts` | public (getApi) — only `postFormsData`/`getFormsDataByMarker`; `updateFormsDataByid`/`updateFormsDataStatusByid`/`deleteFormsDataByid` — user-auth (Client Component after reDefine) |
+| `AuthProvider` (getAuthProviders, getAuthProviderByMarker) | `app/actions/auth.ts` | public (getApi) |
+| `AuthProvider` (auth, signUp, generateCode, checkCode, logout) | Client Component directly | getApi() on the client (see `rules/server-actions.md`) |
+| `Pages`, `Products`, `Menus`, `Blocks` | `app/actions/<module>.ts` | public (getApi) |
+| `Orders`, `Users`, `Payments`, `Events`, `Subscriptions` | Client Component | user-auth (getApi after reDefine) |
+
+> ⚠️ Token-generating calls `auth()`/`oauth()` in Server Action are only allowed with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155): on the client `getApi().AuthProvider.getDeviceMetadata()` → on the server per-request instance `defineOneEntry(url, { token, deviceMetadata })` — see `/create-google-oauth` and `rules/auth-provider.md`.
 
 ## Step 2: Read the existing file
 
@@ -28,7 +32,7 @@ grep -r "interface I" node_modules/oneentry/dist/<module>/ --include="*.d.ts" -l
 
 ## Step 4: Create or supplement the file
 
-### For public methods (Forms, AuthProvider, Pages, Products, etc.)
+### For public methods (Forms, Pages, Products, etc.; AuthProvider — only getAuthProviders/getAuthProviderByMarker)
 
 ```typescript
 'use server';
@@ -48,9 +52,9 @@ export async function getFormByMarker(marker: string, locale?: string) {
 }
 ```
 
-### For user-authorized methods (Orders, Users, Payments, Events)
+### For user-authorized methods (Orders, Users, Payments, Events, Subscriptions)
 
-These methods are called **directly from Client Component** via `getApi()` after `reDefine()`.
+These methods are called **directly from the Client Component** via `getApi()` after `reDefine()`.
 
 **Mandatory auth-init pattern in the component:**
 
@@ -64,7 +68,7 @@ import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
 export function ProfileData() {
   // useRef guard — protection against double execution in React StrictMode (dev).
-  // Without it, two parallel reDefine calls burn a one-time refresh token → logout.
+  // Eliminates an extra pair of requests (reDefine + proactive /refresh) and setState races.
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -75,12 +79,13 @@ export function ProfileData() {
       const refreshToken = localStorage.getItem('refresh-token');
       if (!refreshToken) return;
       // ⚠️ hasActiveSession() is mandatory before reDefine.
-      // After login, the SDK is already authorized — reDefine without checking will replace the working
-      // instance with a new one without an access token → first request 401 → token deletion → logout.
+      // After login, the SDK is already authorized — reDefine without checking will recreate the working instance,
+      // and the new one before the first request will make an unnecessary proactive /refresh, wasting
+      // just issued token (no more spurious 401, SDK ≥ 1.0.152; see rules/tokens.md).
       if (!hasActiveSession()) {
         await reDefine(refreshToken, 'en_US');
       }
-      // now getApi().Users/Orders/Payments/Events work
+      // now getApi().Users/Orders/Payments/Events/Subscriptions work
       const user = await getApi().Users.getUser() as IUserEntity;
       if (isError(user)) return;
     };
@@ -91,7 +96,7 @@ export function ProfileData() {
 
 ## Step 5: Provide usage instructions
 
-After creating the file, show an example of usage from Client Component:
+After creating the file, show an example of usage from the Client Component:
 
 ```typescript
 // components/MyComponent.tsx
@@ -117,4 +122,4 @@ export function MyComponent() {
 For user-auth methods, remind:
 
 ⚠️ `reDefine(refreshToken, locale)` must be called before accessing user-auth methods.
-Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without this, React StrictMode burns the refresh token with a double call → logout. `saveFunction` automatically updates the token in localStorage with each rotation.
+Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without them, double execution in StrictMode leads to an extra pair of requests (`reDefine` + proactive `/refresh`) and setState races (the token pattern `reDefine` + `getUser` does not burn out — both requests share one proactive refresh, SDK ≥ 1.0.152; see `rules/tokens.md`). `saveFunction` automatically updates the token in localStorage with each rotation.

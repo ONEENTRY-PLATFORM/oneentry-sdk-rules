@@ -33,27 +33,26 @@ const allImages = Object.values(attrs)
   .filter(Boolean)
 ```
 
-## Value Types (Critically Important!)
+## Value Types (critically important!)
 
 | Type                                   | Access to value                                            |
 |---------------------------------------|-----------------------------------------------------------|
 | `string`, `integer`, `float`, `real`  | `attrs.marker?.value` (primitive)                          |
 | `text`                                | `attrs.marker?.value?.htmlValue` or `value.plainValue`   |
 | `textWithHeader`                      | `attrs.marker?.value?.header`, `value.htmlValue`          |
-| `image`                               | **depends on the entity** — see section below              |
+| `image`                               | object **or** array of objects — see section below          |
 | `groupOfImages`                       | `attrs.marker?.value?.[0]?.downloadLink` (always an array)  |
 | `file`                                | `attrs.marker?.value?.downloadLink` (object)              |
 | `date`, `dateTime`, `time`            | `attrs.marker?.value?.fullDate` or `value.formattedValue`|
 | `list`                                | `attrs.marker?.value` (array of ids or objects with extended) |
 | `radioButton`                         | `attrs.marker?.value` (string-id)                         |
 | `entity`                              | `attrs.marker?.value` (array of markers)                   |
-| `json`                                | `JSON.parse(attrs.marker?.value || '{}')`                 |
-| `timeInterval`                        | `attrs.marker?.value` → `[[ISO, ISO], ...]`               |
+| `timeInterval`                        | `attrs.marker?.value` → array of groups; slots in `value[].values[].timeIntervals` |
 | `spam`                                | captcha — render `<FormReCaptcha>`, NOT `<input>`         |
 
 ## ⚠️ image, groupOfImages — FIRST CHECK the actual structure via API
 
-**ALWAYS run `/inspect-api` before the first use of the image attribute:**
+**ALWAYS run `/inspect-api` before the first use of the image attribute or:**
 
 ```javascript
 // .claude/temp/check-image.mjs
@@ -79,25 +78,35 @@ for (const [k, v] of Object.entries(attrs)) {
 }
 ```
 
-## ⚠️ image — structure depends on the entity type (verified with real data)
+## ⚠️ image — value can be an object OR an array of objects
 
-> **Note:** Swagger documentation declares `image.value` as an object for all entities. The actual API returns different structures — trust real data, not Swagger.
+The SDK (`_clearArray`) unwraps a **single-element** array `image` into an object (`[img]` → `img`). Therefore, the form of `value` depends **not on the entity type** (Products/Pages/Blocks), but on whether unwrapping occurred:
 
-| Entity       | image valueType | Access                                 |
-|--------------|-----------------|----------------------------------------|
-| **Products** | OBJECT          | `attrs.pic?.value?.downloadLink`       |
-| **Pages**    | ARRAY           | `attrs.icon?.value?.[0]?.downloadLink` |
-| **Blocks**   | ARRAY           | `attrs.bg?.value?.[0]?.downloadLink`   |
+- a single image obtained via a "top-level" method (`getProductById`, `getPageByUrl`) → **object**;
+- multiple images **or** the entity came nested (e.g., product inside the Blocks response), where unwrapping did not occur → **array**.
+
+> The same product with one image comes as an object from `Products.getProductById`, but as an array inside the Blocks response — the entity type does not matter. (The previous table "Products=OBJECT / Pages=ARRAY / Blocks=ARRAY" described a false correlation.)
 
 ```typescript
-// Products — image is an OBJECT
-const imageUrl = attrs.pic?.value?.downloadLink || '';
-
-// Pages / Blocks — image is an ARRAY
-const imageUrl = attrs.bg?.value?.[0]?.downloadLink || '';
+// ✅ Universally — we take both object and array:
+const raw = attrs.pic?.value;
+const img = Array.isArray(raw) ? raw[0] : raw;
+const imageUrl = img?.downloadLink || '';
 ```
 
-> ⚠️ **ALWAYS** run `/inspect-api` or do `console.log(attrs.marker?.value)` before using — to know the exact structure in your project.
+**Structure of the image object** (`img`):
+
+```typescript
+// { downloadLink, previewLink, filename, size, contentType, defaultPreview }
+const url = img?.downloadLink;                    // full-size image
+// previewLink — OBJECT by presets, NOT a string-URL:
+//   { default: [ "data:image/webp;base64,…" /* LQIP */, "https://…preview.default.jpeg" ] }
+const preset  = img?.defaultPreview || 'default';
+const blur    = img?.previewLink?.[preset]?.[0];  // ready base64 → blurDataURL (fetch not needed)
+const preview = img?.previewLink?.[preset]?.[1];  // URL of compressed preview
+```
+
+> ⚠️ **ALWAYS** check via `/inspect-api` or `console.log(attrs.marker?.value)` + `Array.isArray(...)` before use.
 
 ## ⚠️ groupOfImages — value is always an ARRAY
 
@@ -107,7 +116,8 @@ const url = attrs.photos?.value?.downloadLink
 
 // ✅ CORRECT
 const url = attrs.photos?.value?.[0]?.downloadLink
-const preview = attrs.photos?.value?.[0]?.previewLink
+// previewLink — object by presets; ready base64-LQIP inside:
+const blur = attrs.photos?.value?.[0]?.previewLink?.default?.[0]
 
 // Gallery
 const gallery = attrs.gallery?.value || []
@@ -165,24 +175,32 @@ const selectedTags = attrs.tags?.value || []  // ["1", "3", "5"]
 const related = attrs.relatedProducts?.value || []  // ["mouse", "cable"]
 ```
 
-## json
+## json — this type of attribute DOES NOT EXIST
+
+In `AttributeType` SDK v1.0.155, the type `json` does not exist (union: `string`, `text`, `textWithHeader`, `integer`, `real`, `float`, `date`, `dateTime`, `time`, `file`, `image`, `groupOfImages`, `list`, `radioButton`, `entity`, `button`, `spam`, `timeInterval`). If the project stores JSON — it is a regular `string`/`text` attribute that you parse manually:
 
 ```typescript
-const data = JSON.parse(attrs.customData?.value || '{}')
+const data = JSON.parse(attrs.customData?.value || '{}')  // customData — type string
 const width = data.dimensions?.width
 ```
 
 ## timeInterval
 
 ```typescript
-// value — array of pairs [startISO, endISO] in UTC
-const intervals = attrs.workingHours?.value || []
-// [[ISO, ISO], [ISO, ISO], ...]
-const start = intervals[0]?.[0]  // "2026-03-15T09:00:00.000Z"
-const end = intervals[0]?.[1]    // "2026-03-15T10:00:00.000Z"
+// value — ARRAY OF GROUPS of schedules, NOT a flat array of pairs!
+// The SDK places computed slots in value[].values[].timeIntervals — [[startISO,endISO],...] (UTC).
+const groups = attrs.workingHours?.value || []
+
+// Collect all slots into a single flat list of pairs:
+const intervals: [string, string][] = groups
+  .flatMap((g: any) => g?.values || [])
+  .flatMap((s: any) => s?.timeIntervals || [])
+// intervals → [["2026-03-15T09:00:00.000Z","2026-03-15T10:00:00.000Z"], ...]
+const start = intervals[0]?.[0]
+const end   = intervals[0]?.[1]
 ```
 
-**In the order/reservation form** — `value` contains available slots. Pattern for the calendar:
+**For the booking calendar**, work with the flat list `intervals` collected above:
 
 ```typescript
 // Slots for the selected date (UTC comparison!)
@@ -208,7 +226,7 @@ const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
 
 `additionalFields` — arbitrary nested attributes that can be attached to **any** attribute in the admin panel. The content is entirely defined by the developer/administrator. The only limitation is that the types of nested fields are taken from the standard set of OneEntry types (`string`, `integer`, `float`, `text`, `image`, `groupOfImages`, `date`, `list`, etc.).
 
-It appears in two contexts:
+It occurs in two contexts:
 
 - `attributeValues` of entities (Product, Page, Block) — values of nested fields
 - `attributes` of schemas (Forms, AttributesSets) — metadata of nested fields
@@ -235,7 +253,7 @@ The SDK automatically transforms `additionalFields` from an **array** (as return
 // If additionalFields is not set → {}
 ```
 
-### Full Record Structure
+### Full Structure of a Record
 
 ```typescript
 // Each record in additionalFields:
@@ -252,12 +270,12 @@ The SDK automatically transforms `additionalFields` from an **array** (as return
 
 ### Accessing Values
 
-> ⚠️ **Markers and meanings of `additionalFields` are defined in the admin panel** — they are unique for each project and attribute. Always check the real structure via `/inspect-api` or `console.log` before use. Do not guess markers.
+> ⚠️ **Markers and meanings of `additionalFields` are defined in the admin panel** — they are unique for each project and attribute. Always check the actual structure via `/inspect-api` or `console.log` before use. Do not guess markers.
 
 ```typescript
 const attrs = entity.attributeValues || {}
 
-// Step 1 — see what is available (via /inspect-api or directly):
+// Step 1 — see what is there (via /inspect-api or directly):
 console.log(attrs.someMarker?.additionalFields)
 // → { fieldA: { type: "string", value: "...", marker: "fieldA", ... },
 //     fieldB: { type: "image",  value: {...}, marker: "fieldB", ... } }
@@ -281,7 +299,7 @@ for (const [marker, field] of Object.entries(extra as Record<string, any>)) {
 
 ### Form Attributes (Forms / AttributesSets)
 
-In the form schema, `additionalFields` — arbitrary UI metadata defined in the admin panel for each field. Interpretation depends on the project:
+In the form schema, `additionalFields` — arbitrary UI metadata specified in the admin panel for each field. Interpretation depends on the project:
 
 ```typescript
 // Markers are defined by the administrator — always inspect:
@@ -296,7 +314,7 @@ const hint        = field.additionalFields?.hint?.value || ''
 
 ### isIcon and isProductPreview
 
-These flags are **on the attribute itself** in `attributeValues`, NOT inside `additionalFields`:
+These are flags **on the attribute itself** in `attributeValues`, NOT inside `additionalFields`:
 
 ```typescript
 // { type: "image", value: {...}, isIcon: false, isProductPreview: true, additionalFields: {} }
@@ -306,10 +324,10 @@ const iconAttr    = Object.values(attrs).find((a: any) => a?.isIcon === true)
 
 ## ⚠️ Final Rating — top-level field `rating`, NOT an attribute
 
-The aggregated rating of the entity (Products, etc.) is formed by OneEntry based on reviews (FormData) and is available in the **top-level field of the entity** `entity.rating?.value` (type `IRating`), and **not** in `attributeValues.rating`.
+The aggregated rating of an entity (Products, etc.) is formed by OneEntry based on reviews (FormData) and is available in the **top-level field of the entity** `entity.rating?.value` (type `IRating`), and **not** in `attributeValues.rating`.
 
 ```typescript
-// ✅ CORRECT — final rating from top-level field
+// ✅ CORRECT — final rating from the top-level field
 const ratingVal = product.rating?.value;  // number | null
 if (ratingVal != null) {
   // show star + value
@@ -317,21 +335,21 @@ if (ratingVal != null) {
   // "Rating not yet formed" — no reviews yet
 }
 
-// ❌ INCORRECT — this is a phantom attribute, often left in the schema
+// ❌ INCORRECT — this is a "phantom" attribute, often remains in the schema
 // from the old implementation (before real reviews were connected).
 // Returns a hardcoded value, does not reflect real reviews.
 const ratingVal = attrs.rating?.value;
 ```
 
-**Link with reviews:** the values of `rating` are recalculated on the OneEntry side from FormData reviews (see [`skills/create-reviews/SKILL.md`](../skills/create-reviews/SKILL.md)). Inside a single review (FormData record), the rating field is already the marker of the form schema (e.g., `review_rating` or `rating`), this is **a different** field.
+**Link with reviews:** the values of `rating` are recalculated on the OneEntry side from FormData reviews (see [`skills/create-reviews/SKILL.md`](../skills/create-reviews/SKILL.md)). Inside a single review (FormData record), the rating field is already a marker of the form schema (e.g., `review_rating` or `rating`), this is **another** field.
 
-| Context                              | Where it is located                          |
-|---------------------------------------|----------------------------------------------|
-| Final entity rating (aggregate)       | `entity.rating?.value` (top-level)           |
+| Context                              | Where it is located                                  |
+|---------------------------------------|-----------------------------------------------------|
+| Final rating of the entity (aggregate)   | `entity.rating?.value` (top-level)                  |
 | Rating inside a single review (FormData) | `formData.find(f => f.marker === '<rating-marker>')?.value` |
-| ❌ `attrs.rating?.value`              | DO NOT use — phantom attribute                |
+| ❌ `attrs.rating?.value`              | DO NOT use — phantom attribute                       |
 
-> If `rating` is found in `attributeValues` — it is likely a remnant from before real reviews were connected. It is not necessary to delete it from the schema (it may break existing data), but in new code, only use `entity.rating`.
+> If `rating` is found in `attributeValues` — this is likely a remnant from before real reviews were connected. It is not necessary to delete it from the schema (it may break existing data), but in new code, use only `entity.rating`.
 
 ## For page blocks — localizeInfos as fallback
 
@@ -342,4 +360,4 @@ const title = attrs.title?.value || block.localizeInfos?.title || ''
 
 > Related rules:
 >
-> - `.claude/rules/performance-images.md` — `downloadLink` goes to `<Image src>`, `previewLink` — to `blurDataURL` via server-side `fetch` + base64, wrapped in `unstable_cache` with TTL of 7 days.
+> - `.claude/rules/performance-images.md` — `downloadLink` goes into `<Image src>`. `previewLink` — **object** `{ preset: [base64-LQIP, previewURL] }`: ready base64 for `blurDataURL` is already in `previewLink[preset][0]`, a separate `fetch` is not needed.

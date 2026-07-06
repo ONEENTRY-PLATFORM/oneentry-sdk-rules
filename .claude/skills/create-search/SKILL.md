@@ -4,20 +4,20 @@ description: Create site search
 ---
 # /create-search — Site Search
 
-Argument: what to search for — `products` (goods), `pages` (pages), `all` (everything).
+Argument: what to search for — `products` (products), `pages` (pages), `all` (everything).
 
 ---
 
 ## Step 1: Clarify with the user
 
 1. **What to search for?**
-   - `products` — `searchProduct(query, locale)`
-   - `pages` — `searchPage(name, url)`
+   - `products` — by name: `searchProduct(query, locale)`; by meaning (semantic): `getProductsByVectorSearch({ queryText: query }, locale)` — not by substring, optional fields: `vectorDistanceThreshold`, `maxHits`, `debug`. Both methods → `IProductsEntity[] | IError`, so Server Action and the component below DO NOT change. The availability of semantic search depends on the OneEntry project settings — in case of an error, the method will return `IError` (the skill processes it as `[]`)
+   - `pages` — `searchPage(name, url?, langCode?)` — locale is the THIRD argument (the second is the url filter)
    - `blocks` — `searchBlock(name)`
-   - several at once — parallel requests via `Promise.all`
+   - multiple at once — parallel requests via `Promise.all`
 
 2. **Where is it displayed?**
-   - Dropdown directly in the search bar — the most common case
+   - Dropdown list directly in the search bar — the most common case
    - Separate results page
 
 3. **Is there a layout?** — if yes, copy it exactly
@@ -36,7 +36,7 @@ import { getApi, isError } from '@/lib/oneentry';
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces';
 import type { IPagesEntity } from 'oneentry/dist/pages/pagesInterfaces';
 
-// Search for products by name
+// Search products by name
 export async function searchProducts(
   query: string,
   locale: string = 'en_US',
@@ -46,12 +46,12 @@ export async function searchProducts(
   return result as IProductsEntity[];
 }
 
-// Search for pages by name (optional)
+// Search pages by name (optional)
 export async function searchPages(
   query: string,
   locale: string = 'en_US',
 ): Promise<IPagesEntity[]> {
-  const result = await getApi().Pages.searchPage(query, locale);
+  const result = await getApi().Pages.searchPage(query, undefined, locale);
   if (isError(result)) return [];
   return result as IPagesEntity[];
 }
@@ -77,8 +77,8 @@ export async function searchAll(query: string, locale: string = 'en_US') {
 - **Dropdown** closes on click outside the component (mousedown listener)
 - **Escape** closes the dropdown
 - On empty query — do not make a request, clear results
-- Result of `searchProduct` — array `IProductsEntity[]`, access to title: `product.localizeInfos?.title`
-- Result of `searchPage` — array `IPagesEntity[]`, access to title: `page.localizeInfos?.title || page.localizeInfos?.menuTitle`
+- Result of `searchProduct` — array `IProductsEntity[]`, access to the name: `product.localizeInfos?.title`
+- Result of `searchPage` — array `IPagesEntity[]`, access to the name: `page.localizeInfos?.title || page.localizeInfos?.menuTitle`
 
 ### components/SearchBar.tsx
 
@@ -185,7 +185,7 @@ export default async function SearchPage({
 
   const [products, pages] = await Promise.all([
     getApi().Products.searchProduct(q, locale),
-    getApi().Pages.searchPage(q, locale),
+    getApi().Pages.searchPage(q, undefined, locale),
   ]);
 
   return (
@@ -223,7 +223,7 @@ export default async function SearchPage({
 ✅ Search created. Key rules:
 
 ```md
-1. searchProduct/searchPage search by NAME, not by attributes
+1. searchProduct/searchPage search by NAME, not by attributes; for semantic search — getProductsByVectorSearch
 2. Debounce 300ms — DO NOT call Action on every character
 3. On empty query — clear results, do not make a request
 4. Dropdown closes on mousedown outside the component and on Escape
@@ -280,17 +280,17 @@ export default async function SearchPage({
 </div>
 ```
 
-### 5.2 Gather test parameters and fill in `.env.local`
+### 5.2 Gather test parameters and fill `.env.local`
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Path of the page where the SearchBar is displayed** — ask: "On which page is the search bar displayed? (usually in Navbar on all pages — `/` or main catalog will do)". If silent → use `/` by default and inform: "Using `/` — SearchBar is expected in Navbar, available everywhere."
+1. **Path of the page where SearchBar is displayed** — ask: "On which page is the search bar displayed? (usually in Navbar on all pages — `/` or main catalog will do)". If silent → use `/` by default and inform: "Using `/` — SearchBar is expected in Navbar, available everywhere".
 2. **Test search query that will GUARANTEED find products** — choose yourself via `/inspect-api`:
-   - Get products: `getApi().Products.getProducts({ limit: 1 })`. Take the first word from `items[0].localizeInfos?.title` (a fragment of 3+ characters). For example, `title="Cosmo Sneakers"` → `SEARCH_HIT_QUERY=Cosmo`.
-   - Inform: "For the test 'there are results' I use the query `{query}` — a fragment of the title of the first product in the catalog."
+   - Get products: `getApi().Products.getProducts([], locale, { limit: 1 })` (the first argument is an array of filters, `limit` — in the query object as the third; `locale` — project language code, e.g. `'en_US'`, can be omitted). Take the first word from `items[0].localizeInfos?.title` (a fragment of length 3+ characters). For example `title="Cosmo Sneakers"` → `SEARCH_HIT_QUERY=Cosmo`.
+   - Inform: "For the test 'there are results' I use the query `{query}` — fragment of the title of the first product in the catalog".
    - If there are no products or the SDK is unavailable — leave it empty, test `test.skip`.
 3. **Test empty query** (which has no results) — generate yourself: `zzzz-nonexistent-{rand}`. Do not save in `.env.local`, hardcode in the spec.
-4. **Path of the separate results page** (if created) — ask: "Should I create a separate results page `/search?q=...`? If yes — what path?". If silent → check via Glob (`app/**/search/**/page.tsx`). If not found → corresponding tests `test.skip`.
+4. **Path of the separate results page** (if created) — ask: "Create a separate results page `/search?q=...`? If yes — what path?". If silent → check via Glob (`app/**/search/**/page.tsx`). If not found → corresponding tests `test.skip`.
 
 **Example `.env.local`:**
 
@@ -334,12 +334,12 @@ test.describe('Site Search', () => {
 
   test('non-existent query — no results / empty-state', async ({ page }) => {
     await page.getByTestId('search-input').fill(SEARCH_MISS_QUERY);
-    // Wait for debounce to complete
+    // Wait for debounce to finish
     await page.waitForTimeout(600);
 
     const dropdownVisible = await page.getByTestId('search-dropdown').isVisible().catch(() => false);
     if (dropdownVisible) {
-      // If dropdown opened — there should be empty-state or 0 items
+      // If dropdown opened — should be empty-state or 0 items
       const itemsCount = await page.getByTestId('search-result-item').count();
       expect(itemsCount).toBe(0);
     }
@@ -374,16 +374,16 @@ test.describe('Site Search', () => {
     await expect(page.getByTestId('search-dropdown')).toBeVisible({ timeout: 5_000 });
 
     await page.getByTestId('search-result-item').first().click();
-    // After navigation, dropdown should not be visible
+    // After navigation dropdown should not be visible
     await expect(page.getByTestId('search-dropdown')).not.toBeVisible();
   });
 });
 
 // If a separate results page `/search?q=...` is created
 test.describe('Search results page', () => {
-  test.skip(!SEARCH_RESULTS_PATH || !SEARCH_HIT_QUERY, 'E2E_SEARCH_RESULTS_PATH or E2E_SEARCH_HIT_QUERY is not set');
+  test.skip(!SEARCH_RESULTS_PATH || !SEARCH_HIT_QUERY, 'E2E_SEARCH_RESULTS_PATH or E2E_SEARCH_HIT_QUERY are not set');
 
-  test('page shows results for the query from URL', async ({ page }) => {
+  test('page shows results for query from URL', async ({ page }) => {
     await page.goto(`${SEARCH_RESULTS_PATH}?q=${encodeURIComponent(SEARCH_HIT_QUERY)}`);
     await expect(page.locator('h1')).toContainText(SEARCH_HIT_QUERY);
   });
@@ -400,7 +400,7 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_SEARCH_PAGE, E2E_SEARCH_HIT_QUERY, E2E_SEARCH_RESULTS_PATH)
 
 Decisions made automatically:
-- Search page: {SEARCH_PAGE} — {specified by user / using `/` since SearchBar is usually in Navbar}
+- Search page: {SEARCH_PAGE} — {user specified / using `/` since SearchBar is usually in Navbar}
 - Query with results: {SEARCH_HIT_QUERY} — fragment of the title of the first product ("{title}") from getProducts
 - Query without results: zzzz-nonexistent-query-xyz — hardcoded in the spec
 - Results page: {PATH → test included / not found — test test.skip}

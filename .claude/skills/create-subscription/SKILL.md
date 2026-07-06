@@ -8,11 +8,11 @@ Creates a flow for paid subscriptions through the `Subscriptions` module of OneE
 
 > ⚠️ **All methods require an authorized user.** Call after `reDefine(refreshToken)` on the client, then `getApi().Subscriptions.*` from the Client Component. Without authorization, the server will return `IError`.
 
-> ⚠️ This is NOT subscriptions for product events (availability/price) — for them, use `/create-subscription-events` (module `Events`). Here — **paid** subscriptions (billing through Stripe).
+> ⚠️ This is NOT subscriptions for product events (availability/price) — for those, use `/create-subscription-events` (module `Events`). Here — **paid** subscriptions (billing through Stripe).
 
 ---
 
-## Step 0: Get Subscription Markers
+## Step 0: Know Subscription Markers
 
 Plan markers are configured in OneEntry Admin. You can get a list of available ones directly from the SDK:
 
@@ -20,7 +20,7 @@ Plan markers are configured in OneEntry Admin. You can get a list of available o
 const markers = await getApi().Subscriptions.getAllSubscriptions()   // string[] — markers of all plans
 ```
 
-> ⚠️ `getAllSubscriptions()` returns **only markers** (`string[]`), without names/prices. Keep the titles and prices of the plans in your own dictionary (or create them as entities in the admin panel and fetch separately). If there are no plans in the admin panel — create an entry in [`MISMATCH-LOG.md`](../../rules/mismatch-log.md) (section C.8 / Subscriptions).
+> ⚠️ `getAllSubscriptions()` returns **only markers** (`string[]`), without names/prices. Keep the titles and prices of the plans in your own dictionary (or create them as entities in the admin panel and pull them separately). If there are no plans in the admin panel — create an entry in [`MISMATCH-LOG.md`](../../rules/mismatch-log.md) (section C.8 / Subscriptions).
 
 ```ts
 // app/config/subscriptions.ts — mapping dictionary (markers are real from the admin panel)
@@ -109,7 +109,7 @@ export function useSubscriptions(locale: string) {
 
 ---
 
-## Step 2: Plans Component
+## Step 2: Component with Plans
 
 File: `app/components/SubscriptionPlans.tsx`
 
@@ -171,7 +171,7 @@ export default function SuccessPage() {
 }
 ```
 
-> Activation occurs **after** payment confirmation via webhook on the OneEntry side — `getActiveSubscriptions()` may not return the new marker immediately. If needed — make several repeated reads with an interval (like polling `paymentUrl` for orders in [`rules/orders.md`](../../rules/orders.md)).
+> Activation occurs **after** payment confirmation via webhook on the OneEntry side — `getActiveSubscriptions()` may return a new marker not instantly. If necessary — make several retries with an interval (like polling `paymentUrl` for orders in [`rules/orders.md`](../../rules/orders.md)).
 
 ---
 
@@ -183,7 +183,7 @@ export default function SuccessPage() {
 1. All methods require a user session — ensureSession() (reDefine) before each call
 2. getAllSubscriptions/getActiveSubscriptions return string[] MARKERS, not objects — keep names/prices in your dictionary or admin entities
 3. subscribe() → { paymentUrl } → redirect to Stripe (like createSession for orders)
-4. An active subscription will appear in getActiveSubscriptions() after the payment webhook — not immediately
-5. recoverSubscriptions() opens the Stripe Billing Portal for recovery
-6. Do not confuse with product event subscriptions (/create-subscription-events)
+4. An active subscription will appear in getActiveSubscriptions() after the payment webhook — not instantly
+5. recoverSubscriptions({ marker }) sends a request for recovery (via Stripe Billing Portal on the OneEntry side) and returns boolean | IError — the redirect URL is NOT returned; after success, just reload getActiveSubscriptions()
+6. Do not confuse with Events subscriptions for products (/create-subscription-events)
 ```

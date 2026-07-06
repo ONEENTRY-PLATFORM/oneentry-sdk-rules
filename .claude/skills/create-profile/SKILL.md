@@ -10,12 +10,11 @@ Creates a Client Component with a profile form: fields from the Users API, data 
 
 ## Step 1: Create client utilities for the profile
 
-> If `lib/profile.ts` already exists — read and supplement, do not duplicate.
+> If `lib/profile.ts` already exists — read and supplement it, do not duplicate.
 
 ```typescript
 // lib/profile.ts
 import { getApi, isError } from '@/lib/oneentry';
-import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
 // Call from Client Component after reDefine()
 export async function getUserProfile(locale: string = 'en_US'): Promise<{
@@ -30,7 +29,12 @@ export async function getUserProfile(locale: string = 'en_US'): Promise<{
   }>;
 } | { error: string; statusCode?: number }> {
   try {
-    const user = (await getApi().Users.getUser()) as IUserEntity;
+    // getUser does NOT throw when isShell=true (default) — error comes in IError-envelope,
+    // check via isError, otherwise 401/403 won't bubble up (see .claude/rules/tokens.md)
+    const user = await getApi().Users.getUser(locale);
+    if (isError(user)) {
+      return { error: user.message || 'Failed to load profile', statusCode: user.statusCode };
+    }
 
     let formAttributes: any[] = [];
     const form = await getApi().Forms.getFormByMarker(user.formIdentifier, locale);
@@ -53,7 +57,8 @@ export async function getUserProfile(locale: string = 'en_US'): Promise<{
       formAttributes,
     };
   } catch (err: any) {
-    return { error: err.message || 'Failed to load profile', statusCode: err.statusCode };
+    // Just a safeguard against unforeseen failures — auth errors do not get here (envelope above)
+    return { error: err?.message || 'Failed to load profile' };
   }
 }
 
@@ -61,18 +66,27 @@ export async function getUserProfile(locale: string = 'en_US'): Promise<{
 export async function updateUserProfile(
   formData: Array<{ marker: string; type: string; value: string }>,
   authData?: Array<{ marker: string; value: string }>,
-): Promise<{ success: boolean } | { error: string }> {
+): Promise<{ success: boolean } | { error: string; statusCode?: number }> {
   try {
-    const user = (await getApi().Users.getUser()) as IUserEntity;
-    await getApi().Users.updateUser({
+    // getUser does NOT throw when isShell=true (default) — check envelope
+    const user = await getApi().Users.getUser();
+    if (isError(user)) return { error: user.message, statusCode: user.statusCode };
+
+    // updateUser returns boolean | IError and also does NOT throw — check the result strictly,
+    // otherwise you'll show "saved" on failure (401, validation error)
+    const result = await getApi().Users.updateUser({
       formIdentifier: user.formIdentifier,
       formData,
       ...(authData && authData.length > 0 ? { authData } : {}),
-      state: user.state, // save state (cart, favorites)
+      state: user.state, // save state (basket, favorites)
     });
+    if (result !== true) {
+      return { error: isError(result) ? result.message : 'Failed to update profile' };
+    }
     return { success: true };
   } catch (err: any) {
-    return { error: err.message || 'Failed to update profile' };
+    // Safeguard against unforeseen failures — auth errors do not get here (envelope above)
+    return { error: err?.message || 'Failed to update profile' };
   }
 }
 ```
@@ -85,16 +99,15 @@ export async function updateUserProfile(
 
 - `'use client'` — the page uses `localStorage` and `useParams`
 - `useParams()` for `locale` — NOT `params` as Promise (this is a Client Component!)
-- **Token race condition:** on 401 — retry with the current `localStorage.getItem('refreshToken')`,
-  log out ONLY on 401/403 after retry
+- **Auth errors:** The SDK automatically does refresh and retry on 401 (proactively + reactively, single-flight, SDK ≥ 1.0.152) — manual retry is not needed. The application's task is to clear `'refresh-token'` and log out on IError-envelope with `statusCode` 401/403 (see .claude/rules/tokens.md)
 - **Field separation:** fields with `isPassword: true` → `authData` (only if filled),
   others → `formData`. Do not rely on the marker name — use the flag
-- **newToken:** after each response update `localStorage.setItem('refreshToken', newToken)`
+- **Token rotation:** `localStorage` is updated automatically via `saveFunction` on every `/refresh` — manual `setItem('refresh-token', ...)` is not needed (there is no `newToken` field in SDK responses)
 - Sort fields by `position`
 
 ### Input Type Definition
 
-The type `password` — by the flag `isPassword`. For email/phone — by the flags `isLogin` / `isNotificationEmail` / `isNotificationPhoneSMS` / `isNotificationPhonePush`; the marker name is the last fallback.
+The `password` type is determined by the `isPassword` flag. For email/phone — by the flags `isLogin` / `isNotificationEmail` / `isNotificationPhoneSMS` / `isNotificationPhonePush`; the marker name is the last fallback.
 
 ```typescript
 type FieldFlags = {
@@ -303,7 +316,7 @@ function getInputType(attr: IFormAttribute): string {
 
 ---
 
-## Step 3: Recall key rules
+## Step 3: Remind key rules
 
 > Token handling rules: `.claude/rules/tokens.md`
 
@@ -314,7 +327,7 @@ function getInputType(attr: IFormAttribute): string {
 2. getUserProfile and updateUserProfile — client utilities via getApi() after reDefine()
 3. Log out ONLY on 401/403
 4. Fields with isPassword: true → authData (only if filled), others → formData (do not rely on marker name)
-5. Never do removeItem('refreshToken') on data loading error
+5. Never do removeItem('refresh-token') on data loading error
 ```
 
 ---
@@ -369,14 +382,14 @@ return (
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Profile page path** — ask: "Where is the profile page located? (e.g., `/profile`, `/account`, `/en_US/profile`)".
+1. **Profile page path** — ask: "Where is the profile page located? (e.g. `/profile`, `/account`, `/en_US/profile`)".
    - Silent → find it yourself via Glob (`app/**/profile/**/page.tsx`, `app/**/account/**/page.tsx`). Inform: "Found the profile page at `{path}` — using it. If incorrect, please provide the actual path."
 2. **Login page path** (needed for redirect check) — ask if not mentioned. Silent → find it yourself via Glob (`app/**/login/**`, `app/**/auth/**`). Inform the solution.
 3. **Test credentials** (existing authorized OneEntry user) — **mandatory for most profile tests**:
-   - Ask: "Please provide the email and password of an existing test user — the checks for loading and editing the profile will be performed on it. If skipped — only the test 'unauthorized user shows placeholder' will work."
+   - Ask: "Please provide the email and password of an existing test user — the checks for loading and editing the profile will be conducted on it. If skipped — only the test 'unauthorized user shows placeholder' will work."
    - If the user provides values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (via Edit/Write). If `.env.local` is not in `.gitignore` — add it yourself.
    - If the user is silent/refuses → leave the variables empty. Inform: "Credentials not set — profile editing tests will be `test.skip`. Add values to `.env.local` when there is a test user."
-4. **Field marker for editing** — choose yourself: take the first non-password attribute from `user.formIdentifier` of the form via the already running `/inspect-api forms` (e.g., `name`, `first_name`). Inform: "Using field `{marker}` for the editing test — the first non-password field of the profile form."
+4. **Field marker for editing** — choose yourself: take the first non-password attribute from `user.formIdentifier` form via the already running `/inspect-api forms` (e.g. `name`, `first_name`). Inform: "For the editing test, I will use the field `{marker}` — the first non-password field of the profile form."
 
 **Example `.env.local`:**
 
@@ -464,7 +477,7 @@ test.describe('Profile Page', () => {
 
       const passwordInputs = page.locator('input[type="password"][data-testid^="profile-field-"]');
       const pwCount = await passwordInputs.count();
-      test.skip(pwCount === 0, 'There are no password fields in the profile form');
+      test.skip(pwCount === 0, 'No password fields in the profile form');
 
       // Do not touch password, save — there should be no error
       await page.getByTestId('profile-submit').click();
@@ -485,12 +498,12 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_PROFILE_PATH, E2E_LOGIN_PATH, E2E_PROFILE_EDIT_FIELD, E2E_TEST_EMAIL/PASSWORD)
 
 Decisions made automatically:
-- Profile path: {PROFILE_PATH} — {provided by user / found via Glob in app/**/profile/**}
-- Login path: {LOGIN_PATH} — {provided by user / found via Glob}
+- Profile path: {PROFILE_PATH} — {user provided / found via Glob in app/**/profile/**}
+- Login path: {LOGIN_PATH} — {user provided / found via Glob}
 - Field for editing test: {EDIT_FIELD} — first non-password field of the profile form (from /inspect-api forms)
 - Test credentials: {provided by user / left empty — the "Authorized user" block will be test.skip. Reason: user did not provide a test user}
 
 Run: npm run test:e2e -- profile.spec.ts
 ```
 
-If credentials are not set — editing tests will be skipped (`test.skip`), leaving only the unauthorized user redirect test.
+If credentials are not set — editing tests are skipped (`test.skip`), only the unauthorized user redirect test remains.

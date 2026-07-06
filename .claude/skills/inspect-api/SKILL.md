@@ -4,8 +4,8 @@ description: Inspect OneEntry API to get markers and data
 ---
 ---
 name: inspect-api
-description: Get the project URL and token, then make requests to OneEntry via SDK to retrieve real markers, attributes, and data structures before writing code
-argument-hint: "pages|menus|forms|products|product-statuses|auth-providers|all"
+description: Get the project URL and token, then make requests to OneEntry via the SDK to retrieve real markers, attributes, and data structures before writing code
+argument-hint: "pages|menus <marker>|forms|products|product-statuses|auth-providers|all"
 allowed-tools: Read, Write, Bash
 ---
 
@@ -27,7 +27,7 @@ Search in the following order of priority:
 
 ### 1. MCP tool `get-project-config` (highest priority)
 
-Call the MCP tool **`get-project-config`** — it will return the URL and token if the user has added them in `.mcp.json`:
+Call the MCP tool **`get-project-config`** — it will return the URL and token if the user has added them to `.mcp.json`:
 
 ```json
 {
@@ -43,7 +43,7 @@ Call the MCP tool **`get-project-config`** — it will return the URL and token 
 }
 ```
 
-If `source` is `".mcp.json"` and both fields are not empty — use them.
+If `source` is `".mcp.json"` and both fields are non-empty — use them.
 
 ### 2. `.env.local` / `.env`
 
@@ -55,12 +55,12 @@ Look for `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`.
 If the data is not found in any of the sources — ask:
 
 > Project URL and App Token not found. Please provide:
-> - Project URL (e.g., `https://my-project.oneentry.cloud`)
+> - Project URL (e.g.: `https://my-project.oneentry.cloud`)
 > - App Token (Settings → App Token in OneEntry Admin Panel)
 
 ## Step 2: Create a temporary inspection script
 
-Create a file `.claude/temp/inspect-api.mjs`, substituting the real URL and TOKEN.
+Create a file `.claude/temp/inspect-api.mjs`, substituting the actual URL and TOKEN.
 The folder `.claude/temp/` is the standard place for temporary files (see project rules).
 
 ```js
@@ -71,6 +71,7 @@ const URL   = 'https://YOUR_PROJECT.oneentry.cloud'; // ← substitute
 const TOKEN = 'YOUR_TOKEN';                          // ← substitute
 const LANG  = 'en_US';
 const ARGS  = process.argv[2] || 'all';
+const MARKER = process.argv[3]; // for the menus section: node inspect-api.mjs menus <marker>
 
 const api = defineOneEntry(URL, { token: TOKEN });
 const sep = (title) => console.log(`\n${'='.repeat(50)}\n${title}\n${'='.repeat(50)}`);
@@ -79,11 +80,12 @@ async function inspect() {
 
   // ── PAGES ──────────────────────────────────────────
   if (ARGS === 'all' || ARGS === 'pages') {
-    sep('PAGES (pageUrl for getPageByUrl)');
-    const pages = await api.Pages.getRootPages(LANG);
+    sep('PAGES (pageUrl for getPageByUrl, including nested)');
+    // getPages returns ALL pages (getRootPages — only top level)
+    const pages = await api.Pages.getPages(LANG);
     if (Array.isArray(pages)) {
       pages.forEach(p =>
-        console.log(`  "${p.pageUrl}" — ${p.localizeInfos?.[LANG]?.title ?? p.localizeInfos?.title ?? ''}`)
+        console.log(`  "${p.pageUrl}" — ${p.localizeInfos?.title ?? ''}${p.parentId != null ? ` (parentId: ${p.parentId}, depth: ${p.depth})` : ''}`)
       );
     } else {
       console.log('  Error:', pages?.message);
@@ -91,25 +93,35 @@ async function inspect() {
   }
 
   // ── MENUS ──────────────────────────────────────────
+  // The SDK does not return a list of all menus — only a specific one by marker (getMenusByMarker,
+  // the only method of the Menus module). The marker is in the admin panel (Content → Menus) or with the user.
   if (ARGS === 'all' || ARGS === 'menus') {
-    sep('MENUS (identifier for getMenusByMarker)');
-    const menus = await api.Menus.getMenus(LANG);
-    if (Array.isArray(menus)) {
-      menus.forEach(m =>
-        console.log(`  "${m.identifier}" — ${m.localizeInfos?.[LANG]?.title ?? ''}`)
-      );
+    sep('MENU (tree of pages by getMenusByMarker)');
+    if (!MARKER) {
+      console.log('  Skipped: a menu marker is required. Run: node inspect-api.mjs menus <marker>');
     } else {
-      console.log('  Error:', menus?.message);
+      const menu = await api.Menus.getMenusByMarker(MARKER, LANG);
+      if (menu?.pages) {
+        const printPages = (pages, depth = 0) =>
+          (Array.isArray(pages) ? pages : [pages]).forEach(pg => { // children: array OR single object
+            console.log(`  ${'  '.repeat(depth)}"${pg.pageUrl}" — ${pg.localizeInfos?.title ?? ''} (position: ${pg.position})`);
+            if (pg.children) printPages(pg.children, depth + 1);
+          });
+        printPages(menu.pages);
+      } else {
+        console.log('  Error:', menu?.message);
+      }
     }
   }
 
   // ── FORMS ──────────────────────────────────────────
   if (ARGS === 'all' || ARGS === 'forms') {
     sep('FORMS (identifier for getFormByMarker)');
-    const forms = await api.Forms.getAllForms(LANG);
-    if (Array.isArray(forms)) {
-      forms.forEach(f => {
-        console.log(`\n  "${f.identifier}" — ${f.localizeInfos?.[LANG]?.title ?? ''}`);
+    // getAllForms returns IFormsResponse { total, items }, NOT an array (default limit=30)
+    const forms = await api.Forms.getAllForms(LANG, 0, 100);
+    if (Array.isArray(forms?.items)) {
+      forms.items.forEach(f => {
+        console.log(`\n  "${f.identifier}" — ${f.localizeInfos?.title ?? ''}`);
         if (Array.isArray(f.attributes)) {
           f.attributes.forEach(a => {
             console.log(`    attr: marker="${a.marker}" type="${a.type}" isLogin=${a.isLogin} isSignUp=${a.isSignUp}`);
@@ -132,10 +144,10 @@ async function inspect() {
     if (result?.items?.length > 0) {
       const p = result.items[0];
       console.log(`  id: ${p.id}`);
-      console.log(`  title: ${p.localizeInfos?.[LANG]?.title ?? p.localizeInfos?.title ?? ''}`);
+      console.log(`  title: ${p.localizeInfos?.title ?? ''}`);
       console.log(`  statusIdentifier: "${p.statusIdentifier}"`);
       console.log(`  price: ${p.price}`);
-      const attrs = p.attributeValues?.[LANG] ?? p.attributeValues ?? {};
+      const attrs = p.attributeValues ?? {}; // already normalized by SDK by requested locale (keys — markers)
       console.log('  attributeValues:');
       Object.entries(attrs).forEach(([marker, attr]) => {
         const a = attr;
@@ -155,7 +167,7 @@ async function inspect() {
     const statuses = await api.ProductStatuses.getProductStatuses(LANG);
     if (Array.isArray(statuses)) {
       statuses.forEach(s =>
-        console.log(`  "${s.identifier}" — ${s.localizeInfos?.[LANG]?.title ?? ''}`)
+        console.log(`  "${s.identifier}" — ${s.localizeInfos?.title ?? ''}`)
       );
     } else {
       console.log('  Error:', statuses?.message);

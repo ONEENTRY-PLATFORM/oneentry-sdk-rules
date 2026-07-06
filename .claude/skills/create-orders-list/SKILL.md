@@ -14,46 +14,73 @@ Creates a Client Component with a list of orders: loading through all storages, 
 
 ```typescript
 // lib/orders.ts
-import { getApi } from '@/lib/oneentry';
+import { getApi, isError } from '@/lib/oneentry';
 import type { IOrdersEntity, IOrderByMarkerEntity } from 'oneentry/dist/orders/ordersInterfaces';
+
+// Default SDK limit for getAllOrdersStorage / getAllOrdersByMarker
+const ORDERS_PAGE_LIMIT = 30;
 
 /**
  * Loads ALL user orders through all storages.
  * Call from Client Component after reDefine().
  * storageIdToMarker is needed for cancelOrder (order.storageId → storageMarker).
+ *
+ * ⚠️ SDK does NOT throw an error when isShell=true (by default), but returns an object
+ *    IError { statusCode, message } — detect it using isError(), not through try/catch.
+ * ⚠️ getAllOrdersByMarker has a default limit=30 — "all orders" are reached only
+ *    by fetching pages based on the total field of the response (the same for getAllOrdersStorage when >30 storages).
  */
 export async function loadAllOrders(): Promise<
   | { orders: IOrderByMarkerEntity[]; storageIdToMarker: Record<number, string> }
   | { error: string; statusCode?: number }
 > {
-  try {
-    const storages = (await getApi().Orders.getAllOrdersStorage()) as IOrdersEntity[];
+  const storages = await getApi().Orders.getAllOrdersStorage();
 
-    const allOrders: IOrderByMarkerEntity[] = [];
-    const storageIdToMarker: Record<number, string> = {};
-
-    for (const storage of storages) {
-      if (!storage.identifier) continue;
-      storageIdToMarker[storage.id] = storage.identifier;
-      try {
-        const result = await getApi().Orders.getAllOrdersByMarker(storage.identifier);
-        if (result && 'items' in result) {
-          allOrders.push(...(result as any).items);
-        }
-      } catch {
-        // skip unavailable storage
-      }
-    }
-
-    return { orders: allOrders, storageIdToMarker };
-  } catch (error: any) {
-    return { error: error.message, statusCode: error.statusCode };
+  // API error is returned as an object, not thrown
+  if (isError(storages)) {
+    return { error: storages.message, statusCode: storages.statusCode };
   }
+  // Protection: in case of a network failure, SDK also returns a value (without statusCode)
+  if (!Array.isArray(storages)) {
+    return { error: 'Unexpected response from getAllOrdersStorage' };
+  }
+
+  const allOrders: IOrderByMarkerEntity[] = [];
+  const storageIdToMarker: Record<number, string> = {};
+
+  for (const storage of storages) {
+    if (!storage.identifier) continue;
+    storageIdToMarker[storage.id] = storage.identifier;
+    try {
+      // Fetch ALL orders of the storage: default limit=30, going by total
+      let offset = 0;
+      let total = 0;
+      do {
+        const result = await getApi().Orders.getAllOrdersByMarker(
+          storage.identifier,
+          undefined, // langCode — defaults from the instance
+          offset,
+          ORDERS_PAGE_LIMIT,
+        );
+        if (isError(result) || !('items' in result)) break;
+        allOrders.push(...result.items);
+        total = result.total;
+        if (result.items.length === 0) break; // protection against infinite loop
+        offset += ORDERS_PAGE_LIMIT;
+      } while (offset < total);
+    } catch {
+      // skip unavailable storage
+    }
+  }
+
+  return { orders: allOrders, storageIdToMarker };
 }
 
 /**
  * Cancels an order: updateOrderByMarkerAndId with statusMarker: 'canceled'.
  * storageMarker is obtained from storageIdToMarker[order.storageId].
+ * SDK does not throw on error (isShell=true) — check the result using isError,
+ * otherwise the cancellation failure will be falsely accepted as success.
  */
 export async function cancelOrder(
   storageMarker: string,
@@ -66,14 +93,18 @@ export async function cancelOrder(
   },
 ): Promise<void | { error: string; statusCode?: number }> {
   try {
-    await getApi().Orders.updateOrderByMarkerAndId(storageMarker, orderId, {
+    const result = await getApi().Orders.updateOrderByMarkerAndId(storageMarker, orderId, {
       formIdentifier: order.formIdentifier,
       paymentAccountIdentifier: order.paymentAccountIdentifier,
       formData: order.formData,
       products: order.products.map((p) => ({ productId: p.id, quantity: p.quantity })),
       statusMarker: 'canceled',
     } as any);
+    if (isError(result)) {
+      return { error: result.message, statusCode: result.statusCode };
+    }
   } catch (error: any) {
+    // External protection against unexpected exceptions (not the main detection channel)
     return { error: error.message, statusCode: error.statusCode };
   }
 }
@@ -86,8 +117,9 @@ export async function cancelOrder(
 ### Key Principles
 
 - `'use client'` + `useParams()` — NOT a server component
-- `loadAllOrders` — one instance traverses all storages
-- **Token race condition:** retry on 401 with the current `localStorage.getItem('refreshToken')`
+- `loadAllOrders` — one instance goes through all storages; `getAllOrdersByMarker` has a default `limit=30`, so "all orders" are reached only by fetching pages based on the `total` field of the response
+- **API Errors:** SDK does NOT throw when `isShell=true` (by default) — returns an object `IError { statusCode, message }`; detect it using `isError()`, not just `try/catch`
+- **Authorization:** SDK ≥ 1.0.152 automatically performs single-flight proactive refresh and internal 401→refresh→retry — manual retry is not needed; log out ONLY on confirmed 401/403; localStorage key — `'refresh-token'` (with a hyphen)
 - **storageIdToMarker** — mapping `storage.id → storage.identifier` for `cancelOrder`
 - **previewImage** — can be an array or an object → normalize: `Array.isArray(img) ? img[0] : img`
 - **Sorting** by `createdDate` in descending order (newest first)
@@ -119,8 +151,10 @@ export default function OrdersPage() {
   const params = useParams();
   const locale = (params.locale as string) || 'en_US';
 
-  // Protection against double execution in React StrictMode (dev)
-  // Without it, two parallel refresh requests burn a one-time refresh token
+  // Protection against double execution in React StrictMode (dev).
+  // Single-flight refresh SDK works only within one instance; without a guard
+  // StrictMode through reDefine creates TWO instances, and the second proactive refresh
+  // will burn the already rotated one-time refresh-token.
   const initRef = useRef(false);
 
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -143,10 +177,11 @@ export default function OrdersPage() {
         return;
       }
       // ⚠️ Check hasActiveSession before reDefine
-      // Without checking — after login, the SDK is already authorized, reDefine will replace the instance
-      // → the first request will return 401 → removeItem('refresh-token') → logout
+      // Without checking — after login SDK is already authorized, reDefine will replace the instance
+      // → the first request will return 401 → removeItem('refresh-token') → log out
       if (!hasActiveSession()) {
-        await reDefine(refreshToken, 'en_US');
+        // locale from useParams — otherwise localized fields of orders will return to en_US
+        await reDefine(refreshToken, locale);
       }
       setIsLoggedIn(true);
       loadOrders();
@@ -159,7 +194,7 @@ export default function OrdersPage() {
       const result = await loadAllOrders();
 
       if ('error' in result) {
-        // Logout ONLY on confirmed auth error
+        // Log out ONLY on confirmed auth error
         if (result.statusCode === 401 || result.statusCode === 403) {
           localStorage.removeItem('refresh-token');
           setIsLoggedIn(false);
@@ -176,7 +211,7 @@ export default function OrdersPage() {
       );
       setOrders(sorted);
     } catch {
-      // Network error — do not logout
+      // Network error — do not log out
     } finally {
       setLoading(false);
     }
@@ -253,13 +288,22 @@ export default function OrdersPage() {
         const isCanceled = order.statusIdentifier === 'canceled';
         const isCreated = order.statusIdentifier === 'created';
 
+        // Status title: statusLocalizeInfos — primary source. SDK can return
+        // both a normalized object { title } and a locale-keyed map — we handle both forms.
+        const sli = order.statusLocalizeInfos as Record<string, any> | string | undefined;
+        const localizedStatus =
+          typeof sli === 'string'
+            ? sli
+            : sli?.title ??
+              (typeof sli?.[locale] === 'string' ? sli[locale] : sli?.[locale]?.title);
+
         return (
           <div key={`${order.storageId}-${order.id}`}>
             {/* Order row — click expands details */}
             <button onClick={() => toggleOrder(order.id)}>
               <span>{new Date(order.createdDate).toLocaleDateString()}</span>
               <span>{order.currency}{Number(order.totalSum).toFixed(2)}</span>
-              <span>{STATUS_LABELS[order.statusIdentifier ?? ''] ?? order.statusIdentifier}</span>
+              <span>{localizedStatus ?? STATUS_LABELS[order.statusIdentifier ?? ''] ?? order.statusIdentifier}</span>
             </button>
 
             {/* Expanded details */}
@@ -322,7 +366,7 @@ export default function OrdersPage() {
 }
 
 /**
- * previewImage can be an array (type image) or an object (type file).
+ * previewImage can be an array (image type) or an object (file type).
  * Normalize and take downloadLink.
  */
 function getProductImage(product: IOrderProducts): string | null {
@@ -335,21 +379,21 @@ function getProductImage(product: IOrderProducts): string | null {
 
 ---
 
-## Step 3: Recall key rules
+## Step 3: Remind key rules
 
 ✅ Orders page created. Key rules:
 
 ```md
 1. loadAllOrders/cancelOrder — call from Client Component, getApi() after reDefine()
 2. storageIdToMarker: storage.id → identifier — needed for cancelOrder
-3. Logout ONLY on 401/403
+3. Log out ONLY on 401/403
 4. previewImage can be an array or an object — normalize using Array.isArray()
 5. Sort orders by createdDate in descending order
 6. Client-side pagination through visibleCount — do not reload the list
 7. cancelOrder updates status locally (setOrders), without reload
 8. Repeat order: addToCart(p.id) for each product from order.products
-9. statusIdentifier — marker, title only through STATUS_LABELS map (replace with real project markers)
-10. paymentAccountLocalizeInfos — locale-keyed: `localizeInfos?.[locale] || paymentAccountIdentifier`
+9. statusLocalizeInfos — primary source of status title (title or locale-keyed entry), STATUS_LABELS — fallback for old orders/no localization; real status markers ('created'/'canceled') take from Orders.getAllStatusesByStorageMarker(marker) → IOrderStatus.identifier + localizeInfos
+10. paymentAccountLocalizeInfos — already normalized SDK to instance language (NOT locale-keyed): `paymentAccountLocalizeInfos?.title || paymentAccountIdentifier`
 ```
 
 ---
@@ -387,7 +431,7 @@ return (
         <button data-testid="order-toggle" onClick={() => toggleOrder(order.id)}>
           <span data-testid="order-date">{new Date(order.createdDate).toLocaleDateString()}</span>
           <span data-testid="order-total">{order.currency}{Number(order.totalSum).toFixed(2)}</span>
-          <span data-testid="order-status">{STATUS_LABELS[order.statusIdentifier ?? ''] ?? order.statusIdentifier}</span>
+          <span data-testid="order-status">{localizedStatus ?? STATUS_LABELS[order.statusIdentifier ?? ''] ?? order.statusIdentifier}</span>
         </button>
 
         {isOpen && (
@@ -421,19 +465,19 @@ return (
 
 ### 4.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (perform step by step, do not ask in one list):**
+**Algorithm (execute step by step, do not ask in one list):**
 
-1. **Path to the orders page** — ask: "What is the path to the orders page? (e.g., `/orders`, `/en_US/account/orders`)". 
-   - Silent → find it yourself via Glob (`app/**/orders/**/page.tsx`, `app/**/account/**/orders/**/page.tsx`). Inform: "Found the orders page at `{path}` — using it".
-2. **Path to the login page** — needed for redirect test to check that an unauthorized user sees the login block.
-   - Ask: "Where is the login form located? (`/login`, `/auth`, etc.)". Silent → Glob by `app/**/login/**` / `app/**/auth/**` or Grep by `<AuthForm`. Inform what you found.
+1. **Path of the orders page** — ask: "What is the path of the orders page? (e.g., `/orders`, `/en_US/account/orders`)". 
+   - Silent → find it yourself through Glob (`app/**/orders/**/page.tsx`, `app/**/account/**/orders/**/page.tsx`). Inform: "Found orders page at `{path}` — using it".
+2. **Path of the authorization page** — needed for redirect test to check that unauthorized users see the login block.
+   - Ask: "Where is the authorization form located? (`/login`, `/auth`, etc.)". Silent → Glob by `app/**/login/**` / `app/**/auth/**` or Grep by `<AuthForm`. Report the found.
 3. **Test credentials** (authorized user who has at least one order in OneEntry):
-   - Ask: "Please provide the email and password of a test user who has at least one order. I will skip — tests for the order list/cancellation/pagination will be disabled through `test.skip`".
-   - If the user provides values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (via Edit/Write), check that `.env.local` is in `.gitignore`.
+   - Ask: "Please provide the email and password of the test user who has at least one order. I will skip — tests with the order list/cancellation/pagination will be disabled through `test.skip`".
+   - If the user provides values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (through Edit/Write), check that `.env.local` is in `.gitignore`.
    - If silent/refused → leave the variables empty with a comment. Inform: "Credentials not set — tests requiring authorization will be skipped through `test.skip`. Reason: without a test user with orders, the list/cancellation cannot be checked".
-4. **Status marker 'created' / 'canceled'** — check yourself via `/inspect-api` (orders section or order statuses in the admin panel): real identifiers may differ. If they differ — update `STATUS_LABELS` in the generated code and constants in the spec file. Inform: "Status markers: created=`{value}`, canceled=`{value}` — substituted in tests".
+4. **Status marker 'created' / 'canceled'** — get real identifiers through `Orders.getAllStatusesByStorageMarker(marker, locale)` → `IOrderStatus[]` (check `isError`, filter by `isUsed`, sort by `position`; default `limit=30`): `identifier` — marker, `localizeInfos` — title. As an alternative — `/inspect-api`. If the identifiers differ from the defaults — update `STATUS_LABELS` in the code and constants in the spec file. Inform: "Status markers: created=`{value}`, canceled=`{value}` — substituted in tests".
 
-**Example of filling in `.env.local` (do it yourself):**
+**Example of filling `.env.local` (do it yourself):**
 
 ```bash
 # e2e orders
@@ -467,7 +511,7 @@ async function signIn(page: import('@playwright/test').Page) {
 
 test.describe('Orders Page', () => {
   test('without authorization shows "Please log in" block', async ({ page, context }) => {
-    // Ensure no refresh-token
+    // Ensure absence of refresh-token
     await context.clearCookies();
     await page.addInitScript(() => window.localStorage.removeItem('refresh-token'));
 
@@ -484,7 +528,7 @@ test.describe('Orders Page', () => {
       await expect(page.getByTestId('orders-page')).toBeVisible({ timeout: 10_000 });
     });
 
-    test('renders list of orders (or empty-state)', async ({ page }) => {
+    test('renders the list of orders (or empty-state)', async ({ page }) => {
       const items = page.getByTestId('order-item');
       const empty = page.getByTestId('orders-empty');
       const hasItems = await items.first().isVisible().catch(() => false);
@@ -502,7 +546,7 @@ test.describe('Orders Page', () => {
 
     test('the "Load more" button loads the next page', async ({ page }) => {
       const loadMore = page.getByTestId('orders-load-more');
-      test.skip(!(await loadMore.isVisible().catch(() => false)), 'Fewer orders than one page — Load more not shown');
+      test.skip(!(await loadMore.isVisible().catch(() => false)), 'Orders are less than one page — Load more not shown');
 
       const before = await page.getByTestId('order-item').count();
       await loadMore.click();
@@ -523,7 +567,7 @@ test.describe('Orders Page', () => {
       const orderItem = cancelBtn.locator('xpath=ancestor::*[@data-testid="order-item"]').first();
       await cancelBtn.click();
 
-      // The button goes into a disabled state — we expect that after the API response it will disappear / be replaced
+      // The button goes into disabled state — we expect that after the API response it will disappear / be replaced
       await expect.poll(async () => orderItem.getByTestId('order-status').innerText(), { timeout: 10_000 })
         .toMatch(/cancel/i);
     });
@@ -541,8 +585,8 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_ORDERS_PATH, E2E_AUTH_PATH, E2E_TEST_EMAIL, E2E_TEST_PASSWORD)
 
 Decisions made automatically:
-- Path to the orders page: {ORDERS_PATH} — {provided by user / found via Glob}
-- Path to the login page: {AUTH_PATH} — {provided / found via Glob}
+- Path of the orders page: {ORDERS_PATH} — {user-specified / found through Glob}
+- Path of the login page: {AUTH_PATH} — {user-specified / found through Glob}
 - Test credentials: {provided / left empty — tests for the authorized block will be test.skip}
 - Status markers: created=`{value}`, canceled=`{value}` — from /inspect-api
 

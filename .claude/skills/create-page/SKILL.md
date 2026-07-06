@@ -13,7 +13,7 @@ Argument: `pageMarker` (page marker in OneEntry, for example `about` or `home`)
 If the argument is not provided — ask the user:
 - "What is the `pageUrl` of the page in OneEntry? (You can find out via `/inspect-api pages`)"
 
-**⚠️ IMPORTANT:** `pageUrl` is the marker (one word, for example `"about"`), NOT the full path (`"shop/about"`).
+**⚠️ IMPORTANT:** `pageUrl` is the marker (one word, for example `"about"`), and NOT the full path (`"shop/about"`).
 
 ---
 
@@ -58,7 +58,7 @@ export default async function AboutPage({
       <h1>{page.localizeInfos?.title}</h1>
       <div
         dangerouslySetInnerHTML={{
-          __html: page.localizeInfos?.htmlContent || page.localizeInfos?.content || '',
+          __html: page.localizeInfos?.htmlContent || page.localizeInfos?.htmlValue || '',
         }}
       />
     </main>
@@ -83,7 +83,7 @@ export default async function HomePage({
   // Parallel requests for performance
   const [page, blocks] = await Promise.all([
     getApi().Pages.getPageByUrl('home', locale),
-    getApi().Pages.getBlocksByPageUrl('home'),
+    getApi().Pages.getBlocksByPageUrl('home', locale),
   ]);
 
   if (isError(page)) notFound();
@@ -100,6 +100,10 @@ export default async function HomePage({
             // Access by marker (if known): attrs.title?.value
             // For images in blocks: attrs.bg?.value?.[0]?.downloadLink (Blocks/Pages — ARRAY)
             // For text: attrs.description?.value?.htmlValue
+            // Products are already loaded by SDK (>=1.0.153) — no separate requests to Products needed:
+            //   product_block          → block.products ?? []               (IProductsEntity[], first 30)
+            //   similar_products_block → block.similarProducts?.items ?? []  (IProductsResponse { total, items })
+            // Only through optional chaining: with traficLimit:true fields are absent, on load error SDK puts [].
             return (
               <section key={block.id}>
                 {/* render block */}
@@ -129,6 +133,7 @@ After creating the file, output:
 4. Blocks/Pages: image → value ARRAY → attrs.bg?.value?.[0]?.downloadLink
 5. Sort blocks by position before rendering
 6. Attribute markers of blocks — find out via /inspect-api
+7. product_block / similar_products_block: getBlocksByPageUrl already returns products in block.products / block.similarProducts?.items (SDK ≥1.0.153) — do not make duplicate requests to Products; fields are absent when traficLimit: true (access via `?? []`)
 ```
 
 ---
@@ -136,7 +141,7 @@ After creating the file, output:
 ## Step 6: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> To set up Playwright — first `/setup-playwright`.
+> For Playwright setup — first `/setup-playwright`.
 
 ### 6.1 Add `data-testid` to the page component
 
@@ -151,7 +156,7 @@ return (
     <div
       data-testid="cms-page-content"
       dangerouslySetInnerHTML={{
-        __html: page.localizeInfos?.htmlContent || page.localizeInfos?.content || '',
+        __html: page.localizeInfos?.htmlContent || page.localizeInfos?.htmlValue || '',
       }}
     />
 
@@ -173,29 +178,29 @@ return (
 );
 ```
 
-### 6.2 Gather test parameters and fill in `.env.local`
+### 6.2 Gather test parameters and fill `.env.local`
 
-**Algorithm (perform step by step, do not ask in one list):**
+**Algorithm (execute step by step, do not ask in one list):**
 
 1. **Path of the page in Next.js** — taken from the route of the created file (`app/[locale]/about/page.tsx` → `/about` or `/{locale}/about`). Claude knows the path itself — do not ask. Inform: "The test will go to `{path}`".
-2. **`pageUrl` marker** — already known from the skill argument (example: `about`, `home`). Use as is. If locale is required — take the first one from `/inspect-api` (usually `en_US`).
+2. **`pageUrl` marker** — already known from the skill argument (example: `about`, `home`). Use as is. If locale is required — take the first from `/inspect-api` (usually `en_US`).
 3. **Expected content** — check yourself via `/inspect-api pages`:
    - `page.localizeInfos.title` — should not be empty, check length > 0.
-   - If the page has blocks — count them via `getBlocksByPageUrl(pageUrl)`. Inform: "Found `{N}` blocks for page `{marker}` — the test will check their rendering".
-4. **Non-existent pageUrl** for the 404 test — generate a random one: `random-${Math.random().toString(36).slice(2,10)}`. This marker definitely does not exist, the test will check `notFound()`.
-5. **Fill in `.env.local`** (yourself, via Edit):
+   - If the page has blocks — count them via `getBlocksByPageUrl(pageUrl, locale)` (in a multilingual project, pass the locale — otherwise blocks will return in the SDK's default language). Inform: "The page `{marker}` has found `{N}` blocks — the test will check their rendering".
+4. **Non-existent pageUrl** for the 404 test — generate a random one: `random-${Math.random().toString(36).slice(2,10)}`. This marker is guaranteed not to exist, the test will check `notFound()`.
+5. **Fill `.env.local`** (yourself, via Edit):
 
 ```bash
 E2E_CMS_PATH=/about              # Next.js route path
 E2E_CMS_PAGE_URL=about           # pageUrl marker in OneEntry
-E2E_CMS_EXPECT_BLOCKS=3          # expected number of blocks (0 if no blocks)
+E2E_CMS_EXPECT_BLOCKS=3          # expected number of blocks (0 if without blocks)
 ```
 
 If any value could not be determined — leave it empty, the corresponding test will be `test.skip`.
 
 ### 6.3 Create `e2e/page.spec.ts`
 
-> ⚠️ Tests check the actual rendering of the pageUrl marker. Replace `/about` and `about` with real values (via env).
+> ⚠️ Tests check the real rendering of the pageUrl marker. Replace `/about` and `about` with real values (via env).
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -204,7 +209,7 @@ const CMS_PATH = process.env.E2E_CMS_PATH || '/about';
 const EXPECT_BLOCKS = Number(process.env.E2E_CMS_EXPECT_BLOCKS ?? '0');
 
 test.describe('CMS page (OneEntry Pages)', () => {
-  test('renders page with title from localizeInfos', async ({ page }) => {
+  test('renders the page with title from localizeInfos', async ({ page }) => {
     await page.goto(CMS_PATH);
     await expect(page.getByTestId('cms-page')).toBeVisible();
     const title = page.getByTestId('cms-page-title');
@@ -219,7 +224,7 @@ test.describe('CMS page (OneEntry Pages)', () => {
   });
 
   test('renders page blocks (if they exist)', async ({ page }) => {
-    test.skip(EXPECT_BLOCKS === 0, 'The page has no blocks — test skipped');
+    test.skip(EXPECT_BLOCKS === 0, 'The page has no blocks — test disabled');
 
     await page.goto(CMS_PATH);
     const blocks = page.getByTestId('cms-block');
@@ -248,7 +253,7 @@ Before completing the task — explicitly inform:
 Decisions made automatically:
 - Page path: {CMS_PATH} — from the route of the created Next.js file
 - pageUrl marker: {marker} — from the skill argument
-- Expected number of blocks: {N} — from /inspect-api getBlocksByPageUrl. {If 0 → block test skipped}
+- Expected number of blocks: {N} — from /inspect-api getBlocksByPageUrl. {If 0 → block test disabled}
 - 404 test: random non-existent path, generated at runtime
 
 Run: npm run test:e2e -- page.spec.ts

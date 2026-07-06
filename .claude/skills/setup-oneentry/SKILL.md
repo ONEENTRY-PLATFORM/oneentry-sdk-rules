@@ -4,17 +4,17 @@ description: Setup OneEntry SDK
 ---
 ---
 name: setup-oneentry
-description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with singleton pattern, configure next.config.ts for images
+description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with a singleton pattern, configure next.config.ts for images
 allowed-tools: Read, Glob, Write, Edit
 ---
 
 # /setup-oneentry - Setup oneentry
 
-Initialize OneEntry SDK in the current project. Follow the steps in order.
+Initialize the OneEntry SDK in the current project. Follow the steps in order.
 
-## Step 1: Check existing file
+## Step 1: Check for existing file
 
-Check if `lib/oneentry.ts` exists. If yes — read and show the current content, then ask if it needs to be overwritten.
+Check if `lib/oneentry.ts` exists. If it does — read and show the current content, then ask if it needs to be overwritten.
 
 ## Step 2: Create lib/oneentry.ts
 
@@ -35,12 +35,28 @@ const saveFunction = async (refreshToken: string): Promise<void> => {
 
 let apiInstance = defineOneEntry(PROJECT_URL, {
   token: APP_TOKEN,
+  langCode: 'en_US',
   auth: {
     saveFunction,
   },
 });
 
 export const getApi = () => apiInstance;
+
+// Current language of the instance (langCode). Always reflects the actual state of the SDK.
+export function getLang(): string {
+  return (
+    (apiInstance.AuthProvider as unknown as { state?: { lang?: string } })?.state
+      ?.lang ?? 'en_US'
+  );
+}
+
+// Extracts the image URL from the OneEntry attribute value:
+// array [{ downloadLink }] (image in Pages/Blocks, groupOfImages) or object { downloadLink } (image in Products, file).
+export function getImageUrl(value: unknown): string {
+  const v = Array.isArray(value) ? value[0] : value;
+  return (v as { downloadLink?: string } | null | undefined)?.downloadLink ?? '';
+}
 
 export async function reDefine(refreshToken: string, langCode?: string): Promise<void> {
   if (!refreshToken) return;
@@ -61,7 +77,9 @@ export function hasActiveSession(): boolean {
 }
 
 // Synchronizes tokens directly in the current instance.
-// Use in login() INSTEAD of reDefine() — avoids 401 when fetchUser after auth().
+// Use in login() INSTEAD of reDefine(): after auth() tokens are already written in the SDK state,
+// and reDefine will recreate the instance without accessToken — before the first SDK request it will make
+// an unnecessary /refresh, unnecessarily rotating the just issued one-time refresh token.
 export function syncTokens(accessToken: string, refreshToken: string): void {
   apiInstance.AuthProvider.setAccessToken(accessToken);
   apiInstance.AuthProvider.setRefreshToken(refreshToken);
@@ -75,6 +93,8 @@ export function isError(result: unknown): result is { statusCode: number; messag
   );
 }
 ```
+
+> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if tokens are issued to the user by the server (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; at runtime — `getApi().AuthProvider.setDeviceMetadata(browserString)`, an empty string resets the override). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
 
 ## Step 3: Configure next.config.ts for images
 
@@ -93,13 +113,13 @@ images: {
 
 ## Step 4: Check and create .env.local
 
-Check if the file `.env.local` exists in the root of the project.
+Check if the `.env.local` file exists in the root of the project.
 
 **If the file DOES NOT exist:**
 
 Ask the user:
-1. OneEntry project URL (e.g., `https://your-project.oneentry.cloud`)
-2. App Token (find in OneEntry admin → Settings → App Token)
+1. OneEntry project URL (for example: `https://your-project.oneentry.cloud`)
+2. App Token (find in the OneEntry admin panel → Settings → App Token)
 
 After receiving the answers, create `.env.local` with the entered values:
 
@@ -120,12 +140,12 @@ Output the message:
 ✅ lib/oneentry.ts created
 ✅ .env.local configured
 
-Find the token: in OneEntry admin → Settings → App Token
+Find the token: in the OneEntry admin panel → Settings → App Token
 ```
 
 ## Step 6: Check oneentry import
 
-Check that the `oneentry` package is installed in `package.json`. If not — inform:
+Check if the `oneentry` package is installed in `package.json`. If not — inform:
 
 ```text
 ⚠️ Install the package: npm install oneentry

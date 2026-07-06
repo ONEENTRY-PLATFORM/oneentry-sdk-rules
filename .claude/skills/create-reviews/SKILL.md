@@ -4,11 +4,11 @@ description: Create reviews section using FormData
 ---
 # Create Reviews Section (FormData)
 
-Arguments: page/product for reviews, whether responses to reviews are needed.
+Arguments: page/product for reviews, whether replies to reviews are needed.
 
 ---
 
-## Step 1: Get the form marker and formModuleConfigId
+## Step 1: Get form marker and formModuleConfigId
 
 ```bash
 /inspect-api forms
@@ -24,11 +24,17 @@ if (isError(form)) return [];
 
 // ⚠️ Discover formModuleConfigId dynamically from the SDK response, do not hardcode
 const DEFAULT_MODULE_CONFIG_ID = 2; // ← check your project through /inspect-api forms
-const formModuleConfigId = (form as IFormsEntity & { moduleFormConfigs?: Array<{ id?: number }> })
-  .moduleFormConfigs?.[0]?.id ?? DEFAULT_MODULE_CONFIG_ID;
+const formModuleConfigId = form.moduleFormConfigs?.[0]?.id ?? DEFAULT_MODULE_CONFIG_ID;
 ```
 
-**⚠️ DO NOT guess the marker.** If unsure — `/inspect-api forms`. See also [`rules/mismatch-log.md`](../../rules/mismatch-log.md) — if the form is not yet in the admin panel, create item C.1 with a field table.
+`moduleFormConfigs[0]` is `IFormConfig`: take the review settings from it, do not hardcode:
+
+- **Rating scale** — `config.maxRatingScale ?? 5` (field `number | null`); star step — `config.allowHalfRatings`. Do not hardcode “/5”.
+- **Moderation** — if `config.isModerate === true` (the field is only in products/pages variant of the config), DO NOT send the review with `status: 'approved'`: send it for moderation and inform the user that the review will appear after verification. Keep the selection for display by `'approved'`.
+- **Multiple configs** — in the response `Forms.getFormByMarker`, the field `formIdentifier` is NOT present: distinguish by `moduleIdentifier`/`entityIdentifiers`, prefer `isRating === true` (field `boolean | null`, can be `null`), fallback — `[0]`.
+- **Without extra request** — if the product is already loaded (`getProductById`/`getProducts`), configs are directly on it: `product.moduleFormConfigs` (in this case, there is `formIdentifier` — choose the review config by `formIdentifier === FORM_MARKER`), its `id` is the ready `formModuleConfigId`. There is also `formDataCount` (total counter of config records) and `entityFormDataCount` (counter by entity marker, key — for example `"catalog"`) — this is NOT a per-product review counter: check the actual keys through `/inspect-api` before using instead of `total` from `getFormsDataByMarker`.
+
+**⚠️ DO NOT guess the marker.** If unsure — `/inspect-api forms`. See also [`rules/mismatch-log.md`](../../rules/mismatch-log.md) — if the form is not yet in the admin panel, create item C.1 with the fields table.
 
 ---
 
@@ -36,11 +42,10 @@ const formModuleConfigId = (form as IFormsEntity & { moduleFormConfigs?: Array<{
 
 ### app/api/server/forms/getProductReviews.ts (Server Component wrapper)
 
-> This is **NOT a Server Action** (`'use server'`) — it is a regular async function in `app/api/server/...`, called directly from the Server Component. See [`rules/server-actions.md`](../../rules/server-actions.md), section "Server Component wrappers".
+> This is **NOT a Server Action** (`'use server'`) — this is a regular async function in `app/api/server/...`, called directly from the Server Component. See [`rules/server-actions.md`](../../rules/server-actions.md), section “Server Component wrappers”.
 
 ```typescript
 import { unstable_noStore } from 'next/cache';
-import type { IFormsEntity } from 'oneentry/dist/forms/formsInterfaces';
 import { getApi, getLang, isError } from '@/lib/oneentry';
 
 const FORM_MARKER = 'review_form';
@@ -53,6 +58,7 @@ export interface ProductReview {
   date: string;
   rating: number;
   text: string;
+  replies: ProductReview[]; // replies to the review
 }
 
 // ⚠️ unstable_noStore() disables Next.js route cache — fresh reviews will appear without revalidate
@@ -65,8 +71,8 @@ export async function getProductReviews(productId: number): Promise<ProductRevie
 
     // 1. Get the form and dynamically read formModuleConfigId
     const form = await getApi().Forms.getFormByMarker(FORM_MARKER);
-    const formModuleConfigId = (form as IFormsEntity & { moduleFormConfigs?: Array<{ id?: number }> })
-      ?.moduleFormConfigs?.[0]?.id ?? DEFAULT_MODULE_CONFIG_ID;
+    const formModuleConfigId =
+      (!isError(form) && form.moduleFormConfigs?.[0]?.id) || DEFAULT_MODULE_CONFIG_ID;
 
     // 2. Take only approved reviews — status matches what the submission form sets
     //    (see submitReview below — there status: 'approved')
@@ -93,19 +99,27 @@ export async function getProductReviews(productId: number): Promise<ProductRevie
       parentId: number | null;
       userIdentifier?: string;
       time?: string;
-      formData?: Array<{ marker: string; value?: unknown }> ;
+      formData?: Array<{ marker: string; value?: unknown }>;
     }> })?.items ?? [];
 
-    // Only top-level (parentId === null) — UI does not render nested responses
+    // Only top-level (parentId === null) — UI does not render nested replies
     return items
       .filter(item => item.parentId === null)
       .map<ProductReview>(item => {
         const ratingField = item.formData?.find(f => f.marker === 'review_rating');
         const textField = item.formData?.find(f => f.marker === 'review_text');
-        // ⚠️ value for `text` comes as [{ plainValue: '...' }], for primitives — string
-        const text = Array.isArray(textField?.value)
-          ? String((textField!.value[0] as { plainValue?: unknown })?.plainValue ?? '')
-          : String(textField?.value ?? '');
+        // ⚠️ value for `text` by SDK types — object { htmlValue, plainValue, params };
+        // in practice, it can also come as [{ plainValue }], for primitives — string
+        const rawText = textField?.value;
+        let text = '';
+        if (Array.isArray(rawText)) {
+          text = String((rawText[0] as { plainValue?: unknown })?.plainValue ?? '');
+        } else if (rawText && typeof rawText === 'object') {
+          const v = rawText as { plainValue?: string; htmlValue?: string };
+          text = v.plainValue || (v.htmlValue ?? '').replace(/<[^>]*>/g, '');
+        } else {
+          text = String(rawText ?? '');
+        }
         return {
           id: String(item.id),
           author: item.userIdentifier?.trim() || 'Anonymous',
@@ -131,7 +145,7 @@ export async function getProductReviews(productId: number): Promise<ProductRevie
 
 import { getApi, isError } from '@/lib/oneentry';
 
-// Submitting a review (top-level)
+// Submit review (top-level)
 export async function submitReview(
   formMarker: string,
   formModuleConfigId: number,
@@ -142,7 +156,7 @@ export async function submitReview(
     formIdentifier: formMarker,
     formModuleConfigId,
     moduleEntityIdentifier: String(productId),
-    replayTo: null,        // null = top-level review (not a response)
+    replayTo: null,        // null = top-level review (not a reply)
     status: 'approved',
     formData,
   });
@@ -150,7 +164,7 @@ export async function submitReview(
   return { success: true };
 }
 
-// Response to a review
+// Reply to review
 export async function submitComment(
   formMarker: string,
   formModuleConfigId: number,
@@ -192,9 +206,9 @@ const rating = review.formData.find((f: any) => f.marker === 'rating')?.value;
 // ⚠️ rating is stored as a string: '5', convert using Number(rating)
 
 // Metadata
-review.parentId         // null = review, number = response
+review.parentId         // null = review, number = reply
 review.time             // date
-review.userIdentifier   // user email
+review.userIdentifier   // user's email
 review.entityIdentifier // product ID
 
 // Average rating
@@ -305,16 +319,16 @@ export function ReviewsList({
 ✅ Reviews created. Key rules:
 
 1. formMarker and formModuleConfigId — from /inspect-api forms or Forms.getAllForms(), DO NOT guess
-2. isNested: 1 — mandatory for parent-child structure (reviews + responses)
+2. isNested: 1 — mandatory for parent-child structure (reviews + replies)
 3. entityIdentifier in body — filter by product
-4. replayTo: null → review, replayTo: String(id) → response
+4. replayTo: null → review, replayTo: String(id) → reply
    ⚠️ Typo in SDK: the field is called replayTo, not replyTo
 5. rating inside the review (FormData) is stored as a string ('5') — convert using Number()
-6. parentId === null → review, parentId !== null → response
+6. parentId === null → review, parentId !== null → reply
 7. FormData.postFormsData requires Server Action
 8. Field markers (rating, text, etc.) — depend on the form schema in OneEntry
 9. The final (aggregated) rating of the entity is read from `entity.rating?.value` (top-level), NOT from `attributeValues.rating`.
-   See [`rules/attribute-values.md`](../../rules/attribute-values.md) — section "Final Rating".
+   See [`rules/attribute-values.md`](../../rules/attribute-values.md) — section “Final Rating”.
 ```
 
 ---
@@ -322,7 +336,7 @@ export function ReviewsList({
 ## Step 6: Playwright E2E Tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> To set up Playwright — first `/setup-playwright`.
+> For Playwright setup — first `/setup-playwright`.
 
 ### 6.1 Add `data-testid` to Components
 
@@ -366,15 +380,15 @@ return (
 **Algorithm (execute step by step, do not ask in one list):**
 
 1. **ID of the test product with reviews** — choose it yourself through `/inspect-api`:
-   - Get products: `getApi().Products.getProducts({ limit: 5 })`. Take `items[0].id`.
-   - Report: "For testing, I am using product `id={productId}` («{title}») — the first in the catalog".
-   - Check if it has reviews: `getFormsDataByMarker(formMarker, formModuleConfigId, { entityIdentifier: productId }, 1)`. If `total > 0` — enable the review display test, otherwise — `test.skip` for it.
-2. **Path of the product page** — ask: "What is the path of the product page with reviews? (for example `/product/[id]`, `/en_US/shop/product/[id]`)". If silent → find it through Glob (`app/**/product/**/page.tsx`, `app/**/shop/**/product/**`). Substitute `{id}` as a template.
+   - Get products: `api.Products.getProducts([], LANG, { limit: 5 })` (in the script `/inspect-api`, `api` and `LANG` are already defined; the first argument is an array of filters `IFilterParams[]`, limit — in query). Take `items[0].id`.
+   - Report: "For the test, I am using product `id={productId}` («{title}») — the first in the catalog".
+   - Check if it has reviews: `getFormsDataByMarker(formMarker, formModuleConfigId, { entityIdentifier: productId }, 1)`. If `total > 0` — include the test for displaying reviews, otherwise — `test.skip` for it.
+2. **Path of the product page** — ask: "What is the path of the product page with reviews? (for example `/product/[id]`, `/en_US/shop/product/[id]`)". If silent → find through Glob (`app/**/product/**/page.tsx`, `app/**/shop/**/product/**`). Substitute `{id}` as a template.
 3. **Field markers of the review form** — determine yourself from the already obtained form schema (`/inspect-api forms`):
    - Rating field: the first attribute with a marker including `rating` (or with type=`radioButton` + `listTitles` from 5 elements). Report: "Using `{marker}` as the rating field".
    - Review text field: the first `string`/`text` attribute, not-captcha, not-rating. Report: "Using `{marker}` as the review text field".
-4. **Test credentials** — if the form requires authorization (`isVisibleAuth` for the form, check through `/inspect-api forms`):
-   - Ask: "The review form requires authorization. Please provide the email/password of the OneEntry test user. I will skip — the review submission test will be `test.skip`".
+4. **Test credentials** — if the form requires authorization (`form.moduleFormConfigs?.[0]?.isAnonymous === false` — anonymous submission is prohibited; field `boolean | null`, if `null`/`true` authorization is not needed; check through `/inspect-api forms`):
+   - Ask: "The review form requires authorization. Provide email/password of the test user OneEntry. I will skip — the review submission test will be `test.skip`".
    - If provided → add `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` to `.env.local` (through Edit/Write).
    - If silent → leave empty, the corresponding test will be `test.skip`.
 
@@ -444,7 +458,7 @@ test.describe('Product Reviews', () => {
     await page.goto(productPath);
     const form = page.getByTestId('review-form');
     const formVisible = await form.isVisible().catch(() => false);
-    test.skip(!formVisible, 'The review form is not visible (might require authorization)');
+    test.skip(!formVisible, 'The review form is not visible (may require authorization)');
 
     const fields = page.locator('[data-testid^="review-field-"]');
     expect(await fields.count()).toBeGreaterThan(0);
@@ -483,7 +497,7 @@ test.describe('Product Reviews', () => {
         if (tag === 'input') await ratingField.first().fill('5');
       }
 
-      // Review text — with random suffix, to identify test records
+      // Review text — with a random suffix to identify test records
       const rand = Math.random().toString(36).slice(2, 8);
       await page.getByTestId(`review-field-${TEXT_MARKER}`).fill(`E2E test review ${rand}`);
 
@@ -505,10 +519,10 @@ Before completing the task — explicitly inform:
 
 Decisions made automatically:
 - Test product: id={PRODUCT_ID} («{title}») — first from getProducts
-- Path of the product page: {PRODUCT_PATH_TEMPLATE} — {provided by user / found through Glob in app/**/product/**}
+- Path of the product page: {PRODUCT_PATH_TEMPLATE} — {user-specified / found through Glob by app/**/product/**}
 - Rating marker: {RATING_MARKER} — attribute with a marker including "rating", from the review form schema
 - Review text marker: {TEXT_MARKER} — first string/text non-captcha attribute of the form
-- Test credentials: {provided by user / left empty — the "Submitting a review" block will be test.skip}
+- Test credentials: {user-specified / left empty — the "Submitting a review" block will be test.skip}
 
 ⚠️ The submitted test review goes with the status 'approved' and remains in the database. The suffix "E2E test review <rand>" will help find and delete it manually in the admin panel.
 

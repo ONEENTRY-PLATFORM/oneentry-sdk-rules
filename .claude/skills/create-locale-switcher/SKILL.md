@@ -10,15 +10,15 @@ Creates a component for changing the language based on data from the `Locales AP
 
 ## Step 1: Clarify with the user
 
-1. **Where is the switch located?** (Header, Footer, separate component)
-2. **How to display languages?** — code (`en_US`), name (`English`), flag?
-3. **Is there a layout?** — if yes, copy exactly
+1. **Where is the switcher located?** (Header, Footer, separate component)
+2. **How to display languages?** — code (`en_US`), name (`English`), flag? The flag is taken from `locale.image` (if filled in the OneEntry admin panel), otherwise fallback to `shortCode`.
+3. **Is there a layout?** — if yes, copy it exactly
 
 ---
 
 ## Step 2: Create Server Action
 
-> If `app/actions/locales.ts` already exists — read and supplement, do not duplicate.
+> If `app/actions/locales.ts` already exists — read and supplement it, do not duplicate.
 
 ```typescript
 // app/actions/locales.ts
@@ -29,16 +29,18 @@ import { getApi, isError } from '@/lib/oneentry';
 export interface LocaleItem {
   code: string;
   title: string;
-  shortCode: string; // the first two characters of the code, e.g. 'en' from 'en_US'
+  shortCode: string; // short locale code from API, e.g. 'en'
+  image: string | null; // URL of the flag/icon from the OneEntry admin panel
 }
 
 export async function getLocales(): Promise<LocaleItem[]> {
   const locales = await getApi().Locales.getLocales();
   if (isError(locales)) return [];
   return (locales as any[]).map((locale: any) => ({
-    code: locale.code,                            // 'en_US', 'ru_RU'
-    title: locale.localizeInfos?.title || locale.code, // 'English', 'Русский'
-    shortCode: locale.code?.split('_')[0] || locale.code, // 'en', 'ru'
+    code: locale.code,                                      // 'en_US', 'ru_RU'
+    title: locale.nativeName || locale.name || locale.code, // 'русский язык' / 'Russian'
+    shortCode: locale.shortCode,                            // 'en', 'ru' — comes from API ready
+    image: locale.image,                                    // URL of the flag, can be null
   }));
 }
 ```
@@ -52,7 +54,7 @@ export async function getLocales(): Promise<LocaleItem[]> {
 - The current locale is taken from the URL (the `[locale]` segment in the route)
 - When changing the language, replace the locale segment in the `pathname` and navigate there
 - `usePathname()` + `useRouter()` from `next/navigation`
-- Can be made as a Server Component (receives locale as a prop) or Client Component
+- Can be done as a Server Component (receives locale as a prop) or Client Component
 - Locales are loaded **once** — either passed as a prop from the server parent or cached
 
 ### Option A: Server parent passes locales as a prop (preferred)
@@ -108,7 +110,7 @@ export function LocaleSwitcher({ locale, locales }: LocaleSwitcherProps) {
           aria-current={loc.code === locale ? 'true' : undefined}
         >
           {loc.shortCode.toUpperCase()} {/* EN / RU */}
-          {/* or loc.title for the full name */}
+          {/* or loc.title for full name */}
         </button>
       ))}
     </div>
@@ -186,7 +188,7 @@ import Link from 'next/link';
 
 ---
 
-## Step 4: Set up routing (if not already set up)
+## Step 4: Configure routing (if not already configured)
 
 The switcher assumes that the application uses the `[locale]` segment in the route:
 
@@ -227,11 +229,11 @@ export default async function LocaleLayout({
 ```md
 ✅ Language switcher created. Key rules:
 
-1. getLocales() returns code ('en_US'), title ('English'), shortCode ('en')
+1. SDK Locales.getLocales() returns ILocalEntity: code ('en_US'), shortCode ('en'), name ('Russian'), nativeName ('русский язык'), image (flag URL | null); Server Action maps to LocaleItem { code, title, shortCode, image }
 2. Changing locale — replace pathname.replace(`/${locale}`, `/${newLocale}`)
 3. Server parent passes locales as prop — better for performance
-4. The current locale is determined from params/useParams, NOT hardcoded
-5. locale.localizeInfos?.title — localized name of the language ('Русский', 'English')
+4. Current locale is determined from params/useParams, NOT hardcoded
+5. Language name — locale.nativeName (in the language itself) or locale.name (in English); there are NO localizeInfos fields in locales
 6. For SEO-friendly: use <Link href={newPath}> instead of router.push
 ```
 
@@ -240,7 +242,7 @@ export default async function LocaleLayout({
 ## Step 6: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> For setting up Playwright — first `/setup-playwright`.
+> To set up Playwright — first `/setup-playwright`.
 
 ### 6.1 Add `data-testid` to the component
 
@@ -281,14 +283,14 @@ If Option C is chosen (links):
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (execute step by step, do not ask in one list):**
+**Algorithm (perform step by step, do not ask in one list):**
 
-1. **List of available locales** — get it from the API via `/inspect-api` (option: temporary mjs script in `.claude/temp/` calling `getApi().Locales.getLocales()`). At least 2 locales are needed — otherwise, the language switch tests are meaningless (`test.skip` with an explanation).
-2. **Default locale and test locale for switching** — determine yourself: the first from the list = default, the second = test target. Save in `.env.local` as `E2E_DEFAULT_LOCALE` and `E2E_TARGET_LOCALE`. Inform: "Available locales: `{list}`. For the switch test use `{default} → {target}`".
-3. **Page path with the switcher** — ask: "On which pages is the switch displayed? (for example, only `/`, or everywhere)".
-   - If silent → take `/` (root) + check that `<LocaleSwitcher>` is rendered in layout via Grep. Inform: "Testing on `/`, switcher in layout — available on all pages".
-4. **Localized content for checking language change** — ask: "Is there a noticeable localized element on the page? (page title, menu item)".
-   - If silent → the locale change test checks only the URL and `<html lang>` (without checking the text). Inform: "Checking locale change by URL segment and `<html lang>` attribute. If specific text check is needed — indicate the block marker".
+1. **List of available locales** — get it from the API via `/inspect-api` (option: temporary mjs script in `.claude/temp/` calling `getApi().Locales.getLocales()`). At least 2 locales are needed — otherwise, language switch tests do not make sense (`test.skip` with explanation).
+2. **Default locale and test locale for switching** — determine yourself: the first in the list = default, the second = test target. Save in `.env.local` as `E2E_DEFAULT_LOCALE` and `E2E_TARGET_LOCALE`. Inform: "Available locales: `{list}`. For the switch test use `{default} → {target}`."
+3. **Page path with the switcher** — ask: "On which pages is the switcher displayed? (for example, only `/`, or everywhere)".
+   - If silent → take `/` (root) + check that `<LocaleSwitcher>` is rendered in layout via Grep. Inform: "Testing on `/`, switcher in layout — available on all pages."
+4. **Localized content for checking language switch** — ask: "Is there a noticeable localized element on the page? (page title, menu item)".
+   - If silent → the language switch test checks only the URL and `<html lang>` (without checking text). Inform: "Checking language switch by URL segment and `<html lang>` attribute. If specific text check is needed — provide a block marker."
 
 **Example of filling in `.env.local` (do it yourself, do not ask the user to copy):**
 
@@ -301,7 +303,7 @@ E2E_LOCALE_TEST_PATH=/
 
 ### 6.3 Create `e2e/locale-switcher.spec.ts`
 
-> ⚠️ Tests check the dynamic change of the `/${locale}/` segment in the URL. Locale markers are taken from the real OneEntry project.
+> ⚠️ Tests check the dynamic change of `/${locale}/` segment in the URL. Locale markers are taken from the real OneEntry project.
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -338,7 +340,7 @@ test.describe('Locale switcher', () => {
 
     // URL contains the new locale
     await expect(page).toHaveURL(new RegExp(`/${TARGET_LOCALE}`));
-    // The segment with the default locale is no longer leading
+    // Segment with the default locale is no longer leading
     expect(page.url()).not.toMatch(new RegExp(`/${DEFAULT_LOCALE}/`));
   });
 
@@ -349,7 +351,7 @@ test.describe('Locale switcher', () => {
     // Reloading the page — locale remains in the URL
     await page.reload();
     await expect(page).toHaveURL(new RegExp(`/${TARGET_LOCALE}`));
-    // The switcher shows the new locale as current
+    // Switcher shows the new locale as current
     const newCurrent = page.getByTestId(`locale-option-${TARGET_LOCALE}`);
     const isDisabled = await newCurrent.isDisabled().catch(() => false);
     const ariaCurrent = await newCurrent.getAttribute('aria-current');
@@ -367,11 +369,13 @@ Before completing the task — explicitly inform:
 ✅ data-testid added to LocaleSwitcher
 ✅ .env.local updated (E2E_DEFAULT_LOCALE, E2E_TARGET_LOCALE, E2E_LOCALE_TEST_PATH)
 
-Decisions made automatically (if applicable):
+Automatically made decisions (if applicable):
 - Available locales: {list} — obtained via getApi().Locales.getLocales()
 - Switch test: {DEFAULT_LOCALE} → {TARGET_LOCALE} (first and second from the list)
 - Path for the test: {TEST_PATH} — {user specified / used `/`}
-- Checking localized content: {disabled, checking only URL and <html lang> / enabled, checking text of block {marker}}. Reason: user did not specify a specific localized element for checking.
+- Checking localized content: {disabled, checking only URL and <html lang> /
+  enabled, checking text of block {marker}}. Reason: user did not specify a specific
+  localized element for checking.
 - If there is only one locale — all tests test.skip with the reason "at least 2 locales needed".
 
 Run: npm run test:e2e -- locale-switcher.spec.ts

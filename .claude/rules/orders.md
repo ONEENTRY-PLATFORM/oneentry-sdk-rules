@@ -40,9 +40,9 @@ const storages = await api.Orders.getAllOrdersStorage()
 `getAllOrdersStorage()` returns an array. Each storage has its own `formIdentifier` (order form) and its own set of `paymentAccountIdentifiers` — they **may differ** between storages.
 
 - **1 storage** — use automatically.
-- **2+ storages** — **must** ask the user which one to use (or let them choose in the UI). DO NOT hardcode `storages[0]` — different storages have different delivery fields and payment methods, the user will get the wrong checkout.
+- **2+ storages** — **must** ask the user which to use (or let them choose in the UI). DO NOT hardcode `storages[0]` — different storages have different delivery fields and different payment methods, the user will get the wrong checkout.
 
-If there are 2+ storages and the user did not specify — ask explicitly, rather than silently substituting the first one.
+If there are 2+ storages and the user did not specify — ask explicitly, rather than silently substituting the first.
 
 ### ⚠️ Choosing the payment method — UX rules
 
@@ -60,8 +60,8 @@ const accountsToShow = accounts.length > 0
   ? accounts
   : await getApi().Payments.getAccounts().then(r => Array.isArray(r) ? r.filter(a => a.isVisible && a.isUsed) : [])
 
-// In the UI: if accountsToShow.length >= 2 — render the choice
-// By default, accountsToShow[0].identifier is selected
+// In the UI: if accountsToShow.length >= 2 — render choice
+// By default, selected accountsToShow[0].identifier
 ```
 
 ### getAllOrdersByMarker → { items, total }
@@ -81,6 +81,7 @@ const total = result.total
   "storageId": 1,
   "createdDate": "2026-01-28T16:02:08.865Z",
   "statusIdentifier": "inProgress",
+  "statusLocalizeInfos": { "title": "In progress" },
   "formIdentifier": "orderForm",
   "formData": [{ "marker": "order_name", "value": "Ivan", "type": "string" }],
   "totalSum": "300.00",
@@ -99,16 +100,21 @@ const total = result.total
 
 ⚠️ `currency` — often an empty string `""`. **Do not hardcode `$`**. Pattern: `{order.currency || ''}{Number(order.totalSum).toFixed(2)}`. For products in the order, use the currency of the parent order, as there is no currency field in `IOrderProducts`.
 
-⚠️ `statusIdentifier` — only the order status marker. Order statuses are set in the **project admin panel** — markers are unique for each project, do not hardcode. The title cannot be obtained through the SDK — build a map on the client side:
+⚠️ `statusIdentifier` — only the order status marker. Statuses are set in the **project admin panel** — markers are unique for each project; do not hardcode either markers or their titles. Localized names are returned by the SDK in two ways:
 
 ```ts
-// Markers — real ones from your project (find out through the admin panel)
-const STATUS_LABELS: Record<string, string> = {
-  myStatus1: 'Label 1',
-  myStatus2: 'Label 2',
+// 1) On each order — statusLocalizeInfos (optional, may be absent on old orders):
+order.statusLocalizeInfos?.title || order.statusIdentifier
+
+// 2) Full list of storage statuses (tabs, filters) — getAllStatusesByStorageMarker:
+const statuses = await api.Orders.getAllStatusesByStorageMarker(storage.identifier, locale) // IOrderStatus[] | IError
+if (!isError(statuses)) {
+  // identifier → title; in the UI filter by isUsed and sort by position;
+  // default limit = 30 — pass a larger one if there are more statuses
+  const titleByIdentifier = Object.fromEntries(
+    statuses.map((s) => [s.identifier, s.localizeInfos?.title]),
+  )
 }
-// Output:
-STATUS_LABELS[order.statusIdentifier ?? ''] ?? order.statusIdentifier
 ```
 
 ⚠️ `paymentAccountLocalizeInfos` — `{ title: string }`. For output:
@@ -130,18 +136,25 @@ await api.Orders.createOrder(storage.identifier, {
     { marker: 'name', value: 'Ivan', type: 'string' }
   ],
   products: [
+    // third optional field signedPrice — price fixation (see below)
     { productId: 123, quantity: 2 }
   ],
-  // Optional: coupon code from previewOrder (see below)
+  // Optionally: coupon code from previewOrder (see below)
   // couponCode: 'SUMMER10',
-  // Optional: deduct N bonuses from the balance (see "Bonuses" below)
+  // Optionally: deduct N bonuses from the balance (see "Bonuses" below)
   // bonusAmount: 100,
 })
 ```
 
+### Price Fixation (signPrice → signedPrice, SDK ≥ 1.0.154)
+
+To ensure the price shown in the catalog/cart does not change by the time of checkout: when requesting products, pass the query parameter `signPrice` with the value of **the order storage marker** (the same `storage.identifier` that goes as the first argument to `createOrder`) — the Products methods (`getProducts`, `getProductsByIds`, `getProductsByPageUrl`, etc.; also supports `getProductsPriceByPageUrl` → `IProductInfo.signedPrice`) and product methods in Blocks will return each product with the `signedPrice` field (a signed string-token, valid for a limited time). Pass this string into the `products[]` element of the order: `{ productId, quantity, signedPrice }`. Without it, the order is considered at current prices.
+
+⚠️ `previewOrder` `signedPrice` **does not accept** (its `products` — `{ productId?, quantity? }`) — fixation only applies in `createOrder` / `updateOrderByMarkerAndId`.
+
 ### Order without products (table reservation, booking, application)
 
-`createOrder` is suitable not only for cart checkout. If an order type form is set up in the admin panel with an empty set of products (for example, `booking_order` for table reservation, service application) — send `products: []`:
+`createOrder` is suitable not only for cart checkout. If a form of type `order` with an empty set of products is set up in the admin panel (for example, `booking_order` for table reservation, service application) — send `products: []`:
 
 ```ts
 // app/actions/reservation.ts — 'use server'
@@ -193,13 +206,13 @@ const preview = await getApi().Orders.previewOrder({
 
 if (isError(preview)) {
   // statusCode=400 → no coupon or it has expired
-  // statusCode=200 + message → coupon exists, but not applicable (MIN_CART_AMOUNT, applicability, maxAmount)
+  // statusCode=200 + message → coupon exists, but is not applicable (MIN_CART_AMOUNT, applicability, maxAmount)
   return { ok: false, error: preview.message }
 }
 
 const { totalSum, totalSumWithDiscount, currency } = preview as IOrderPreviewResponse
 
-// ⚠️ The server returned success, but the discount is zero → the coupon exists, but did not work
+// ⚠️ The server returned success, but the discount is zero → the coupon exists but did not work
 // (for example, MIN_CART_AMOUNT not met or applicability did not intersect with the cart)
 if (totalSumWithDiscount >= totalSum) {
   return { ok: false, error: 'Coupon does not apply to this cart' }
@@ -207,14 +220,14 @@ if (totalSumWithDiscount >= totalSum) {
 
 const discount = totalSum - totalSumWithDiscount
 // Save { code, totalSum, totalSumWithDiscount, currency } — show "Discount" line at checkout
-// and pass `couponCode` to createOrder
+// and pass `couponCode` in createOrder
 ```
 
 **Important:**
 
-- `previewOrder` does **not apply** the coupon — it only calculates. To include the discount in the order, pass `couponCode` to `createOrder`.
+- `previewOrder` itself **does not apply** the coupon — it only calculates. To apply the discount to the order, pass `couponCode` in `createOrder`.
 - Applicability conditions (`applicability`, `maxAmount`, `MIN_CART_AMOUNT`) are set in the admin panel for each coupon — they are usually not passed to the front end, trust the server's response.
-- If there are `selected: false` products in the cart (UX where the user checks specific products) — filter them before `previewOrder` and `createOrder`. The server calculates the discount based on what is actually sent in `products[]`.
+- If there are `selected: false` products in the cart (UX where the user checks specific products) — filter them before `previewOrder` and `createOrder`. The server calculates the discount based on what was actually sent in `products[]`.
 
 See [`rules/mismatch-log.md`](mismatch-log.md): if coupons are not yet set up in the admin panel — item `C.7 Orders` (coupons / payment accounts / statuses) with coupon markers and their `applicability`.
 
@@ -238,10 +251,10 @@ const preview = await getApi().Orders.previewOrder({
 if (isError(preview)) return
 
 const { bonusApplied, totalDue, totalSum, totalSumWithDiscount } = preview as IOrderPreviewResponse
-// bonusApplied — how many bonuses were actually applied (the server limits according to admin panel rules)
-// totalDue     — total to pay in cash AFTER discounts and bonuses
+// bonusApplied — how many bonuses were actually applied (the server limits according to admin rules)
+// totalDue     — total to be paid in cash AFTER discounts and bonuses
 
-// 3. Pass bonusAmount to createOrder so that the deduction is included in the order
+// 3. Pass bonusAmount in createOrder so that the deduction is included in the order
 await getApi().Orders.createOrder(storage.identifier, {
   formIdentifier: storage.formIdentifier,
   paymentAccountIdentifier: 'stripe',
@@ -253,7 +266,7 @@ await getApi().Orders.createOrder(storage.identifier, {
 
 **Important:**
 
-- `bonusAmount` is a **request** for deduction. The server limits it according to admin panel rules (`maxBonusPaymentPercent`, `minBonusAmount`, `minOrderAmountForBonus`) — the actual deduction is seen in `bonusApplied`, and the amount to pay in `totalDue`, do not calculate manually.
+- `bonusAmount` — this is a **request** for deduction. The server limits it according to admin rules (`maxBonusPaymentPercent`, `minBonusAmount`, `minOrderAmountForBonus`) — the actual deduction is seen in `bonusApplied`, and the amount to be paid in `totalDue`, do not calculate manually.
 - Bonus limits are in `preview.discountConfig.settings` / `preview.discountConfig.bonus` — they are usually not passed to the front end, trust the response from `previewOrder`.
 - The history of accruals/deductions — `Discounts.getBonusHistory(type?, dateFrom?, dateTo?, ...)`.
 
@@ -283,7 +296,7 @@ if (order.split && !order.split.completed) {
 }
 ```
 
-> The fields `bonusApplied` / `totalDue` / `couponCode` are on `IBaseOrdersEntity` (response create/update/preview). In `IOrderByMarkerEntity`, bonuses and totals are inside `discountConfig`, not at the top level.
+> Fields `bonusApplied` / `totalDue` / `couponCode` are on `IBaseOrdersEntity` (response create/update/preview). In `IOrderByMarkerEntity`, bonuses and totals are inside `discountConfig`, not at the top level.
 
 ---
 
@@ -308,7 +321,7 @@ const ok = await getApi().Orders.createRefundRequest(orderId, {
 await getApi().Orders.cancelRefundRequest(orderId)  // boolean
 ```
 
-**`IRefundRequest`** (key): `{ id, createdDate, status, amount, note, products, orderId, orderStorageId, userId }`. `status` — marker of the refund status (set in the admin panel, do not hardcode — build a map like for order statuses). `amount` — refund amount (number). `products` — map `productId → { quantity }`.
+**`IRefundRequest`** (key): `{ id, createdDate, status, amount, note, products, orderId, orderStorageId, userId }`. `status` — the marker of the refund status (set in the admin panel, do not hardcode; there is no method for localized names of refund statuses in the SDK — if a title is needed, build a map `marker → name` on the client). `amount` — the refund amount (number). `products` — map `productId → { quantity }`.
 
 > If refunds are not yet set up in the admin panel (no refund statuses) — item `C.7 Orders` in [`rules/mismatch-log.md`](mismatch-log.md).
 
@@ -322,7 +335,7 @@ Experimentally verified: `createSession` returns HTTP 201 for Stripe, Cash, and 
 
 ```ts
 const session = await api.Payments.createSession(order.id, 'session', false) as any
-// Stripe → session.paymentUrl = "https://checkout.stripe.com/..."  (URL exists)
+// Stripe → session.paymentUrl = "https://checkout.stripe.com/..."  (there is a URL)
 // Cash   → session.paymentUrl = null   (offline, no redirect needed)
 // PayPal → session.paymentUrl = null immediately, URL appears asynchronously
 ```
