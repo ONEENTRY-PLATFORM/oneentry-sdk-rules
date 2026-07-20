@@ -9,7 +9,7 @@ paths:
 
 # Forms & FormsData — OneEntry Rules
 
-## getFormByMarker → response structure
+## getFormByMarker → Response Structure
 
 ```ts
 const form = await getApi().Forms.getFormByMarker('contact_us', locale)
@@ -41,18 +41,18 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 }
 ```
 
-**Key fields:**
+**Key Fields:**
 
 - `attributes: IFormAttribute[]` — form fields for rendering. Sort by `position`
 - `localizeInfos: IFormLocalizeInfo` — form localization: `title`, as well as `titleForSite`, `successMessage`, `unsuccessMessage`, `urlAddress`, `database`, `script`
 - `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`
 - `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`
-- `validators[name].errorMessage` — custom error text for the validator (set in admin panel)
+- `validators[name].errorMessage` — custom error message text for the validator (set in admin panel)
 - `additionalFields: Record<marker, IFormAttributeAdditionalField>` — SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others
-- `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — form type (the typo `sing_in_up` — from the API, it is as it is). Choose behavior based on it: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings
+- `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — form type (the typo `sing_in_up` — from the API, it is as is). Choose behavior based on it: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings
 - `moduleFormConfigs[].exceptionIds?: string[]` — list of excluded identifiers in the module config (for example, entities for which the form does not apply)
 
-**Types for form fields — import from `oneentry/dist/forms/formsInterfaces`:**
+**Types for Form Fields — import from `oneentry/dist/forms/formsInterfaces`:**
 
 ```ts
 import type {
@@ -65,7 +65,7 @@ import type {
 
 > ⚠️ For form fields use `IFormAttribute`, not `IAttributesSetsEntity`. `IAttributesSetsEntity` is the type for AttributesSets API (`getAttributes`, `getAttributeSetByMarker`), it has a different structure and lacks form-specific flags (`isLogin`, `isSignUp`, `isNotification*`).
 
-**Using form `localizeInfos`:**
+**Using Form `localizeInfos`:**
 
 ```tsx
 // Success/error message from form settings in the admin panel
@@ -95,9 +95,9 @@ const hint = field.additionalFields?.hint?.value || ''
 {hint && <span className="hint">{hint}</span>}
 ```
 
-**Mapping validator errors:**
+**Mapping Validator Errors:**
 
-In case of an error `postFormsData` `IError.message` — an array of strings with field markers or messages. To display custom errors, build a map from the form:
+On error `postFormsData` `IError.message` — an array of strings with field markers or messages. To display custom errors, build a map from the form:
 
 ```ts
 import type { IFormAttribute } from 'oneentry/dist/forms/formsInterfaces'
@@ -106,7 +106,7 @@ import type { IFormAttribute } from 'oneentry/dist/forms/formsInterfaces'
 function buildValidatorErrors(attributes: IFormAttribute[]): Record<string, string> {
   const map: Record<string, string> = {}
   for (const attr of attributes) {
-    // Find the first validator with errorMessage
+    // Look for the first validator with errorMessage
     const errorMessage = Object.values(attr.validators || {})
       .map((v: any) => v?.errorMessage)
       .find(Boolean)
@@ -133,14 +133,16 @@ const formModuleConfigId = formModuleConfig?.id ?? 0
 const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? ''
 ```
 
-**Special types of form fields:**
+**Special Form Field Types:**
 
-- `spam` — captcha (reCAPTCHA v3). DO NOT render as `<input>`, use `<FormReCaptcha>`
+- `spam` — captcha (reCAPTCHA v3 Enterprise). DO NOT render as `<input>`, use `<FormReCaptcha>`.
+  siteKey — in `spam.settings.captcha.key` (NOT in `validators`), value of the spam field — object
+  `{ event: { token, siteKey } }` (NOT a plain string). The complete verified recipe — skill `/create-captcha`.
 - `button` — submit button. Render as `<button type="submit">`
 
 ---
 
-## postFormsData — three required identifiers
+## postFormsData — Three Required Identifiers
 
 ```ts
 await getApi().FormData.postFormsData({
@@ -148,12 +150,12 @@ await getApi().FormData.postFormsData({
   formModuleConfigId: 2,                  // from form.moduleFormConfigs[0].id
   moduleEntityIdentifier: 'blog',         // from form.moduleFormConfigs[0].entityIdentifiers[0].id
   replayTo: null,                         // email for reply or null
-  status: 'sent',                         // 'sent' | 'draft'
+  status: '',                             // data-form: '' (verified with working projects)
   formData: [...]                         // form field data
 })
 ```
 
-**All three identifiers are required.** Get them from `getFormByMarker`:
+**All three identifiers are mandatory.** Get them from `getFormByMarker`:
 
 ```ts
 const formModuleConfigId = form.moduleFormConfigs?.[0]?.id ?? 0
@@ -162,7 +164,7 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 
 ---
 
-## formData — values by field types
+## formData — Values by Field Types
 
 Each element of formData: `{ marker, type, value }`. `type` is taken from `attributes[].type`.
 
@@ -200,10 +202,10 @@ For `date` / `dateTime` / `time` fields, **always** render the corresponding nat
 | `dateTime` | `<input type="datetime-local">` | `react-datepicker` (showTimeSelect) |
 | `time` | `<input type="time">` | `react-datepicker` (showTimeSelectOnly) |
 
-**Rules for `formatString` from the schema** (defined in the admin panel via `additionalFields.formatString` or `validators`):
+**`formatString` rules from the schema** (defined in the admin panel via `additionalFields.formatString` or `validators`):
 
 - If a specific format is needed (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`) — take it from the attribute and use it when building `formattedValue`.
-- If the format is not specified — apply the default value for the type (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`).
+- If no format is specified — apply the default value for the type (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`).
 
 **Assembling value from native input:**
 
@@ -217,7 +219,7 @@ const value = { fullDate: iso, formattedValue: formatted, formatString: 'DD-MM-Y
 // dateTime
 const input = '2024-05-07T18:30' // value from <input type="datetime-local">
 const iso = new Date(input).toISOString()
-// formattedValue by formatString from the attribute schema
+// formattedValue according to formatString from the attribute schema
 
 // time — sent with a reference date (usually today)
 const input = '14:30' // value from <input type="time">
@@ -226,7 +228,7 @@ const d = new Date(); d.setUTCHours(h, m, 0, 0)
 const value = { fullDate: d.toISOString(), formattedValue: input, formatString: 'HH:mm' }
 ```
 
-**Dynamic field rendering in the form (pattern):**
+**Dynamic Field Rendering in Form (pattern):**
 
 ```tsx
 if (attr.type === 'date') {
@@ -240,12 +242,12 @@ if (attr.type === 'time') {
 }
 ```
 
-> ⚠️ Do not confuse with `timeInterval` — this is a list of available slots (see `.claude/rules/attribute-values.md`), rendered as a separate date+slot selector, not as an input.
+> ⚠️ Do not confuse with `timeInterval` — this is a list of available slots (see `.claude/rules/attribute-values.md`), rendered as a separate date+slot selector, not an input. Available slots **are read** via `expandTimeIntervals(schedule, { from, to })` by `field.localizeInfos.intervals[]` (SDK ≥ 1.0.156; the computed field `timeIntervals` has been removed).
 
 ### text — value is an ARRAY with ONE object, only one of htmlValue/plainValue/mdValue
 
 ```ts
-// ❌ INCORRECT — passing a string
+// ❌ INCORRECT — sending a string
 { marker: 'message', type: 'text', value: 'Hello' }
 
 // ✅ CORRECT — array with one object, only one field
@@ -276,7 +278,7 @@ if (attr.type === 'time') {
 { marker: 'color', type: 'radioButton', value: ['red'] }
 ```
 
-### entity — numeric ids for pages, strings with a prefix for products
+### entity — numeric ids for pages, strings with prefix for products
 
 ```ts
 // Pages — numeric ids
@@ -288,6 +290,8 @@ if (attr.type === 'time') {
 
 ### timeInterval — array of intervals in ISO 8601
 
+**Sending** the selected slot (format has not changed):
+
 ```ts
 {
   marker: 'delivery_slot',
@@ -296,19 +300,31 @@ if (attr.type === 'time') {
     ['2025-02-11T16:00:00.000Z', '2025-02-11T18:00:00.000Z']
   ]
 }
-// value — array of arrays [startISO, endISO]
+// value — an array of arrays [startISO, endISO]
+```
+
+**Reading** available slots (SDK ≥ 1.0.156) — `expandTimeIntervals` by the field schedules:
+
+```ts
+import { expandTimeIntervals } from 'oneentry';
+
+const field = form.attributes.find((a) => a.marker === 'delivery_slot');
+const slots = (field?.localizeInfos.intervals ?? []).flatMap((schedule) =>
+  expandTimeIntervals(schedule, { from: '2025-02-01', to: '2025-02-28' }),
+);
+// slots → [[startISO, endISO], ...] (UTC). The ready field timeIntervals is no longer available in the SDK.
 ```
 
 ### image, groupOfImages — File object
 
 ```ts
-// Needs a File object (not a URL string!)
+// A File object is needed (not a URL string!)
 const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png')
 { marker: 'photo', type: 'image', value: [file] }
 { marker: 'gallery', type: 'groupOfImages', value: [file1, file2] }
 ```
 
-### file — two variants depending on the source
+### file — two options depending on the source
 
 ```ts
 // New file from user (from <input type="file">):
@@ -340,7 +356,7 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 // app/actions/forms.ts
 'use server'
 
-// ⚠️ message from validators — array of strings, always normalize
+// ⚠️ message from validators — an array of strings, always normalize
 function normalizeError(message: string | string[]): string {
   return Array.isArray(message) ? message.join('; ') : message
 }
@@ -377,7 +393,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
 ---
 
-## Response postFormsData
+## Response from postFormsData
 
 ```json
 {

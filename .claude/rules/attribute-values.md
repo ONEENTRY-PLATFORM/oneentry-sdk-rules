@@ -40,19 +40,19 @@ const allImages = Object.values(attrs)
 | `string`, `integer`, `float`, `real`  | `attrs.marker?.value` (primitive)                          |
 | `text`                                | `attrs.marker?.value?.htmlValue` or `value.plainValue`   |
 | `textWithHeader`                      | `attrs.marker?.value?.header`, `value.htmlValue`          |
-| `image`                               | object **or** array of objects — see section below          |
+| `image`                               | object **or** array of objects — see section below        |
 | `groupOfImages`                       | `attrs.marker?.value?.[0]?.downloadLink` (always an array)  |
 | `file`                                | `attrs.marker?.value?.downloadLink` (object)              |
 | `date`, `dateTime`, `time`            | `attrs.marker?.value?.fullDate` or `value.formattedValue`|
 | `list`                                | `attrs.marker?.value` (array of ids or objects with extended) |
 | `radioButton`                         | `attrs.marker?.value` (string-id)                         |
 | `entity`                              | `attrs.marker?.value` (array of markers)                   |
-| `timeInterval`                        | `attrs.marker?.value` → array of groups; slots in `value[].values[].timeIntervals` |
+| `timeInterval`                        | `attrs.marker?.value` → array of groups (raw schedule); slots — via `expandAttributeTimeIntervals(attr, { from, to })` |
 | `spam`                                | captcha — render `<FormReCaptcha>`, NOT `<input>`         |
 
 ## ⚠️ image, groupOfImages — FIRST CHECK the actual structure via API
 
-**ALWAYS run `/inspect-api` before the first use of the image attribute or:**
+**ALWAYS run `/inspect-api` before first using an image attribute or:**
 
 ```javascript
 // .claude/temp/check-image.mjs
@@ -83,7 +83,7 @@ for (const [k, v] of Object.entries(attrs)) {
 The SDK (`_clearArray`) unwraps a **single-element** array `image` into an object (`[img]` → `img`). Therefore, the form of `value` depends **not on the entity type** (Products/Pages/Blocks), but on whether unwrapping occurred:
 
 - a single image obtained via a "top-level" method (`getProductById`, `getPageByUrl`) → **object**;
-- multiple images **or** the entity came nested (e.g., product inside the Blocks response), where unwrapping did not occur → **array**.
+- multiple images **or** the entity came nested (e.g., a product inside a Blocks response), where unwrapping did not occur → **array**.
 
 > The same product with one image comes as an object from `Products.getProductById`, but as an array inside the Blocks response — the entity type does not matter. (The previous table "Products=OBJECT / Pages=ARRAY / Blocks=ARRAY" described a false correlation.)
 
@@ -177,7 +177,7 @@ const related = attrs.relatedProducts?.value || []  // ["mouse", "cable"]
 
 ## json — this type of attribute DOES NOT EXIST
 
-In `AttributeType` SDK v1.0.155, the type `json` does not exist (union: `string`, `text`, `textWithHeader`, `integer`, `real`, `float`, `date`, `dateTime`, `time`, `file`, `image`, `groupOfImages`, `list`, `radioButton`, `entity`, `button`, `spam`, `timeInterval`). If the project stores JSON — it is a regular `string`/`text` attribute that you parse manually:
+In `AttributeType` SDK v1.0.156, the type `json` does not exist (union: `string`, `text`, `textWithHeader`, `integer`, `real`, `float`, `date`, `dateTime`, `time`, `file`, `image`, `groupOfImages`, `list`, `radioButton`, `entity`, `button`, `spam`, `timeInterval`). If the project stores JSON — it is a regular `string`/`text` attribute that you parse manually:
 
 ```typescript
 const data = JSON.parse(attrs.customData?.value || '{}')  // customData — type string
@@ -186,21 +186,34 @@ const width = data.dimensions?.width
 
 ## timeInterval
 
-```typescript
-// value — ARRAY OF GROUPS of schedules, NOT a flat array of pairs!
-// The SDK places computed slots in value[].values[].timeIntervals — [[startISO,endISO],...] (UTC).
-const groups = attrs.workingHours?.value || []
+> ⚠️ **SDK ≥ 1.0.156:** the computed field `timeIntervals` NO LONGER adds to the attribute
+> (previously, the SDK placed slots in `value[].values[].timeIntervals`). Now slots are resolved
+> **on demand** in the window `{ from, to }` that you choose, via
+> `expandAttributeTimeIntervals`. Raw schedule data (`dates`/`range`, `times`/`intervals`,
+> `inEveryWeek`, `inEveryMonth`) still lies in `value` — only the ready field has been removed.
 
-// Collect all slots into a single flat list of pairs:
-const intervals: [string, string][] = groups
-  .flatMap((g: any) => g?.values || [])
-  .flatMap((s: any) => s?.timeIntervals || [])
+```typescript
+import { expandAttributeTimeIntervals, isTimeIntervalAttribute } from 'oneentry'
+
+// Unwraps the ENTIRE timeInterval attribute into a flat list of pairs [startISO, endISO] (UTC)
+// over the specified window: traverses groups and schedules, merges the result.
+// Non-timeInterval attribute → empty array (safe to call without type checking).
+// The function is pure: it does not mutate input and does not make requests.
+const intervals = expandAttributeTimeIntervals(attrs.workingHours, {
+  from: '2026-03-01',
+  to: '2026-03-31',
+})
 // intervals → [["2026-03-15T09:00:00.000Z","2026-03-15T10:00:00.000Z"], ...]
 const start = intervals[0]?.[0]
 const end   = intervals[0]?.[1]
+
+// Need access to raw schedule without casting — use type guard:
+if (isTimeIntervalAttribute(attrs.workingHours)) {
+  attrs.workingHours.value[0].values[0].dates // fully typed
+}
 ```
 
-**For the booking calendar**, work with the flat list `intervals` collected above:
+**For booking calendar** work with the flat list `intervals` collected above:
 
 ```typescript
 // Slots for the selected date (UTC comparison!)
@@ -210,7 +223,7 @@ function filterIntervalsByDate(intervals: [string, string][], date: Date) {
   return intervals.filter(([s, e]) => new Date(s) < endOfDay && new Date(e) > startOfDay);
 }
 
-// Time formatting — from UTC hours!
+// Formatting time — from UTC hours!
 const h = new Date(startISO).getUTCHours();
 const m = new Date(startISO).getUTCMinutes();
 const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
@@ -224,16 +237,16 @@ const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
 
 ## additionalFields — nested attributes
 
-`additionalFields` — arbitrary nested attributes that can be attached to **any** attribute in the admin panel. The content is entirely defined by the developer/administrator. The only limitation is that the types of nested fields are taken from the standard set of OneEntry types (`string`, `integer`, `float`, `text`, `image`, `groupOfImages`, `date`, `list`, etc.).
+`additionalFields` — arbitrary nested attributes that can be attached to **any** attribute in the admin panel. The content is fully defined by the developer/administrator. The only limitation is that the types of nested fields are taken from the standard set of OneEntry types (`string`, `integer`, `float`, `text`, `image`, `groupOfImages`, `date`, `list`, etc.).
 
-It occurs in two contexts:
+Found in two contexts:
 
 - `attributeValues` of entities (Product, Page, Block) — values of nested fields
 - `attributes` of schemas (Forms, AttributesSets) — metadata of nested fields
 
 ### SDK Normalization
 
-The SDK automatically transforms `additionalFields` from an **array** (as returned by the API) into a **Record**, with the key being the `marker` of the field.
+The SDK automatically transforms `additionalFields` from an **array** (as returned by the API) into a **Record**, key — `marker` of the field.
 
 ```typescript
 // RAW API (rawData: true in config):
@@ -299,7 +312,7 @@ for (const [marker, field] of Object.entries(extra as Record<string, any>)) {
 
 ### Form Attributes (Forms / AttributesSets)
 
-In the form schema, `additionalFields` — arbitrary UI metadata specified in the admin panel for each field. Interpretation depends on the project:
+In the form schema, `additionalFields` — arbitrary UI metadata set in the admin panel for each field. Interpretation depends on the project:
 
 ```typescript
 // Markers are defined by the administrator — always inspect:
@@ -324,10 +337,10 @@ const iconAttr    = Object.values(attrs).find((a: any) => a?.isIcon === true)
 
 ## ⚠️ Final Rating — top-level field `rating`, NOT an attribute
 
-The aggregated rating of an entity (Products, etc.) is formed by OneEntry based on reviews (FormData) and is available in the **top-level field of the entity** `entity.rating?.value` (type `IRating`), and **not** in `attributeValues.rating`.
+The aggregated rating of the entity (Products and others) is formed by OneEntry based on reviews (FormData) and is available in the **top-level field of the entity** `entity.rating?.value` (type `IRating`), and **not** in `attributeValues.rating`.
 
 ```typescript
-// ✅ CORRECT — final rating from the top-level field
+// ✅ CORRECT — final rating from top-level field
 const ratingVal = product.rating?.value;  // number | null
 if (ratingVal != null) {
   // show star + value
@@ -335,7 +348,7 @@ if (ratingVal != null) {
   // "Rating not yet formed" — no reviews yet
 }
 
-// ❌ INCORRECT — this is a "phantom" attribute, often remains in the schema
+// ❌ INCORRECT — this is a phantom attribute, often left in the schema
 // from the old implementation (before real reviews were connected).
 // Returns a hardcoded value, does not reflect real reviews.
 const ratingVal = attrs.rating?.value;
@@ -349,7 +362,7 @@ const ratingVal = attrs.rating?.value;
 | Rating inside a single review (FormData) | `formData.find(f => f.marker === '<rating-marker>')?.value` |
 | ❌ `attrs.rating?.value`              | DO NOT use — phantom attribute                       |
 
-> If `rating` is found in `attributeValues` — this is likely a remnant from before real reviews were connected. It is not necessary to delete it from the schema (it may break existing data), but in new code, use only `entity.rating`.
+> If `attributeValues` contains `rating` — this is likely a remnant from before real reviews were connected. It is not necessary to delete it from the schema (it may break existing data), but in new code, use only `entity.rating`.
 
 ## For page blocks — localizeInfos as fallback
 

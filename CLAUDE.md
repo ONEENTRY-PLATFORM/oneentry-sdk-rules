@@ -351,12 +351,12 @@ OneEntry is a headless CMS for e-commerce and content projects.
 
 At the very beginning of the project, ask two questions (once per session) and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
 
-1. **“Do we need to save tokens?”**
+1. **"Do we need to save tokens?"**
    - **save** → do not run linter/build, do not write comments
    - **full** → JSDoc + lint + build after writing
    - Save as `feedback_token_mode.md`
 
-2. **“Do we need to write E2E tests with Playwright?”**
+2. **"Do we need to write E2E tests with Playwright?"**
    - **yes** → run **`/setup-playwright`**, write tests in `e2e/` for each new component/page, add `data-testid` to interactive elements
    - **no** → do not create `e2e/`
    - Save as `feedback_playwright.md`
@@ -401,11 +401,11 @@ components/
   ui/           ← primitives (Button, Modal, Skeleton) — only without business logic
 ```
 
-If it does not fit into any group — create a new one with a clear name.
+If it doesn't fit into any group — create a new one with a clear name.
 
 ---
 
-### Main rule: check types and markers BEFORE the code
+### The main rule: check types and markers BEFORE the code
 
 Unifies everything that was previously scattered across several checklists. Applies to **every** subtask.
 
@@ -422,7 +422,7 @@ Import types: `import type { IPagesEntity } from 'oneentry/dist/pages/pagesInter
 
 #### 2. Markers — from API via `/inspect-api`, not from memory
 
-Run **`/inspect-api`** — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). Markers like `'main'`, `'header'`, `'footer'` — hallucination. If `.env.local` is missing — ask for URL and token.
+Run **`/inspect-api`** — it reads `.env.local` and returns real markers (Pages, Forms, Menus, AuthProvider, …). Markers like `'main'`, `'header'`, `'footer'` — hallucination. If `.env.local` is missing — ask for the URL and token.
 
 **🚨 Existing code — NOT a source of truth:**
 
@@ -433,9 +433,9 @@ const stockQty = attrs.units_product?.value
 // Before using these markers — confirm via `/inspect-api`.
 ```
 
-#### 3. Entities must exist in OneEntry before connecting
+#### 3. Entities must exist in OneEntry before connection
 
-If asked “add form X” / “connect product Y” — first confirm existence via API:
+When asked "add form X" / "connect product Y" — first confirm existence via API:
 
 ```ts
 // Forms: getApi().Forms.getAllForms()
@@ -444,15 +444,15 @@ If asked “add form X” / “connect product Y” — first confirm existence 
 // Attributes: getApi().AttributesSets.getAttributes()
 ```
 
-If not found → respond: **“First create [name] in OneEntry Admin Panel, then I will connect it in the code.”**
+If not found → respond: **"First create [name] in the OneEntry Admin Panel, then I will connect it in the code."**
 
 #### 4. SDK binding immediately, without static stubs
 
-If the user provided the layout of a component that should work with the SDK (authorization form, order form, data from CMS) — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
+The user provided the layout of a component that should work with the SDK (authorization form, order form, data from CMS) — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
 
 #### 5. Forms — ALWAYS dynamic
 
-Never hardcode `<input name="..." type="...">`. Get fields via `getFormByMarker(marker)`, render dynamically by `attribute.type` and `attribute.marker`. The layout defines the style — fields come from the API.
+Never hardcode `<input name="..." type="...">`. Get fields via `getFormByMarker(marker)`, render dynamically by `attribute.type` and `attribute.marker`. The layout sets the style — fields come from the API.
 
 #### 6. langCode — from `params`, not hardcoded
 
@@ -467,15 +467,15 @@ In Next.js 15+: `params` is `Promise<{locale: string}>`, need to `await params`.
 | **groupOfImages** | `attrs.marker?.value?.[0]?.downloadLink` (ARRAY) |
 | **spam** (reCAPTCHA) | Render `<FormReCaptcha>`, NOT `<input>` |
 
-If you don’t know the type — `console.log(attrs.marker)`. Full table: `.claude/rules/attribute-values.md`.
+If you don't know the type — `console.log(attrs.marker)`. Full table: `.claude/rules/attribute-values.md`.
 
-#### 8. “Add to Cart” button — by default, without question
+#### 8. "Add to Cart" button — by default, without question
 
-For card / catalog / product page — `AddToCartButton` is added automatically. Cart not implemented — first `/create-cart-manager`. The “Add to Favorites” button (`FavoriteButton`) — **only on request**.
+For card / catalog / product page — `AddToCartButton` is added automatically. Cart not implemented — first `/create-cart-manager`. The "Add to Favorites" button (`FavoriteButton`) — **only on request**.
 
 #### 9. `isError` + singleton SDK + exact types
 
-- Check every API call through type guard `isError`.
+- Check each API call through type guard `isError`.
 - One instance of SDK in `lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** new `defineOneEntry()`.
 - Exact TS types from `oneentry/dist/`, never `as any`.
 
@@ -483,28 +483,28 @@ For card / catalog / product page — `AddToCartButton` is added automatically. 
 
 ### 📋 Composite prompt = step-by-step execution
 
-“Do X + add Y + create Z” — this is **not** a single pass. Real case: skipping the flag `isCheckCode: true` in the auth flow due to “general pass”.
+"Do X + add Y + create Z" — this is **not** a single pass. Real case: skipping the flag `isCheckCode: true` in the auth flow due to "general pass".
 
-**Step 1. Decomposition in TodoWrite:** for each subtask, define the required skill (see table below) and relevant `.claude/rules/*.md`.
+**Step 1. Decomposition in TodoWrite:** for each subtask, define the mandatory skill (see the table below) and relevant `.claude/rules/*.md`.
 
 **Step 2. Execution mode:**
 
 - **Sequentially** (default) — one subtask → its rules → checklist → next.
 - **In parallel** — only for completely independent tasks without common dependencies (different pages/components without common AuthContext/`lib/oneentry.ts`). Through Agent tool, each with full context.
 
-**Step 3. Checklist after each subtask:** have all rules been applied, have all API fields been processed, have all flags (`isCheckCode`, `systemCodeTlsSec`, …) been considered.
+**Step 3. Checklist after each subtask:** have all rules been applied, have all API fields been processed, have all flags (`isCheckCode`, `systemCodeTlsSec`, …) been taken into account.
 
-❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in one message without a checklist in between.
+❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in one message without a checklist between them.
 
 #### Trigger keywords for skills
 
-| Words in prompt | Required skill |
+| Words in prompt | Mandatory skill |
 | --- | --- |
 | login, registration, authorization, personal account, auth | `/create-auth` |
 | google login, oauth, login via google/facebook | `/create-google-oauth` |
-| profile, user personal data | `/create-profile` |
+| profile, personal user data | `/create-profile` |
 | orders, order history | `/create-orders-list` |
-| checkout | `/create-checkout` |
+| checkout, order processing | `/create-checkout` |
 | product list, catalog | `/create-product-list` |
 | product card (in list) | `/create-product-card` |
 | product page (detailed) | `/create-product-page` |
@@ -513,7 +513,7 @@ For card / catalog / product page — `AddToCartButton` is added automatically. 
 | filters, filter panel | `/create-filter-panel` |
 | search, search bar | `/create-search` |
 | reviews, reviews | `/create-reviews` |
-| product subscription, notifications about price/availability | `/create-subscription-events` |
+| product subscription, price/availability notifications | `/create-subscription-events` |
 | language switcher, locale switcher | `/create-locale-switcher` |
 | menu, navigation | `/create-menu` |
 | feedback form, form from CMS | `/create-form` |
@@ -522,6 +522,9 @@ For card / catalog / product page — `AddToCartButton` is added automatically. 
 | create next.js project | `/setup-nextjs` |
 | connect SDK, configure oneentry | `/setup-oneentry` |
 | e2e tests, playwright | `/setup-playwright` |
+| fill admin with script, upload content programmatically, mass create products/pages | `/admin-fill-content` |
+| upload images to CMS with script, preview/LQIP not created | `/admin-upload-images` |
+| 403 Permission data not found, group rights, grant permission for route | `/admin-grant-permissions` |
 
 > Trigger found → **first skill, then code**. Multiple triggers → multiple skills, each with its own checklist.
 
@@ -529,21 +532,23 @@ For card / catalog / product page — `AddToCartButton` is added automatically. 
 
 ### When to stop and ask the user
 
-- **Don’t know the marker** → `/inspect-api`; no Bash — ask.
-- **403 Forbidden** → check: is `AuthProvider.auth/signUp/generateCode` called via Server Action? Move it to Client Component (fingerprint). Or check group permissions in the admin panel.
-- **No layout** → “Is there an example of layout/design?”
-- **Don’t understand the data source** → “Where should the data for [component] come from?”
-- **Multiple solutions** → “X or Y, which do you prefer?”
+- **Don't know the marker** → `/inspect-api`; no Bash — ask.
+- **403 Forbidden** → check: is `AuthProvider.auth/signUp/generateCode` called via Server Action? Move to Client Component (fingerprint). Or check group rights in the admin panel.
+- **No layout** → "Is there an example of layout/design?"
+- **Don't understand the data source** → "Where should the data for [component] come from?"
+- **Multiple solutions available** → "X or Y, which do you prefer?"
 
 ---
 
-### API permissions for the “Guests” group
+### API permissions for the "Guests" group
 
-By default, the “Guests” group has a limit of **10 objects** per entity. Before requests:
+By default, the "Guests" group has a limit of **10 objects** per entity. Before requests:
 
 1. Open the admin panel: `PROJECT_URL/users/groups/edit-group/1?tab`
 2. For each entity (Pages, Products, Forms, …): **Read: Yes, with restriction → without restrictions**
 3. Without this, `getPages()`, `getProducts()`, etc. will return a maximum of 10 records.
+
+Error `403 "Permission data not found. Provide the permission for requested url"` = route not granted to the group — skill `/admin-grant-permissions`. Programmatic content writing (SDK — read-only) — internal admin API: rule `.claude/rules/admin-api.md`, skills `/admin-fill-content` and `/admin-upload-images`; web UI admin panel — `.claude/rules/admin-ui.md`.
 
 ---
 
@@ -556,7 +561,7 @@ The SDK is isomorphic — works on the server and on the client. Context selecti
 - **CSR, dynamics, search** → Client Component via `getApi()`
 - **User data** (Orders, Users, Payments) → Client Component via `getApi()` after `reDefine()`
 
-**Strict limitation:** `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **only from Client Component** (on the server, the fingerprint is incorrect).
+**Strict limitation:** `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **only from Client Component** (fingerprint is incorrect on the server).
 
 > Rules: `.claude/rules/server-actions.md`, `.claude/rules/auth-provider.md`, `.claude/rules/nextjs-pages.md`
 
@@ -565,8 +570,8 @@ The SDK is isomorphic — works on the server and on the client. Context selecti
 ### Miscellaneous
 
 - **Pages — from CMS** (`getPageByUrl` + `getBlocksByPageUrl`), not hardcoded. The main one is usually `'home'`. Skill: `/create-page`.
-- **Exactly copy the user’s layout** (Tailwind/JSX) — only change hardcoded data to API data.
-- **Linter:** write code according to the project linter config. Do not fix someone else's linting/formatting — that’s the user’s job.
+- **Exactly copy the user's layout** (Tailwind/JSX) — change only hardcoded data to API data.
+- **Linter:** write code according to the project's linter config. Do not fix someone else's linting/formatting — that is the user's job.
 - **Pagination, loading states, markers instead of IDs** — recommended by default.
 
 ## SDK Initialization
@@ -972,7 +977,7 @@ import type { IAttributesSetsEntity } from 'oneentry/dist/attribute-sets/attribu
 | `radioButton` | `attrs.marker?.value` | string-id |
 | `list` | `attrs.marker?.value` | array of ids or objects with `extended` |
 | `entity` | `attrs.marker?.value` | array of markers |
-| `timeInterval` | `attrs.marker?.value` | `[[ISO, ISO], ...]` |
+| `timeInterval` | `expandAttributeTimeIntervals(attr, { from, to })` | → `[[ISO, ISO], ...]`; in `value` raw schedule |
 | `spam` | — | reCAPTCHA v3 captcha → `<FormReCaptcha>` |
 
 ```typescript
@@ -994,7 +999,7 @@ const imgUrl = imgAttr?.value?.[0]?.downloadLink || ''
 | --- | --- | --- |
 | `in` | Value in the list | `"red,blue,green"` |
 | `nin` | NOT in the list | `"red,blue"` |
-| `eq` | Equal | `100` |
+| `eq` | Equals | `100` |
 | `neq` | Not equal | `0` |
 | `mth` | More than | `50` |
 | `lth` | Less than | `1000` |
@@ -1017,13 +1022,13 @@ Contains data for the request language. Direct access to fields (without nesting
 
 ```typescript
 page.localizeInfos?.title        // title
-page.localizeInfos?.menuTitle    // menu name
+page.localizeInfos?.menuTitle    // menu title
 page.localizeInfos?.htmlContent  // HTML content (check first)
-// plainContent is in the API response, but not in the ILocalizeInfo type (there is plainValue) — in strict TS a cast is needed:
-(page.localizeInfos as any)?.plainContent // unformatted text
+// plainContent is in the API response, but not in the type ILocalizeInfo (there is plainValue) — in strict TS you need a cast:
+(page.localizeInfos as any)?.plainContent // plain text
 ```
 
-### Page blocks (`getBlocksByPageUrl` → `IPositionBlock[]`)
+### Page Blocks (`getBlocksByPageUrl` → `IPositionBlock[]`)
 
 With SDK ≥ 1.0.153, blocks already contain products — additional requests to `Products` are not needed:
 
@@ -1659,7 +1664,7 @@ async function loadPageData(productId: number) {
 }
 ```
 
-## Frequent Scenarios (Extended)
+## Common Scenarios (Extended)
 
 ### Order Form from OneEntry Forms API
 
@@ -1668,10 +1673,10 @@ async function loadPageData(productId: number) {
 **How it works:**
 
 1. `getApi().Orders.getAllOrdersStorage()` returns order storages, each with a `formIdentifier`
-2. `getApi().Forms.getFormByMarker(formIdentifier, locale)` returns the fields of the delivery form
-3. The form fields are rendered dynamically by type (`string`, `date`, `timeInterval`, etc.)
+2. `getApi().Forms.getFormByMarker(formIdentifier, locale)` returns the delivery form fields
+3. Form fields are rendered dynamically by type (`string`, `date`, `timeInterval`, etc.)
 
-**The `timeInterval` field in the order form** is a field with a list of available delivery slots. Its `value` contains an array of available time intervals `[[start, end], ...]`, from which the following are determined:
+**The `timeInterval` field in the order form** is a field with a list of available delivery slots. You get the slots through `expandTimeIntervals(schedule, { from, to })` by `field.localizeInfos.intervals[]` (SDK ≥ 1.0.156; the computed field `timeIntervals` has been removed) — the result is `[[start, end], ...]`, from which the following are determined:
 
 - Available dates in the calendar (unique dates from start values)
 - Available times for the selected date (times from start values for that date)
@@ -1694,7 +1699,7 @@ To create a UI filter panel with `FilterContext`, price/color/availability compo
 
 To create a search bar (dropdown or separate page), use the skill **`/create-search`**.
 
-For the language switcher, use the skill **`/create-locale-switcher`**.
+For a language switcher, use the skill **`/create-locale-switcher`**.
 
 ### FormData — Reading Data from Forms
 
@@ -1717,13 +1722,13 @@ export async function getFormSubmissions(marker: string) {
 }
 ```
 
-**Response Structure:** each element contains `id`, `time`, `formData: [{ marker, value, type }]`.
+**Response Structure:** each item contains `id`, `time`, `formData: [{ marker, value, type }]`.
 
 **Accessing Fields:** `Object.fromEntries(submission.formData.map(f => [f.marker, f.value]))`.
 
 **Updating Status / Deleting** (`updateFormsDataByid`, `updateFormsDataStatusByid`, `deleteFormsDataByid`):
 
-**⚠️ Require user authorization** — call from Client Component after `reDefine(refreshToken)`, NOT through app-token (unlike `getFormsDataByMarker`, which works with app-token).
+**⚠️ Requires user authorization** — call from Client Component after `reDefine(refreshToken)`, NOT through app-token (unlike `getFormsDataByMarker`, which works with app-token).
 
 ```typescript
 await getApi().FormData.updateFormsDataStatusByid(id, { statusIdentifier: 'processed' });
@@ -1736,7 +1741,7 @@ await getApi().FormData.deleteFormsDataByid(id);
 
 ### IntegrationCollections — Custom Collections
 
-IntegrationCollections are arbitrary data tables in OneEntry (FAQ, directories, arbitrary content). Full CRUD is available without authorization.
+IntegrationCollections are arbitrary data tables in OneEntry (FAQs, directories, arbitrary content). Full CRUD access is available without authorization.
 
 **⚠️ Collection Marker:** obtain it through `/inspect-api` or `getICollections()` — do not guess.
 
@@ -1767,7 +1772,7 @@ await getApi().IntegrationCollections.updateICollectionRow('faq', id, {
 await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', id);
 ```
 
-**Response Structure** (`ICollectionRowsResponce` = `{ items, total }`; row fields are in `formData`, as in FormData):
+**Response Structure** (`ICollectionRowsResponse` = `{ items, total }`; row fields are in `formData`, as in FormData):
 
 ```typescript
 {
@@ -1802,7 +1807,7 @@ if (valid) {
 
 **⚠️ IMPORTANT:** `getRootPages()` and `getPages()` do NOT return `catalog_page` (product catalogs).
 Pages have a `type` field (`PageType`): `common_page`, `error_page`, `catalog_page`, `external_page`.
-To get a catalog, use `getPageByUrl()` — it finds pages of any type.
+To obtain a catalog, use `getPageByUrl()` — it finds pages of any type.
 `getChildPagesByParentUrl()` also returns `catalog_page` child pages.
 
 ```typescript
@@ -1967,7 +1972,7 @@ Events, Orders, Payments, Subscriptions, Users, WebSocket
 
 **`langCode` — an optional parameter** for most methods. The default language is set during SDK initialization. Pass it explicitly only in multilingual applications. All interfaces and types of returned values are in `node_modules/oneentry/dist/`.
 
-> **Rarely used modules** (`Admins`, `GeneralTypes`, `IntegrationCollections`, `Templates`, `TemplatePreviews`, `System`) are intentionally not described here — see signatures in `node_modules/oneentry/dist/*/...Interfaces.d.ts` if needed. Only `IntegrationCollections` supports writing — full CRUD of collection rows by marker: `getICollectionRowsByMarker` / `getICollectionRowByMarkerAndId` (reading), `createICollectionRow` / `updateICollectionRow` (body `{ formIdentifier, formData }`, as in FormData), `deleteICollectionRowByMarkerAndId`. Use it if the project stores data in OneEntry collections.
+> **Rarely used modules** (`Admins`, `GeneralTypes`, `IntegrationCollections`, `Templates`, `TemplatePreviews`, `System`) are intentionally not described here — see signatures in `node_modules/oneentry/dist/*/...Interfaces.d.ts` if necessary. Only `IntegrationCollections` supports writing — full CRUD of collection rows by marker: `getICollectionRowsByMarker` / `getICollectionRowByMarkerAndId` (reading), `createICollectionRow` / `updateICollectionRow` (body `{ formIdentifier, formData }`, like in FormData), `deleteICollectionRowByMarkerAndId`. Use it if the project stores data in OneEntry collections.
 
 **Device metadata (v1.0.155).** Each module has `setDeviceMetadata(value)` and `getDeviceMetadata()` — override the header `x-device-metadata` (to which the API binds refresh tokens); there is also the option `config.deviceMetadata`. This is needed for server-side OAuth code exchange — see `03-sdk-init.md` and `/create-google-oauth`.
 
@@ -1980,8 +1985,8 @@ getSingleAttributeByMarkerSet(setMarker, attributeMarker, langCode?): IAttribute
 getAttributeSetByMarker(marker, langCode?): IAttributeSetsEntity    // SET object, not attribute
 ```
 
-- Do not confuse the two types: **`IAttributesSetsEntity`** — a separate attribute (`{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`); **`IAttributeSetsEntity`** — a set object (`{ id, identifier, title, schema, isVisible, type: { id, type }, position }`). From v1.0.155, the fields `typeId` and `properties` have been removed from the set — read the type of the set from `type.id` / `type.type`.
-- `getAttributesByMarker` is declared in d.ts as `IAttributeSetsEntity[]` — this is a known SDK typing error: an array of **attributes** (without `id`/`identifier`/`schema`) actually comes, read the attribute fields.
+- Do not confuse the two types: **`IAttributesSetsEntity`** — a separate attribute (`{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`); **`IAttributeSetsEntity`** — a set object (`{ id, identifier, title, schema, isVisible, type: { id, type }, position }`). Starting from v1.0.155, the set has removed the fields `typeId` and `properties` — read the type of the set from `type.id` / `type.type`.
+- `getAttributesByMarker` is declared in d.ts as `IAttributeSetsEntity[]` — this is a known SDK typing error: an array of **attributes** (without `id`/`identifier`/`schema`) is actually returned, read the attribute fields.
 
 ### AuthProvider
 
@@ -2022,12 +2027,12 @@ getRecentlyViewed(marker, langCode?, signPrice?): IProductsEntity[]
 getRepeatPurchase(marker, langCode?, signPrice?): IProductsEntity[]
 getTrending(marker, langCode?, signPrice?): IProductsEntity[]
 
-// Slider (only for the slider_block): tree of slides with a flat pre-order array
+// Slider (only for slider_block): tree of slides as a flat pre-order array
 getSlides(marker): IBlockSlidesResponse
 ```
 
-- `...ByProductIds` — versions by explicit list: `body: IBlockProductsLookup = { productIds: number[], langCode?, limit?, signPrice? }`. Versions without `ByProductIds` take the cart/wishlist **from context** (authorized user or guest by `x-guest-id`).
-- `BlockType` has been expanded with values: `'frequently_ordered_block'`, `'trending_block'`, `'recently_viewed_block'`, `'repeat_purchase_block'`, `'slider_block'`, `'personal_recommendations_block'`, `'cart_complement_block'`, `'cart_similar_block'`, `'wishlist_similar_block'`. Get the block marker in the OneEntry admin panel → Blocks.
+- `...ByProductIds` — versions by explicit list: `body: IBlockProductsLookup = { productIds: number[], langCode?, limit?, signPrice? }`. Versions without `ByProductIds` take the cart/wishlist **from the context** (authorized user or guest by `x-guest-id`).
+- `BlockType` has been supplemented with values: `'frequently_ordered_block'`, `'trending_block'`, `'recently_viewed_block'`, `'repeat_purchase_block'`, `'slider_block'`, `'personal_recommendations_block'`, `'cart_complement_block'`, `'cart_similar_block'`, `'wishlist_similar_block'`. Get the block marker in the OneEntry admin panel → Blocks.
 
 ### Discounts
 
@@ -2039,7 +2044,7 @@ getBonusBalance(): IBonusBalanceEntity                      // ⚠️ user — {
 getBonusHistory(type?, dateFrom?, dateTo?, discountId?, moduleId?, isAdmin?): IBonusTransactionEntity[]  // ⚠️ user
 ```
 
-- `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate a discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
+- `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate the discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
 - Bonuses: `getBonusBalance` / `getBonusHistory` require user authorization. `IBonusTransactionType` = `'ACCRUAL' | 'USAGE' | 'REDUCE' | 'REVERSAL_ACCRUAL' | 'REVERSAL_USAGE' | 'EXPIRATION'`.
 
 ### Events ⚠️ require authorization
@@ -2082,11 +2087,11 @@ Content filter — a customizable tree of nodes in the admin panel (pages, produ
 ### Forms
 
 ```ts
-getAllForms(langCode?, offset?, limit?): IFormsResponse   // paginated: { total, items: IFormsEntity[] } — iterate through .items
+getAllForms(langCode?, offset?, limit?): IFormsResponse   // paginated: { total, items: IFormsEntity[] } — iterate over .items
 getFormByMarker(marker, langCode?): IFormsEntity
 ```
 
-> `IFormsEntity.type` is narrowed down to `'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`.
+> `IFormsEntity.type` is narrowed down to `'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) has received the field `exceptionIds?: string[]`.
 
 ### FormData
 
@@ -2100,7 +2105,7 @@ deleteFormsDataByid(id): boolean                          // ⚠️ user
 
 Update/delete methods require user authorization (call after `reDefine(refreshToken)`); `postFormsData` and `getFormsDataByMarker` work with app-token.
 
-> `IPostFormResponseData.fingerprint` is now `string | null` (for anonymous / app-token submissions, it comes as `null`).
+> `IPostFormResponseData.fingerprint` is now `string | null` (for anonymous / app-token submissions it comes as `null`).
 
 ### Locales
 
@@ -2132,7 +2137,7 @@ createRefundRequest(id, body: ICreateRefundRequest): boolean    // body: { produ
 cancelRefundRequest(id): boolean
 ```
 
-> Bonuses and coupons: `ICreateOrderPreview` / `IOrderData` accept `couponCode`, `additionalDiscountsMarkers`, `bonusAmount`; responses (`IBaseOrdersEntity`, `IOrderPreviewResponse`) return `bonusApplied`, `totalDue`, `discountConfig`. Split payment (`IOrderSplit`) and `discountConfig` come in `getOrderByMarkerAndId`. The elements `products` in the body are `{ productId, quantity, signedPrice? }`: `signedPrice` should be taken from the product obtained with the `signPrice` parameter (price fixation, v1.0.154). Details — `.claude/rules/orders.md`.
+> Bonuses and coupons: `ICreateOrderPreview` / `IOrderData` accept `couponCode`, `additionalDiscountsMarkers`, `bonusAmount`; responses (`IBaseOrdersEntity`, `IOrderPreviewResponse`) return `bonusApplied`, `totalDue`, `discountConfig`. Split payment (`IOrderSplit`) and `discountConfig` come in `getOrderByMarkerAndId`. The elements `products` in the body are `{ productId, quantity, signedPrice? }`: `signedPrice` should be taken from the product received with the `signPrice` parameter (price fixation, v1.0.154). Details — `.claude/rules/orders.md`.
 
 ### Pages
 
@@ -2147,9 +2152,9 @@ getConfigPageByUrl(url): IPageConfig
 searchPage(name, url?, langCode?): IPagesEntity[]
 ```
 
-> `IPagesEntity.type` is now typed as `PageType` = `'catalog_page' | 'common_page' | 'error_page' | 'external_page'` (a subset of `BlockType`). `categoryPath` has become `string | null` (for nested pages, it comes as `null`).
+> `IPagesEntity.type` is now typed as `PageType` = `'catalog_page' | 'common_page' | 'error_page' | 'external_page'` (a subset of `BlockType`). `categoryPath` has become `string | null` (for nested pages it comes as `null`).
 >
-> `getBlocksByPageUrl` enriches blocks with products (v1.0.153): a block of `type: 'product_block'` gets `products?: IProductsEntity[]`, and a block of `type: 'similar_products_block'` gets `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. With `traficLimit: true` in the SDK config, enrichment is disabled, and in case of a loading error, an empty array `[]` is placed in the field — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
+> `getBlocksByPageUrl` enriches blocks with products (v1.0.153): a block of `type: 'product_block'` gets `products?: IProductsEntity[]`, and a block of `type: 'similar_products_block'` gets `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. When `traficLimit: true` in the SDK config, enrichment is disabled, and in case of a loading error, an empty array `[]` is placed in the field — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
 
 ### Payments ⚠️ require authorization
 
@@ -2157,18 +2162,18 @@ searchPage(name, url?, langCode?): IPagesEntity[]
 getSessions(offset?, limit?): ISessionsEntity
 getSessionById(id): ISessionEntity
 getSessionByOrderId(id): ISessionEntity | ISessionEntity[]
-createSession(orderId, type: 'session'|'intent', automaticTaxEnabled?): ISessionEntity   // paymentUrl for redirect (+ clientSecret when 'intent')
+createSession(orderId, type: 'session'|'intent', automaticTaxEnabled?): ISessionEntity   // paymentUrl for redirection (+ clientSecret when 'intent')
 getAccounts(): IAccountsEntity[]
 getAccountById(id): IAccountsEntity
 ```
 
 ### Products
 
-`body: IFilterParams[]` — a required parameter, but by default `[]`. If filters are not needed, you can omit it.
+`body: IFilterParams[]` — a required parameter, but defaults to `[]`. If filters are not needed, it can be omitted.
 
 ```ts
 getProducts(body?: IFilterParams[], langCode?, userQuery?: IProductsQueryBase): IProductsResponse
-getProductsEmptyPage(body?, langCode?, userQuery?): IAggregatedProductGroup[]   // ⚠️ POST, aggregated groups of products without category
+getProductsEmptyPage(body?, langCode?, userQuery?): IAggregatedProductGroup[]   // ⚠️ POST, aggregated product groups without category
 getProductsByPageId(id: number, body?, langCode?, userQuery?): IProductsResponse
 getProductsPriceByPageUrl(url, langCode?, userQuery?: IProductsPriceQuery): IProductsInfo
 getProductsByPageUrl(url, body?, langCode?, userQuery?): IProductsResponse
@@ -2183,7 +2188,7 @@ getProductsCountByPageId(id: string, body?): IProductsCount   // ⚠️ id — s
 getProductsCountByPageUrl(url, body?): IProductsCount
 ```
 
-- Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price', signPrice? }` — for `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. For `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`); for `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); for `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting are no longer accepted by this endpoint, extra fields are a TS error). `IProductsQuery` — deprecated alias `IProductsQueryBase`, do not use in new code.
+- Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price', signPrice? }` — for `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. For `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`); for `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); for `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting are no longer accepted by this endpoint, extra fields are a TS error). `IProductsQuery` — deprecated alias for `IProductsQueryBase`, do not use in new code.
 - `getProductsByVectorSearch` — `body: IVectorSearchProducts = { queryText, vectorDistanceThreshold?, maxHits?, debug? }`. Semantic search by the meaning of the query (not by substring, like `searchProduct`).
 - `getProductsEmptyPage` — now **POST**, returns `IAggregatedProductGroup[]` (`{ attrValue, items, productIds, total }`), not `IProductsResponse`.
 
@@ -2209,10 +2214,10 @@ subscribe(body: ISubscribe): ICreatedSubscription          // body: { marker } �
 cancelSubscription(body: ICancelSubscription): boolean      // body: { marker }
 getAllSubscriptions(): string[]                            // markers of all available subscriptions
 getActiveSubscriptions(): string[]                         // markers of the user's active subscriptions
-recoverSubscriptions(body: ICancelSubscription): boolean   // recovery through Stripe Billing Portal
+recoverSubscriptions(body: ICancelSubscription): boolean   // recovery via Stripe Billing Portal
 ```
 
-Paid subscriptions. `subscribe` returns `paymentUrl` for redirect to payment (like `createSession` for orders). Skills: `/create-subscription`.
+Paid subscriptions. `subscribe` returns `paymentUrl` for redirection to payment (like `createSession` for orders). Skills: `/create-subscription`.
 
 ### UserActivity
 
@@ -2252,3 +2257,31 @@ removeWishlistItem(productId): IWishlistResponse
 ```ts
 connect(): Socket
 ```
+
+### Top-level utilities timeInterval (v1.0.156)
+
+Imported directly from the package, not through modules. Pure functions — without requests and mutations.
+
+```ts
+import {
+  expandAttributeTimeIntervals, // (attr, { from, to }) → TimeIntervalPair[]  — the entire timeInterval attribute
+  expandTimeIntervals,          // (schedule, { from, to }) → TimeIntervalPair[] — a single schedule
+  isTimeIntervalAttribute,      // (attr) → attr is ITimeIntervalAttributeValue — type-guard
+} from 'oneentry';
+```
+
+- `expandAttributeTimeIntervals(attr, window)` — expands the **entire** `timeInterval` attribute
+  of the entity (`page.attributeValues.interval` etc.): traverses groups and schedules, merges slots.
+  Non-timeInterval attribute → `[]` (safe without type checking).
+- `expandTimeIntervals(schedule, window)` — expands **one** schedule. Accepts both types:
+  schedules of entities (`attributeValues[marker].value[].values[]`) and **forms**
+  (`attributes[].localizeInfos.intervals[]`, already typed — main case).
+- `TimeIntervalPair = [startISO, endISO]` (UTC). Window `ITimeIntervalWindow = { from, to }`.
+  Also exported are `ITimeIntervalAttributeValue`, `ITimeIntervalGroup`,
+  `ITimeIntervalEntitySchedule`, `ITimeIntervalSchedule`, `IAttributeValue`.
+
+> ⚠️ **Breaking (v1.0.156):** the computed field `timeIntervals` is no longer added to responses
+> (materialized a year of slots and inflated the cache). Public `Module._addTimeIntervalsToSchedules`
+> / `_addTimeIntervalsToFormSchedules` have also been removed. Migrate to `expandAttributeTimeIntervals` / `expandTimeIntervals`
+> with the required window. The raw schedule (`dates`/`range`, `times`/`intervals`, `inEveryWeek`, `inEveryMonth`)
+> has not changed. See `rules/attribute-values.md`, `/create-checkout`.

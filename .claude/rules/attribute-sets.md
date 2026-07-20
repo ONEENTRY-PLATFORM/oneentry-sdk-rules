@@ -28,7 +28,7 @@ const product = await getApi().Products.getProductById(id)
 const price = product.attributeValues.price?.value // actual value
 ```
 
-**Exception:** `timeInterval` — if the "Receive values" option is enabled in the admin panel, the `value` field will contain schedule data.
+**Exception:** `timeInterval` — if the "Receive values" option is enabled in the admin panel, the `value` field will contain raw schedule data. Expand ready slots `[[startISO, endISO], ...]` using `expandAttributeTimeIntervals(attr, { from, to })` (SDK ≥ 1.0.156; computed field `timeIntervals` from the response is removed). See `rules/attribute-values.md`.
 
 ---
 
@@ -37,7 +37,7 @@ const price = product.attributeValues.price?.value // actual value
 ```ts
 {
   type: "string" | "text" | "image" | "list" | ..., // attribute type
-  value: {},              // always empty in the schema (except timeInterval with Receive values enabled)
+  value: {},              // always empty in schema (except timeInterval with Receive values enabled)
   marker: "product_name", // unique identifier — used in attributeValues of the entity
   position: 1,            // display order
   listTitles: [...],      // options for radioButton and list
@@ -61,7 +61,7 @@ const colorAttr = attrs.find((a: any) => a.marker === 'color')
 const options = colorAttr?.listTitles ?? []
 // [{ title: "Red", value: "1", extended: { type: "string", value: "#FF0000" }, position: 1 }]
 
-// extended — additional value (e.g., CSS color for swatch)
+// extended — additional value (e.g., CSS color for the swatch)
 const swatches = options.map((opt: any) => ({
   label: opt.title,
   value: opt.value,
@@ -75,7 +75,7 @@ const swatches = options.map((opt: any) => ({
 
 ## additionalFields — Nested Attributes
 
-`additionalFields` is configured in the admin panel on the attribute. The **Raw** API returns it as an array, but the SDK normalizes it to `Record<marker, field>` **in all contexts** — both in `attributeValues` of entities (Products, Pages, Blocks), and in the schema from `getAttributesByMarker` / `getSingleAttributeByMarkerSet`, and in form attributes. The array remains only when `rawData: true` in the config.
+`additionalFields` is configured in the admin panel on the attribute. The **raw** API returns it as an array, but the SDK normalizes it to `Record<marker, field>` **in all contexts** — both in `attributeValues` of entities (Products, Pages, Blocks), and in the schema from `getAttributesByMarker` / `getSingleAttributeByMarkerSet`, and in form attributes. The array remains only when `rawData: true` in the config.
 
 ```ts
 // RAW API (rawData: true) — array:
@@ -84,13 +84,13 @@ const swatches = options.map((opt: any) => ({
     { type: "integer", marker: "fieldB", value: 0 }
 ] }
 
-// Default (rawData: false) — both in schema and entity the same Record (key = marker):
+// Default (rawData: false) — both in schema and in entity the same Record (key = marker):
 attr.additionalFields
 // → { fieldA: { type: "string", value: "...", ... }, fieldB: { type: "integer", value: 0, ... } }
 // Empty → {} (not [])
 ```
 
-> ⚠️ Markers of `additionalFields` are defined in the admin panel and are unique to the project. **Do not guess** — inspect via `/inspect-api` or `console.log`. The form is the same in the schema and in `attributeValues` (Record); there is no difference between "array in schema / object in entity".
+> ⚠️ Markers of `additionalFields` are defined in the admin panel and are unique to the project. **Do not guess** — inspect via `/inspect-api` or `console.log`. The form is the same in the schema and in `attributeValues` (Record); there is **no** difference between "array in schema / object in entity".
 
 ---
 
@@ -142,4 +142,4 @@ attrs['2nd_price']?.value
 | Get a single attribute by marker                | `getSingleAttributeByMarkerSet(setMarker, attrMarker)` |
 | Get all attribute sets                          | `getAttributes()`                                      |
 
-**DO NOT use AttributesSets to get values of products/pages.** For that, use `Products.getProducts()`, `Pages.getPageByUrl()` etc. — they have `attributeValues` with real data.
+**DO NOT use AttributesSets to get values of products/pages.** For that, use `Products.getProducts()`, `Pages.getPageByUrl()`, etc. — they have `attributeValues` with actual data.
