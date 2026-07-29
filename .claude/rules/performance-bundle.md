@@ -36,7 +36,9 @@ export default withBundleAnalyzer(nextConfig);
 }
 ```
 
-The goal — first-load JS on the route `/` should be **under 200 KB gzipped**. Each `app/[locale]/page.tsx`, `app/[locale]/shop/page.tsx`, etc. — a separate number in the `next build` report. If anything is higher — open the HTML report of the analyzer and look for the bulkiest modules.
+> ⚠️ **Turbopack (Next 16):** `@next/bundle-analyzer` is a webpack plugin, the report **is not generated** under Turbopack builds ("not compatible with Turbopack builds, no report will be generated"). Options: `next experimental-analyze` (interactive treemap) or classic report via `next build --webpack`. The `next build` table under Turbopack also **does not print First Load JS** — measure sizes manually: gzip chunks `.next/static/chunks/*.js` + `build-manifest.json` (`rootMainFiles` = shared first-load; `app-build-manifest.json` — webpack artifact, not available under Turbopack).
+
+The goal — first-load JS on the `/` route should be **under 200 KB gzipped**. Each `app/[locale]/page.tsx`, `app/[locale]/shop/page.tsx`, etc. — a separate number in the `next build` report. If anything is higher — open the HTML report of the analyzer and look for the bulkiest modules.
 
 ## `optimizePackageImports` — for packages with barrel imports
 
@@ -58,7 +60,7 @@ const nextConfig: NextConfig = {
 };
 ```
 
-`@oneentry/web-sdk` uses subpath exports — no need to add it to the list.
+The `oneentry` SDK uses subpath exports — no need to add it to the list.
 
 How to check if a package is a candidate: open `node_modules/<pkg>/dist/index.{js,mjs}` and look for `export * from './…'` lines. If there are many — the package is barrel-style, add it.
 
@@ -82,11 +84,11 @@ import ProductCard from '@/components/ProductCard';
 import CartPopup from '@/components/popups/CartPopup';
 ```
 
-The same applies to `app/api/index.ts`, `lib/index.ts`, `utils/index.ts`. Never create such files — they look neat but turn every page into a monolithic chunk.
+The same applies to `app/api/index.ts`, `lib/index.ts`, `utils/index.ts`. Never create such files — they look tidy but turn every page into a monolithic chunk.
 
 ## Threshold for `dynamic()` — 30 KB gzipped or the library is rendered on event
 
-Not every component is worth moving to `dynamic()`. The overhead (a separate HTTP request for the chunk, separate code for hydration) only pays off for heavy modules.
+Not every component is worth moving to `dynamic()`. The overhead (a separate HTTP request for the chunk, separate code for hydration) pays off only on heavy modules.
 
 | Candidate | Solution |
 | --- | --- |
@@ -96,7 +98,7 @@ Not every component is worth moving to `dynamic()`. The overhead (a separate HTT
 | Charts `recharts` 90 KB | `dynamic({ ssr: false })` |
 | Rich-text editor `tiptap` 120 KB | `dynamic({ ssr: false })` + sticky mounting |
 
-Specific patterns (sticky-mount, static CSS import inside a lazy module, workarounds for Turbopack issues with dynamic `import()` CSS) — see `.claude/rules/performance.md`.
+Specific patterns (sticky-mount, static CSS import inside lazy module, bypassing Turbopack issues with dynamic `import()` CSS) — see `.claude/rules/performance.md`.
 
 ## `productionBrowserSourceMaps: false` — for production builds
 
@@ -114,7 +116,7 @@ const nextConfig: NextConfig = {
 };
 ```
 
-If you need error monitoring with stack trace decoding (Sentry, Datadog) — set up the loading of source maps into their sourcemap-storage as a separate CI step, not in the public `_next/static`.
+If error monitoring with stack trace decoding is needed (Sentry, Datadog) — set up the loading of source maps into their sourcemap-storage as a separate CI step, not in the public `_next/static`.
 
 ## `serverExternalPackages` — for native and CommonJS dependencies
 
@@ -129,15 +131,15 @@ const nextConfig: NextConfig = {
 
 The warning `Critical dependency: the request of a dependency is an expression` during `next build` usually indicates a candidate for `serverExternalPackages`.
 
-## ⚠️ Do not import OneEntry SDK in client components
+## ⚠️ OneEntry SDK in the client bundle — the heaviest single module
 
-Any `'use client'` file with `import { defineOneEntry } from '@oneentry/web-sdk'` pulls the entire SDK into the client bundle — usually +80 KB gzipped. The SDK is intended for server use (server actions, server components, route handlers).
+Importing `defineOneEntry` from any `'use client'` file pulls the entire SDK into the client bundle: measurement on SDK 1.0.156 — **~126 KB gzip (~580 KB raw)**, the largest single chunk of the application. Public data (Pages, Products, Menus, Forms) should be read on the server (server components, server actions, route handlers) — the SDK is not needed on the client for them.
 
 ```typescript
-// ❌ INCORRECT — SDK in client chunk
+// ❌ INCORRECT — SDK in the client chunk for public data
 // components/AddToCartButton.tsx
 'use client';
-import { defineOneEntry } from '@oneentry/web-sdk';   // +80 KB in every chunk where the button is
+import { defineOneEntry } from 'oneentry';   // +126 KB gzip in every chunk where there is a button
 
 // ✅ CORRECT — SDK on the server, client calls server action
 // components/AddToCartButton.tsx
@@ -149,23 +151,25 @@ import { addToCartAction } from '@/app/actions/cart';
 import { getApi } from '@/lib/oneentry';
 ```
 
-The same goes for `@/lib/oneentry` (singleton initializer for the SDK) — never import it in files with `'use client'`.
+**The most insidious leak channel — global client store.** If the Redux/RTK Query store (`'use client'`, provider in the root layout) imports a module with `defineOneEntry` (for example, in `queryFn`), the SDK ends up in **the first-load of every page**, even those where user data is not needed. One client `import` in the store → API module chain — and the 200 KB budget is breached. Check the import chain from the root provider.
+
+A conscious exception — **user-auth methods** (`Users`, `Orders`, `Payments` after `reDefine()`): they are called from Client Component (fingerprint, localStorage session), and the SDK is indeed needed on the client for them. Then: isolate the SDK import in lazy-loaded chunks of account routes (`dynamic()`), not in the global store of the root layout.
 
 Quick check before committing:
 
 ```bash
-# should return empty
+# each match — a conscious decision (user-auth), not a random import
 grep -rln "'use client'" --include="*.tsx" --include="*.ts" \
-  | xargs grep -l "@oneentry/web-sdk\|@/lib/oneentry"
+  | xargs grep -l "from 'oneentry'\|@/lib/oneentry"
 ```
 
 ## Checklist before committing
 
 - [ ] `@next/bundle-analyzer` is connected; primary JS on the main route < 200 KB gzipped
 - [ ] All used barrel packages (`lucide-react`, `date-fns`, `gsap`, …) in `experimental.optimizePackageImports`
-- [ ] No `index.ts` re-exports in your own code (`components/`, `lib/`, `utils/`)
+- [ ] No `index.ts` re-exports in own code (`components/`, `lib/`, `utils/`)
 - [ ] `dynamic()` used only for modules ≥ 30 KB or libraries rendered on event
 - [ ] `productionBrowserSourceMaps: false` in `next.config`
-- [ ] No `@oneentry/web-sdk` / `@/lib/oneentry` imports in `'use client'` files (grep above)
+- [ ] Import `oneentry` / `@/lib/oneentry` in `'use client'` files — only for user-auth methods and not through the root layout store (grep above)
 
 > Related rules: `.claude/rules/performance.md` (lazy splitting of heavy libraries via `dynamic`, sticky-mount patterns), `.claude/rules/performance-gsap.md` (`optimizePackageImports` for GSAP), `.claude/rules/server-actions.md` (where SDK calls should live).

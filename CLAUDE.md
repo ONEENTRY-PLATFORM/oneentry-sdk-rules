@@ -968,8 +968,8 @@ import type { IAttributesSetsEntity } from 'oneentry/dist/attribute-sets/attribu
 | Type | Access to value | Note |
 | --- | --- | --- |
 | `string`, `integer`, `real`, `float` | `attrs.marker?.value` | primitive |
-| `text` | `attrs.marker?.value?.htmlValue` | or `plainValue`, `mdValue` |
-| `textWithHeader` | `attrs.marker?.value?.header`, `.htmlValue` | |
+| `text` | `(Array.isArray(v) ? v[0] : v)?.htmlValue` | array **or** object (`v = attrs.marker?.value`); has `plainValue`, `mdValue` |
+| `textWithHeader` | same wrapper → `?.header`, `?.htmlValue` | |
 | `image` | `attrs.marker?.value?.downloadLink` | object |
 | `groupOfImages` | `attrs.marker?.value?.[0]?.downloadLink` | **ARRAY!** |
 | `file` | `attrs.marker?.value?.downloadLink` | object |
@@ -1001,7 +1001,7 @@ const imgUrl = imgAttr?.value?.[0]?.downloadLink || ''
 | `nin` | NOT in the list | `"red,blue"` |
 | `eq` | Equals | `100` |
 | `neq` | Not equal | `0` |
-| `mth` | More than | `50` |
+| `mth` | Greater than | `50` |
 | `lth` | Less than | `1000` |
 | `exs` | Exists | — |
 | `nexs` | Does not exist | — |
@@ -1030,7 +1030,7 @@ page.localizeInfos?.htmlContent  // HTML content (check first)
 
 ### Page Blocks (`getBlocksByPageUrl` → `IPositionBlock[]`)
 
-With SDK ≥ 1.0.153, blocks already contain products — additional requests to `Products` are not needed:
+With SDK ≥ 1.0.153 blocks already contain products — additional requests to `Products` are not needed:
 
 ```typescript
 const products = block.products ?? []               // product_block → IProductsEntity[]
@@ -1664,7 +1664,7 @@ async function loadPageData(productId: number) {
 }
 ```
 
-## Common Scenarios (Extended)
+## Frequent Scenarios (Advanced)
 
 ### Order Form from OneEntry Forms API
 
@@ -1699,7 +1699,7 @@ To create a UI filter panel with `FilterContext`, price/color/availability compo
 
 To create a search bar (dropdown or separate page), use the skill **`/create-search`**.
 
-For a language switcher, use the skill **`/create-locale-switcher`**.
+For the language switcher, use the skill **`/create-locale-switcher`**.
 
 ### FormData — Reading Data from Forms
 
@@ -1728,7 +1728,7 @@ export async function getFormSubmissions(marker: string) {
 
 **Updating Status / Deleting** (`updateFormsDataByid`, `updateFormsDataStatusByid`, `deleteFormsDataByid`):
 
-**⚠️ Requires user authorization** — call from Client Component after `reDefine(refreshToken)`, NOT through app-token (unlike `getFormsDataByMarker`, which works with app-token).
+**⚠️ Require user authorization** — call from Client Component after `reDefine(refreshToken)`, NOT through app-token (unlike `getFormsDataByMarker`, which works with app-token).
 
 ```typescript
 await getApi().FormData.updateFormsDataStatusByid(id, { statusIdentifier: 'processed' });
@@ -1741,7 +1741,7 @@ await getApi().FormData.deleteFormsDataByid(id);
 
 ### IntegrationCollections — Custom Collections
 
-IntegrationCollections are arbitrary data tables in OneEntry (FAQs, directories, arbitrary content). Full CRUD access is available without authorization.
+IntegrationCollections are arbitrary data tables in OneEntry (FAQ, directories, arbitrary content). Full CRUD is available without authorization.
 
 **⚠️ Collection Marker:** obtain it through `/inspect-api` or `getICollections()` — do not guess.
 
@@ -1772,7 +1772,7 @@ await getApi().IntegrationCollections.updateICollectionRow('faq', id, {
 await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', id);
 ```
 
-**Response Structure** (`ICollectionRowsResponse` = `{ items, total }`; row fields are in `formData`, as in FormData):
+**Response Structure** (`ICollectionRowsResponce` = `{ items, total }`; row fields are in `formData`, like in FormData):
 
 ```typescript
 {
@@ -1794,20 +1794,24 @@ await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', i
 }
 ```
 
-**Marker Validation** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT boolean:
+**Marker Validation** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT a boolean. ⚠️ Semantics — "marker **is free**": `true` = no collection with that marker exists (can create), `false` = marker is occupied (the same semantics confirmed by a live test at the twin endpoint `ProductStatuses.validateMarker`):
 
 ```typescript
 const { valid } = await getApi().IntegrationCollections.validateICollectionMarker('faq');
-if (valid) {
-  /* marker exists */
+if (!valid) {
+  /* marker occupied — the faq collection exists */
 }
+
+// Existence check — more reliable by list:
+const cols = await getApi().IntegrationCollections.getICollections(locale);
+const exists = cols.some((c) => c.identifier === 'faq');
 ```
 
-### Navigation by Categories
+### Category Navigation
 
 **⚠️ IMPORTANT:** `getRootPages()` and `getPages()` do NOT return `catalog_page` (product catalogs).
 Pages have a `type` field (`PageType`): `common_page`, `error_page`, `catalog_page`, `external_page`.
-To obtain a catalog, use `getPageByUrl()` — it finds pages of any type.
+To get a catalog, use `getPageByUrl()` — it finds pages of any type.
 `getChildPagesByParentUrl()` also returns `catalog_page` child pages.
 
 ```typescript
@@ -1846,12 +1850,12 @@ if (isError(categories)) return []
 
 **Cause:** A parallel operation (CartContext, FavoritesContext) has already burned the same `refreshToken`. The new page reads the stale token from localStorage.
 
-> SDK (≥ 1.0.152) deduplicates simultaneous refreshes within *one* instance of `getApi()` (single-flight) — a race of parallel requests on the same page no longer logs out the user. There remains a race between **tabs/reloads** (the fresh context takes the token from localStorage) — the rule below is relevant for it.
+> SDK (≥ 1.0.152) deduplicates simultaneous refreshes within *one* instance of `getApi()` (single-flight) — a race of parallel requests on the same page no longer logs the user out. There remains a race between **tabs/reloads** (the fresh context takes the token from localStorage) — the rule below is relevant for it.
 
 **Rule for all account pages:**
 
 1. Server Action MUST return `statusCode` in the error object
-2. On 401 — retry with `localStorage.getItem('refreshToken')` (the token may have been refreshed)
+2. On 401 — retry with `localStorage.getItem('refreshToken')` (the token may have been updated)
 3. Log out ONLY on 401/403 AFTER retry
 4. Never call `removeItem('refreshToken')` on data loading error
 
@@ -1861,13 +1865,13 @@ if (isError(categories)) return []
 
 A typical expired session. Redirect to `/login`.
 
-> ⚠️ If the token expires too quickly — check the token lifespan in the OneEntry admin panel: `PROJECT_URL/users/auth-providers`.
+> ⚠️ If the token expires too quickly — check the token lifetime in the OneEntry admin: `PROJECT_URL/users/auth-providers`.
 
 #### 403 Forbidden
 
-**Cause 1:** insufficient permissions for the action (user group settings in the admin panel).
+**Cause 1:** insufficient permissions for the action (user group settings in the admin).
 
-**Cause 2:** calling `AuthProvider.auth/signUp/generateCode` via Server Action → fingerprint (`x-device-metadata`) will be server-side, not browser-side, and the refresh token will be tied to the server. By default — move the call to Client Component. With SDK ≥ 1.0.155, server-side calls are allowed with the browser fingerprint passed through `config.deviceMetadata` (per-request instance `defineOneEntry(url, { token, deviceMetadata })`); the main case — server-side OAuth code exchange. See `03-sdk-init.md` → "Device metadata".
+**Cause 2:** calling `AuthProvider.auth/signUp/generateCode` via Server Action → fingerprint (`x-device-metadata`) will be server-side, not browser-side, and the refresh token will be tied to the server. By default — move the call to Client Component. With SDK ≥ 1.0.155, server-side calls are allowed with the browser's fingerprint passed through `config.deviceMetadata` (per-request instance `defineOneEntry(url, { token, deviceMetadata })`); the main case — server-side OAuth code exchange. See `03-sdk-init.md` → "Device metadata".
 
 **Method distribution by context:**
 
@@ -1878,7 +1882,7 @@ A typical expired session. Redirect to `/login`.
 
 #### 400 Bad Request — `notificationData.phoneSMS` is not allowed to be empty
 
-An empty string `''` is rejected by the API validator. `phoneSMS` in the `INotificationData` type is optional (`phoneSMS?: string`) — if the user does not have a phone, **simply do not pass the field** (`as any` is not needed). The SDK itself removes `phoneSMS` from the body if an empty string `''` is received.
+An empty string `''` is rejected by the API validator. `phoneSMS` in the `INotificationData` type is optional (`phoneSMS?: string`) — if the user does not have a phone, **just do not pass the field** (`as any` is not needed). The SDK itself removes `phoneSMS` from the body if an empty string `''` is received.
 
 > Full signUp pattern: `.claude/rules/auth-provider.md`
 
@@ -1894,6 +1898,10 @@ const authData = formFields
 ```
 
 > Full auth pattern: `.claude/rules/auth-provider.md` | Skill: **`/create-auth`**
+
+#### 400 Bad Request — `Login or password values are missed` when `Users.updateUser`
+
+The message is misleading: it comes for both `authData: []` and a single login element. The password is NOT required when saving the profile — just **do not pass the `authData` key at all** when the password is not changing. The full contract (`maximum 1 element — password`, `{ marker, value }` without `type`, login cannot be changed) — skill **`/create-profile`**.
 
 #### 404 Not Found
 
@@ -1918,6 +1926,27 @@ const user = await getApi().Users.getUser();
 ### Debugging Requests
 
 Enable logging: `validation: { enabled: true, logErrors: true }` in the `defineOneEntry` config.
+
+### Environment and Build
+
+#### 400 on `/_next/image` for CMS images with correct `remotePatterns` (dev)
+
+**Symptom:** all `/_next/image?url=https://…oneentry.cloud/…` return `400 "url" parameter is not allowed`, even though `remotePatterns` in `next.config` are correct; clearing caches and restarting do not help.
+
+**Cause:** SSRF protection of the Next optimizer (16+) resolves the image host with **all** DNS records and blocks the request if any are private. In networks with DNS64/NAT64, the resolver synthesizes an AAAA record `64:ff9b::/96` next to the public A record → every remote image is blocked. Only a generalized 400 goes to the browser; the real reason is the line `⨯ upstream image … resolved to private ip` in the **stdout of the dev server** — when getting a 400 on images, first check there, rather than guessing from the config.
+
+**Solution (dev-only, production retains protection):**
+
+```typescript
+// next.config.ts
+images: { dangerouslyAllowLocalIP: process.env.NODE_ENV === 'development' }
+```
+
+#### After deployment/rebuild, a section (menu, hero, list) disappeared — then "fixed itself"
+
+**Cause:** static pages (`force-static` / ISR) read CMS **only once — during `next build`**. The CI runner is usually far from the CMS and generates many pages in bulk → transient timeout/429; wrappers that "degrade without errors" turn a failure into an empty section, and it **gets baked into static**. Intermittently and in different sections — requests are independent. ISR later regenerates the page at runtime — hence "then it appeared".
+
+**Mitigation:** a separate build profile in the fetch wrapper based on `process.env.NEXT_PHASE === 'phase-production-build'` — increased timeout (~30s), more retries with exponential backoff+jitter, limiting concurrency of requests to CMS, and mandatory `console.warn` on degradation after all retries (the CI log shows which section went empty). An alternative — fail-fast: drop `next build` on critical data unavailability + retry the CI job, so that nothing empty gets deployed.
 
 ## Performance — SSR caching, lazy, parallelism
 
@@ -1957,7 +1986,7 @@ Full rules: ISR (`force-static` + `revalidate`), `unstable_cache` on top of serv
 
 ```ts
 const {
-  AttributesSets, AuthProvider, Blocks, Discounts, Events, FileUploading,
+  Admins, AttributesSets, AuthProvider, Blocks, Discounts, Events, FileUploading,
   Filters, Forms, FormData, Locales, Menus, Orders, Pages, Payments,
   ProductStatuses, Products, Sitemap, Subscriptions, UserActivity, Users, WS
 } = defineOneEntry('your-url', { token: 'your-app-token' });
@@ -1966,15 +1995,27 @@ const {
 **Methods requiring user authorization** (call after `reDefine(refreshToken)` on the client):
 Events, Orders, Payments, Subscriptions, Users, WebSocket
 
-**Guest mode.** Cart/wishlist (`Users.getCart/...`), activity tracking (`UserActivity`), and recommendations Blocks work for **unauthorized guests** — the SDK sends the header `x-guest-id` instead of `Authorization`. For details, see `03-sdk-init.md` (section "Guest Mode").
+**Guest mode.** Cart/wishlist (`Users.getCart/...`), activity tracking (`UserActivity`), and recommendations Blocks work for **unauthorized guests** — the SDK sends the header `x-guest-id` instead of `Authorization`. Details — `03-sdk-init.md` (section "Guest Mode").
 
-**The `rating` field** (aggregate rating) is now available in `IProductsEntity`, `IPagesEntity`, and `IUserEntity` — use it for stars on cards. Rating forms — form type `'rating'` (see `/create-reviews`).
+**Field `rating`** (aggregate rating) is now available in `IProductsEntity`, `IPagesEntity`, and `IUserEntity` — use it for stars on cards. Rating forms — form type `'rating'` (see `/create-reviews`).
 
-**`langCode` — an optional parameter** for most methods. The default language is set during SDK initialization. Pass it explicitly only in multilingual applications. All interfaces and types of returned values are in `node_modules/oneentry/dist/`.
+**`langCode` — optional parameter** for most methods. The default language is set during SDK initialization. Pass it explicitly only in multilingual applications. All interfaces and types of returned values are in `node_modules/oneentry/dist/`.
 
-> **Rarely used modules** (`Admins`, `GeneralTypes`, `IntegrationCollections`, `Templates`, `TemplatePreviews`, `System`) are intentionally not described here — see signatures in `node_modules/oneentry/dist/*/...Interfaces.d.ts` if necessary. Only `IntegrationCollections` supports writing — full CRUD of collection rows by marker: `getICollectionRowsByMarker` / `getICollectionRowByMarkerAndId` (reading), `createICollectionRow` / `updateICollectionRow` (body `{ formIdentifier, formData }`, like in FormData), `deleteICollectionRowByMarkerAndId`. Use it if the project stores data in OneEntry collections.
+> **Rarely used modules** (`GeneralTypes`, `IntegrationCollections`, `Templates`, `TemplatePreviews`, `System`) are intentionally not described here — see signatures in `node_modules/oneentry/dist/*/...Interfaces.d.ts` if necessary. Only `IntegrationCollections` supports writing — full CRUD of collection rows by marker: `getICollectionRowsByMarker` / `getICollectionRowByMarkerAndId` (reading), `createICollectionRow` / `updateICollectionRow` (body `{ formIdentifier, formData }`, as in FormData), `deleteICollectionRowByMarkerAndId`. Use it if the project stores data in OneEntry collections.
 
-**Device metadata (v1.0.155).** Each module has `setDeviceMetadata(value)` and `getDeviceMetadata()` — override the header `x-device-metadata` (to which the API binds refresh tokens); there is also the option `config.deviceMetadata`. This is needed for server-side OAuth code exchange — see `03-sdk-init.md` and `/create-google-oauth`.
+**Device metadata (v1.0.155).** Each module has `setDeviceMetadata(value)` and `getDeviceMetadata()` — override the header `x-device-metadata` (the API binds refresh tokens to it); there is also the option `config.deviceMetadata`. This is needed for server-side OAuth code exchange — see `03-sdk-init.md` and `/create-google-oauth`.
+
+### Admins
+
+```ts
+getAdminsInfo(body?: IFilterParams[], langCode?, offset?, limit?): IAdminEntity[]
+```
+
+The "team/experts" pattern: OneEntry admins with an assigned set of attributes work as content entities (masters, doctors, trainers) — photo, rating, service-`entity`, schedule-`timeInterval`. The "team member" indicator is a filled key attribute (for example, name): filter the list on your side, there is no separate flag.
+
+- ⚠️ **Positional signature** (`body, langCode, offset, limit`) — an options object instead of positional arguments will return a 4xx envelope, not a list.
+- ⚠️ **Default `limit` = 30**: calling without arguments silently returns only the first page — part of the admins "disappears" without an error (classic: "32 masters in CMS, 30 on the site"). Always pass an explicit `limit` or paginate.
+- `body` — the same `IFilterParams[]` as in Products (filters by attribute values); types — `oneentry/dist/admins/adminsInterfaces`.
 
 ### AttributeSets
 
@@ -1985,8 +2026,8 @@ getSingleAttributeByMarkerSet(setMarker, attributeMarker, langCode?): IAttribute
 getAttributeSetByMarker(marker, langCode?): IAttributeSetsEntity    // SET object, not attribute
 ```
 
-- Do not confuse the two types: **`IAttributesSetsEntity`** — a separate attribute (`{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`); **`IAttributeSetsEntity`** — a set object (`{ id, identifier, title, schema, isVisible, type: { id, type }, position }`). Starting from v1.0.155, the set has removed the fields `typeId` and `properties` — read the type of the set from `type.id` / `type.type`.
-- `getAttributesByMarker` is declared in d.ts as `IAttributeSetsEntity[]` — this is a known SDK typing error: an array of **attributes** (without `id`/`identifier`/`schema`) is actually returned, read the attribute fields.
+- Do not confuse the two types: **`IAttributesSetsEntity`** — a separate attribute (`{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`); **`IAttributeSetsEntity`** — a set object (`{ id, identifier, title, schema, isVisible, type: { id, type }, position }`). Starting from v1.0.155, the fields `typeId` and `properties` have been removed from the set — read the set type from `type.id` / `type.type`.
+- `getAttributesByMarker` is declared in d.ts as `IAttributeSetsEntity[]` — this is a known SDK typing error: an array of **attributes** (without `id`/`identifier`/`schema`) actually comes, read the attribute fields.
 
 ### AuthProvider
 
@@ -2027,11 +2068,11 @@ getRecentlyViewed(marker, langCode?, signPrice?): IProductsEntity[]
 getRepeatPurchase(marker, langCode?, signPrice?): IProductsEntity[]
 getTrending(marker, langCode?, signPrice?): IProductsEntity[]
 
-// Slider (only for slider_block): tree of slides as a flat pre-order array
+// Slider (only for slider_block): tree of slides with a flat pre-order array
 getSlides(marker): IBlockSlidesResponse
 ```
 
-- `...ByProductIds` — versions by explicit list: `body: IBlockProductsLookup = { productIds: number[], langCode?, limit?, signPrice? }`. Versions without `ByProductIds` take the cart/wishlist **from the context** (authorized user or guest by `x-guest-id`).
+- `...ByProductIds` — versions by explicit list: `body: IBlockProductsLookup = { productIds: number[], langCode?, limit?, signPrice? }`. Versions without `ByProductIds` take the cart/wishlist **from context** (authorized user or guest by `x-guest-id`).
 - `BlockType` has been supplemented with values: `'frequently_ordered_block'`, `'trending_block'`, `'recently_viewed_block'`, `'repeat_purchase_block'`, `'slider_block'`, `'personal_recommendations_block'`, `'cart_complement_block'`, `'cart_similar_block'`, `'wishlist_similar_block'`. Get the block marker in the OneEntry admin panel → Blocks.
 
 ### Discounts
@@ -2044,7 +2085,7 @@ getBonusBalance(): IBonusBalanceEntity                      // ⚠️ user — {
 getBonusHistory(type?, dateFrom?, dateTo?, discountId?, moduleId?, isAdmin?): IBonusTransactionEntity[]  // ⚠️ user
 ```
 
-- `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate the discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
+- `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate a discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
 - Bonuses: `getBonusBalance` / `getBonusHistory` require user authorization. `IBonusTransactionType` = `'ACCRUAL' | 'USAGE' | 'REDUCE' | 'REVERSAL_ACCRUAL' | 'REVERSAL_USAGE' | 'EXPIRATION'`.
 
 ### Events ⚠️ require authorization
@@ -2060,8 +2101,10 @@ subscribeToForm(marker, body: ISubscribeFormEvent): boolean      // body: { form
 unsubscribeFromForm(marker, body: ISubscribeFormEvent): boolean
 getFormSubscriptions(offset?, limit?): IListFormSubscription[]   // [{ eventMarker, formDataId }]
 
-getAllEvents(): IContentApiEvent[]                               // public — all available events
+getAllEvents(): IContentApiEvent[]                               // public via SDK, but see note about 401
 ```
+
+> ⚠️ `getAllEvents` is public from the SDK side, but the events route must be **granted to the guest group** — it is not granted for some tenants, and the method returns `401` with the app token. Then see event markers in the admin panel → Events, via admin API (`GET /api/admin/events`, rule `admin-api`) or grant permission (`/admin-grant-permissions`). The existence of an event cannot be checked with trial `generateCode`/`checkCode` — they mask the error (see `rules/auth-provider.md`).
 
 > Do not confuse with the **Subscriptions** module (paid subscriptions) — these are different entities. `Events.getAllSubscriptions` → product subscriptions; `Subscriptions.getAllSubscriptions` → markers of paid subscriptions.
 
@@ -2082,7 +2125,7 @@ getFile(id, type, entity, filename, template?): Response   // raw fetch Response
 getFilterByMarker(marker, langCode?): IContentFilter            // tree of items (IContentFilterItem[])
 ```
 
-Content filter — a customizable tree of nodes in the admin panel (pages, products, attributes, discounts, bonuses, payment methods). `IContentFilterItem.type` = `'page' | 'product' | 'admin' | 'attribute' | 'discount' | 'personal-discount' | 'bonus' | 'payment-method' | 'custom'`. Nodes are nested through `children`. Public (app-token).
+Content filter — a customizable tree of nodes in the admin panel (pages, products, attributes, discounts, bonuses, payment methods). `IContentFilterItem.type` = `'page' | 'product' | 'admin' | 'attribute' | 'discount' | 'personal-discount' | 'bonus' | 'payment-method' | 'custom'`. Nodes are nested via `children`. Public (app-token).
 
 ### Forms
 
@@ -2091,7 +2134,7 @@ getAllForms(langCode?, offset?, limit?): IFormsResponse   // paginated: { total,
 getFormByMarker(marker, langCode?): IFormsEntity
 ```
 
-> `IFormsEntity.type` is narrowed down to `'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) has received the field `exceptionIds?: string[]`.
+> `IFormsEntity.type` is narrowed down to `'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`.
 
 ### FormData
 
@@ -2131,13 +2174,13 @@ createOrder(marker, body: IOrderData, langCode?): IBaseOrdersEntity
 updateOrderByMarkerAndId(marker, id, body: IOrderData, langCode?): IBaseOrdersEntity
 getAllStatusesByStorageMarker(marker, langCode?, offset?, limit?): IOrderStatus[]
 
-// Refunds (refund requests) for the order
+// Refunds (refund requests) for an order
 getRefunds(id): IRefundRequest[]
 createRefundRequest(id, body: ICreateRefundRequest): boolean    // body: { products: Record<string, { quantity }>, note? }
 cancelRefundRequest(id): boolean
 ```
 
-> Bonuses and coupons: `ICreateOrderPreview` / `IOrderData` accept `couponCode`, `additionalDiscountsMarkers`, `bonusAmount`; responses (`IBaseOrdersEntity`, `IOrderPreviewResponse`) return `bonusApplied`, `totalDue`, `discountConfig`. Split payment (`IOrderSplit`) and `discountConfig` come in `getOrderByMarkerAndId`. The elements `products` in the body are `{ productId, quantity, signedPrice? }`: `signedPrice` should be taken from the product received with the `signPrice` parameter (price fixation, v1.0.154). Details — `.claude/rules/orders.md`.
+> Bonuses and coupons: `ICreateOrderPreview` / `IOrderData` accept `couponCode`, `additionalDiscountsMarkers`, `bonusAmount`; responses (`IBaseOrdersEntity`, `IOrderPreviewResponse`) return `bonusApplied`, `totalDue`, `discountConfig`. Split payment (`IOrderSplit`) and `discountConfig` come in `getOrderByMarkerAndId`. The elements `products` in the body are `{ productId, quantity, signedPrice? }`: `signedPrice` should be taken from the product obtained with the `signPrice` parameter (price fixing, v1.0.154). Details — `.claude/rules/orders.md`.
 
 ### Pages
 
@@ -2154,7 +2197,7 @@ searchPage(name, url?, langCode?): IPagesEntity[]
 
 > `IPagesEntity.type` is now typed as `PageType` = `'catalog_page' | 'common_page' | 'error_page' | 'external_page'` (a subset of `BlockType`). `categoryPath` has become `string | null` (for nested pages it comes as `null`).
 >
-> `getBlocksByPageUrl` enriches blocks with products (v1.0.153): a block of `type: 'product_block'` gets `products?: IProductsEntity[]`, and a block of `type: 'similar_products_block'` gets `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. When `traficLimit: true` in the SDK config, enrichment is disabled, and in case of a loading error, an empty array `[]` is placed in the field — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
+> `getBlocksByPageUrl` enriches blocks with products (v1.0.153): for a block `type: 'product_block'` there appears `products?: IProductsEntity[]`, for `type: 'similar_products_block'` — `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. When `traficLimit: true` in the SDK config, enrichment is disabled, and in case of a loading error, an empty array `[]` is placed in the field — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
 
 ### Payments ⚠️ require authorization
 
@@ -2162,14 +2205,14 @@ searchPage(name, url?, langCode?): IPagesEntity[]
 getSessions(offset?, limit?): ISessionsEntity
 getSessionById(id): ISessionEntity
 getSessionByOrderId(id): ISessionEntity | ISessionEntity[]
-createSession(orderId, type: 'session'|'intent', automaticTaxEnabled?): ISessionEntity   // paymentUrl for redirection (+ clientSecret when 'intent')
+createSession(orderId, type: 'session'|'intent', automaticTaxEnabled?): ISessionEntity   // paymentUrl for redirect (+ clientSecret when 'intent')
 getAccounts(): IAccountsEntity[]
 getAccountById(id): IAccountsEntity
 ```
 
 ### Products
 
-`body: IFilterParams[]` — a required parameter, but defaults to `[]`. If filters are not needed, it can be omitted.
+`body: IFilterParams[]` — required parameter, but by default `[]`. If filters are not needed, it can be omitted.
 
 ```ts
 getProducts(body?: IFilterParams[], langCode?, userQuery?: IProductsQueryBase): IProductsResponse
@@ -2188,7 +2231,7 @@ getProductsCountByPageId(id: string, body?): IProductsCount   // ⚠️ id — s
 getProductsCountByPageUrl(url, body?): IProductsCount
 ```
 
-- Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price', signPrice? }` — for `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. For `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`); for `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); for `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting are no longer accepted by this endpoint, extra fields are a TS error). `IProductsQuery` — deprecated alias for `IProductsQueryBase`, do not use in new code.
+- Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price', signPrice? }` — in `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. In `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`); in `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); in `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting are no longer accepted by this endpoint, extra fields are a TS error). `IProductsQuery` — deprecated alias `IProductsQueryBase`, do not use in new code.
 - `getProductsByVectorSearch` — `body: IVectorSearchProducts = { queryText, vectorDistanceThreshold?, maxHits?, debug? }`. Semantic search by the meaning of the query (not by substring, like `searchProduct`).
 - `getProductsEmptyPage` — now **POST**, returns `IAggregatedProductGroup[]` (`{ attrValue, items, productIds, total }`), not `IProductsResponse`.
 
@@ -2217,7 +2260,7 @@ getActiveSubscriptions(): string[]                         // markers of the use
 recoverSubscriptions(body: ICancelSubscription): boolean   // recovery via Stripe Billing Portal
 ```
 
-Paid subscriptions. `subscribe` returns `paymentUrl` for redirection to payment (like `createSession` for orders). Skills: `/create-subscription`.
+Paid subscriptions. `subscribe` returns `paymentUrl` for redirect to payment (like `createSession` for orders). Skills: `/create-subscription`.
 
 ### UserActivity
 
@@ -2274,14 +2317,14 @@ import {
   of the entity (`page.attributeValues.interval` etc.): traverses groups and schedules, merges slots.
   Non-timeInterval attribute → `[]` (safe without type checking).
 - `expandTimeIntervals(schedule, window)` — expands **one** schedule. Accepts both types:
-  schedules of entities (`attributeValues[marker].value[].values[]`) and **forms**
+  entity schedules (`attributeValues[marker].value[].values[]`) and **forms**
   (`attributes[].localizeInfos.intervals[]`, already typed — main case).
-- `TimeIntervalPair = [startISO, endISO]` (UTC). Window `ITimeIntervalWindow = { from, to }`.
+- `TimeIntervalPair = [startISO, endISO]` (UTC). The window `ITimeIntervalWindow = { from, to }`.
   Also exported are `ITimeIntervalAttributeValue`, `ITimeIntervalGroup`,
   `ITimeIntervalEntitySchedule`, `ITimeIntervalSchedule`, `IAttributeValue`.
 
 > ⚠️ **Breaking (v1.0.156):** the computed field `timeIntervals` is no longer added to responses
 > (materialized a year of slots and inflated the cache). Public `Module._addTimeIntervalsToSchedules`
 > / `_addTimeIntervalsToFormSchedules` have also been removed. Migrate to `expandAttributeTimeIntervals` / `expandTimeIntervals`
-> with the required window. The raw schedule (`dates`/`range`, `times`/`intervals`, `inEveryWeek`, `inEveryMonth`)
+> with the required window. The raw schedule data (`dates`/`range`, `times`/`intervals`, `inEveryWeek`, `inEveryMonth`)
 > has not changed. See `rules/attribute-values.md`, `/create-checkout`.

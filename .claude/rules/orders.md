@@ -44,11 +44,11 @@ const storages = await api.Orders.getAllOrdersStorage()
 
 If there are 2+ storages and the user did not specify — ask explicitly, rather than silently substituting the first.
 
-### ⚠️ Choosing the payment method — UX rules
+### ⚠️ Choosing a payment method — UX rules
 
 `storage.paymentAccountIdentifiers` — the source of available payment methods for the storage (configured in the OneEntry admin panel). Apply as follows:
 
-- **0 linked accounts** — fallback to `Payments.getAccounts()` (all visible `isVisible && isUsed`). When creating an order, the server may reject an unlinked method — warn the user that the storage has no configured payment methods.
+- **0 linked accounts** — fallback to `Payments.getAccounts()` (all visible `isVisible && isUsed`). When creating an order, the server may reject an unlinked method — warn the user that there are no configured payment methods for the storage.
 - **1 linked** — use it automatically, do not show a choice.
 - **2+ linked** — **must** show ALL options in one block. DO NOT hardcode the first and do not hide options.
 
@@ -61,7 +61,7 @@ const accountsToShow = accounts.length > 0
   : await getApi().Payments.getAccounts().then(r => Array.isArray(r) ? r.filter(a => a.isVisible && a.isUsed) : [])
 
 // In the UI: if accountsToShow.length >= 2 — render choice
-// By default, selected accountsToShow[0].identifier
+// By default, accountsToShow[0].identifier is selected
 ```
 
 ### getAllOrdersByMarker → { items, total }
@@ -100,7 +100,7 @@ const total = result.total
 
 ⚠️ `currency` — often an empty string `""`. **Do not hardcode `$`**. Pattern: `{order.currency || ''}{Number(order.totalSum).toFixed(2)}`. For products in the order, use the currency of the parent order, as there is no currency field in `IOrderProducts`.
 
-⚠️ `statusIdentifier` — only the order status marker. Statuses are set in the **project admin panel** — markers are unique for each project; do not hardcode either markers or their titles. Localized names are returned by the SDK in two ways:
+⚠️ `statusIdentifier` — only the marker of the order status. Statuses are set in the **project admin panel** — markers are unique for each project; do not hardcode either markers or their titles. Localized names are returned by the SDK in two ways:
 
 ```ts
 // 1) On each order — statusLocalizeInfos (optional, may be absent on old orders):
@@ -141,25 +141,25 @@ await api.Orders.createOrder(storage.identifier, {
   ],
   // Optionally: coupon code from previewOrder (see below)
   // couponCode: 'SUMMER10',
-  // Optionally: deduct N bonuses from the balance (see "Bonuses" below)
+  // Optionally: deduct N bonuses from balance (see "Bonuses" below)
   // bonusAmount: 100,
 })
 ```
 
-### Price Fixation (signPrice → signedPrice, SDK ≥ 1.0.154)
+### Price fixation (signPrice → signedPrice, SDK ≥ 1.0.154)
 
-To ensure the price shown in the catalog/cart does not change by the time of checkout: when requesting products, pass the query parameter `signPrice` with the value of **the order storage marker** (the same `storage.identifier` that goes as the first argument to `createOrder`) — the Products methods (`getProducts`, `getProductsByIds`, `getProductsByPageUrl`, etc.; also supports `getProductsPriceByPageUrl` → `IProductInfo.signedPrice`) and product methods in Blocks will return each product with the `signedPrice` field (a signed string-token, valid for a limited time). Pass this string into the `products[]` element of the order: `{ productId, quantity, signedPrice }`. Without it, the order is considered at current prices.
+To ensure that the price shown in the catalog/cart does not change by the time of checkout: when requesting products, pass the query parameter `signPrice` with the value of **the order storage marker** (the same `storage.identifier` that goes as the first argument to `createOrder`) — the Products methods (`getProducts`, `getProductsByIds`, `getProductsByPageUrl`, etc.; supports `getProductsPriceByPageUrl` → `IProductInfo.signedPrice`) and product methods Blocks will return each product with the field `signedPrice` (a signed string-token, valid for a limited time). Pass this string into the `products[]` element of the order: `{ productId, quantity, signedPrice }`. Without it, the order is considered at current prices.
 
 ⚠️ `previewOrder` `signedPrice` **does not accept** (its `products` — `{ productId?, quantity? }`) — fixation only applies in `createOrder` / `updateOrderByMarkerAndId`.
 
 ### Order without products (table reservation, booking, application)
 
-`createOrder` is suitable not only for cart checkout. If a form of type `order` with an empty set of products is set up in the admin panel (for example, `booking_order` for table reservation, service application) — send `products: []`:
+`createOrder` is suitable not only for cart checkout. If a form of type `order` with an empty set of products (for example, `booking_order` for table reservation, application for service) is set up in the admin panel — send `products: []`:
 
 ```ts
 // app/actions/reservation.ts — 'use server'
 await getApi().Orders.createOrder('booking_order', {
-  formIdentifier: 'booking_order',                 // = storage marker, forms and storage match
+  formIdentifier: 'booking_order',                 // = marker of storage, form and storage match
   paymentAccountIdentifier: 'cash',                // if payment is not needed — still specify cash
   formData: payload.formData as IOrdersFormData[], // dates, guests, name, contact
   products: [],
@@ -174,7 +174,7 @@ The cost of delivery in OneEntry is a regular product with a fixed price and `pr
 
 ```ts
 // app/utils/constants.ts
-export const DELIVERY_PRODUCT_ID = 33; // ← find out through /inspect-api products, replace with your own
+export const DELIVERY_PRODUCT_ID = 33; // ← find out via /inspect-api products, replace with yours
 
 // when assembling the order
 const orderProducts: IOrderProductData[] = cartProducts.map(p => ({
@@ -212,7 +212,7 @@ if (isError(preview)) {
 
 const { totalSum, totalSumWithDiscount, currency } = preview as IOrderPreviewResponse
 
-// ⚠️ The server returned success, but the discount is zero → the coupon exists but did not work
+// ⚠️ The server returned success, but the discount is zero → the coupon exists, but did not work
 // (for example, MIN_CART_AMOUNT not met or applicability did not intersect with the cart)
 if (totalSumWithDiscount >= totalSum) {
   return { ok: false, error: 'Coupon does not apply to this cart' }
@@ -225,9 +225,9 @@ const discount = totalSum - totalSumWithDiscount
 
 **Important:**
 
-- `previewOrder` itself **does not apply** the coupon — it only calculates. To apply the discount to the order, pass `couponCode` in `createOrder`.
+- `previewOrder` itself **does not apply** the coupon — it only calculates. To include the discount in the order, pass `couponCode` in `createOrder`.
 - Applicability conditions (`applicability`, `maxAmount`, `MIN_CART_AMOUNT`) are set in the admin panel for each coupon — they are usually not passed to the front end, trust the server's response.
-- If there are `selected: false` products in the cart (UX where the user checks specific products) — filter them before `previewOrder` and `createOrder`. The server calculates the discount based on what was actually sent in `products[]`.
+- If there are `selected: false` items in the cart (UX where the user checks specific items) — filter them before `previewOrder` and `createOrder`. The server calculates the discount based on what was actually sent in `products[]`.
 
 See [`rules/mismatch-log.md`](mismatch-log.md): if coupons are not yet set up in the admin panel — item `C.7 Orders` (coupons / payment accounts / statuses) with coupon markers and their `applicability`.
 
@@ -242,7 +242,7 @@ Bonus balance is a separate entity from coupons (module `Discounts`). To allow t
 const balance = await getApi().Discounts.getBonusBalance()   // { balance: number }
 if (isError(balance)) return
 
-// 2. Recalculate the order with the deduction of N bonuses — through previewOrder
+// 2. Recalculate the order with the deduction of N bonuses — via previewOrder
 const preview = await getApi().Orders.previewOrder({
   products: [{ productId: 123, quantity: 2 }],
   bonusAmount: 100,          // how many bonuses the user wants to deduct
@@ -254,7 +254,7 @@ const { bonusApplied, totalDue, totalSum, totalSumWithDiscount } = preview as IO
 // bonusApplied — how many bonuses were actually applied (the server limits according to admin rules)
 // totalDue     — total to be paid in cash AFTER discounts and bonuses
 
-// 3. Pass bonusAmount in createOrder so that the deduction is included in the order
+// 3. Pass bonusAmount in createOrder to include the deduction in the order
 await getApi().Orders.createOrder(storage.identifier, {
   formIdentifier: storage.formIdentifier,
   paymentAccountIdentifier: 'stripe',
@@ -267,7 +267,7 @@ await getApi().Orders.createOrder(storage.identifier, {
 **Important:**
 
 - `bonusAmount` — this is a **request** for deduction. The server limits it according to admin rules (`maxBonusPaymentPercent`, `minBonusAmount`, `minOrderAmountForBonus`) — the actual deduction is seen in `bonusApplied`, and the amount to be paid in `totalDue`, do not calculate manually.
-- Bonus limits are in `preview.discountConfig.settings` / `preview.discountConfig.bonus` — they are usually not passed to the front end, trust the response from `previewOrder`.
+- Bonus limits are in `preview.discountConfig.settings` / `preview.discountConfig.bonus` — they are usually not passed to the front end, trust the `previewOrder` response.
 - The history of accruals/deductions — `Discounts.getBonusHistory(type?, dateFrom?, dateTo?, ...)`.
 
 ---
@@ -280,9 +280,9 @@ await getApi().Orders.createOrder(storage.identifier, {
 const order = await getApi().Orders.getOrderByMarkerAndId('my_order', 418) as IOrderByMarkerEntity
 // order.discountConfig — details of discounts/bonuses (IOrderDiscountConfig | null)
 // order.totalSumRaw    — amount before discounts (string)
-// order.isPartial      — boolean | null: whether part has been paid (for split/staged payment)
+// order.isPartial      — boolean | null: whether part is paid (for split/staged payment)
 // order.paymentStrategy — payment strategy (e.g. 'once')
-// order.split          — configuration for staged (split) payment, if enabled
+// order.split          — configuration of staged (split) payment, if enabled
 ```
 
 Staged payment (`order.split: IOrderSplit`):
@@ -296,7 +296,7 @@ if (order.split && !order.split.completed) {
 }
 ```
 
-> Fields `bonusApplied` / `totalDue` / `couponCode` are on `IBaseOrdersEntity` (response create/update/preview). In `IOrderByMarkerEntity`, bonuses and totals are inside `discountConfig`, not at the top level.
+> The fields `bonusApplied` / `totalDue` / `couponCode` are on `IBaseOrdersEntity` (response create/update/preview). In `IOrderByMarkerEntity`, bonuses and totals are inside `discountConfig`, not at the top level.
 
 ---
 
@@ -325,6 +325,16 @@ await getApi().Orders.cancelRefundRequest(orderId)  // boolean
 
 > If refunds are not yet set up in the admin panel (no refund statuses) — item `C.7 Orders` in [`rules/mismatch-log.md`](mismatch-log.md).
 
+### Cancellation vs refund — which branch to show (verified with live API)
+
+Cancelling an order extinguishes its payment session, so the outcome depends on the session state:
+
+- **Session `waiting` and not expired** → cancellation proceeds normally.
+- **Refusal "Payment sessions … may have been paid"** = the session cannot be extinguished: it is **paid or expired** (Stripe checkout sessions live for 24 hours, `sessionTimeout` of the account is usually shorter). For a paid order, lead the user to **refund request**, not into a dead end "cancellation impossible".
+- **`createRefundRequest` for an unpaid order** → `404 "You cannot refund uncompleted order"` — **normal** response (`isCompleted` not yet `true`), not a bug: show "order not paid", refund is not needed here.
+- **Expired unpaid order** (session expired, payment not confirmed): both cancellation and refund are denied — from the client API this is a dead end, resolved by changing the order status in the admin panel.
+- **Permissions:** route `/api/content/orders/{id}/refund` — a separate permission for user groups. `403 Permission data not found` on refund methods → grant permission to the group (skill `/admin-grant-permissions`); applies with a lag of about 5 minutes.
+
 ---
 
 ## Payments — paymentUrl
@@ -335,7 +345,7 @@ Experimentally verified: `createSession` returns HTTP 201 for Stripe, Cash, and 
 
 ```ts
 const session = await api.Payments.createSession(order.id, 'session', false) as any
-// Stripe → session.paymentUrl = "https://checkout.stripe.com/..."  (there is a URL)
+// Stripe → session.paymentUrl = "https://checkout.stripe.com/..."  (URL exists)
 // Cash   → session.paymentUrl = null   (offline, no redirect needed)
 // PayPal → session.paymentUrl = null immediately, URL appears asynchronously
 ```
@@ -344,18 +354,29 @@ const session = await api.Payments.createSession(order.id, 'session', false) as 
 
 ```ts
 const sessions = await api.Payments.getSessionByOrderId(order.id) as any
-// sessions — ARRAY, not an object!
+// sessions — AN ARRAY, not an object!
 const session = Array.isArray(sessions) ? sessions[0] : sessions
 // session.paymentUrl — URL (may be null if not ready yet)
 // session.status — "waiting" | "paid" | ...
 ```
 
+### ⚠️ Session forever `waiting`, `isCompleted` does not become `true`
+
+If the payment on the Stripe side **goes through** (test card, redirect to success), but the order session remains forever `waiting` and `order.isCompleted` is not set — the problem is in the configuration of the payment account in the admin panel (Settings → Payments), not in the code:
+
+- `successUrl` / `cancelUrl` of the account must point to **your** host (a common finding on new tenants — there are leftover demo stand URLs from the template);
+- the connected Stripe account (`stripeAccountId`) must belong to your project — otherwise, the payment event goes to another project, and yours does not know about it.
+
+This is fixed by reconnecting the Stripe account (going through onboarding again) and correcting the URLs in the admin panel; the actual account config is visible in the admin API — `GET /api/admin/payments/accounts` (admin-api rule). If after reconnecting the session still hangs `waiting` — this is webhook routing on the OneEntry cloud side, a question for their support.
+
+Consequence for e2e: as long as the account is foreign, there are no paid orders in the project — a successful refund flow is unreplicable, and "non-cancelable" orders accumulate (see "Cancellation vs refund").
+
 ### PayPal — asynchronous flow
 
 For PayPal, `createSession` immediately returns `paymentUrl: null`.
-OneEntry creates the payment session asynchronously — polling is needed through `getSessionByOrderId`:
+OneEntry creates a payment session asynchronously — polling is needed via `getSessionByOrderId`:
 
-**Full flow order + payment (call from the client through getApi()):**
+**Full flow order + payment (call from the client via getApi()):**
 
 ```ts
 // Client Component — after reDefine() the token is already set up
@@ -404,7 +425,7 @@ const isStripe = selectedPayment === 'stripe'
 const isOnline = selectedPayment === 'stripe' || selectedPayment === 'paypal'
 
 // Cash and any other offline: isOnline = false → show success screen
-// PayPal: isOnline = true, !isStripe → polling through getSessionByOrderId
+// PayPal: isOnline = true, !isStripe → polling via getSessionByOrderId
 // Stripe: isOnline = true, isStripe → createSession
 ```
 

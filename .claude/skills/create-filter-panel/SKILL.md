@@ -2,15 +2,15 @@
 name: create-filter-panel
 description: Create product filter panel
 ---
-# Create Product Filter Panel
+# Create product filter panel
 
-Creates a filter panel with price, color, and availability. Uses FilterContext as a buffer between the UI and the URL — filters are applied only by the "Apply" button, and the page is not re-rendered on each slider movement.
+Creates a filter panel with price, color, and availability. Uses FilterContext as a buffer between the UI and the URL — filters are applied only by the "Apply" button, the page is not re-rendered on each slider movement.
 
 > ⚠️ Assumes that the product catalog uses URL query params (pattern from `/create-product-list`).
 
 ---
 
-## Step 1: Check Real Attribute Markers
+## Step 1: Check real attribute markers
 
 ```bash
 /inspect-api products          # markers price, color, etc.
@@ -77,7 +77,7 @@ export function FilterProvider({ children }: { children: ReactNode }) {
 
 ---
 
-## Step 3: Create Price Filter Component
+## Step 3: Create price filter component
 
 File: `components/filter/PriceFilter.tsx`
 
@@ -105,7 +105,7 @@ export const PriceFilter = memo(({
     searchParams.get('maxPrice') ? Number(searchParams.get('maxPrice')) : max,
   );
 
-  // Synchronizing with context — NOT with URL directly
+  // Synchronize with context — NOT with URL directly
   useEffect(() => {
     setCtxFrom(priceFrom !== min ? priceFrom : null);
     setCtxTo(priceTo !== max ? priceTo : null);
@@ -142,7 +142,7 @@ PriceFilter.displayName = 'PriceFilter';
 
 ---
 
-## Step 4: Create Color Filter
+## Step 4: Create color filter
 
 Colors are taken from the product attribute via `AttributesSets.getSingleAttributeByMarkerSet`.
 
@@ -192,7 +192,7 @@ export const ColorFilter = memo(({
             }}
             title={color.title}
           >
-            {!color.hex && color.title /* fallback: without hex show the title */}
+            {!color.hex && color.title /* fallback: without hex show the name */}
           </button>
         ))}
       </div>
@@ -228,7 +228,7 @@ export async function getColorOptions(locale: string) {
 
 ---
 
-## Step 5: Create Availability Filter
+## Step 5: Create availability filter
 
 File: `components/filter/AvailabilityFilter.tsx`
 
@@ -255,7 +255,7 @@ export const AvailabilityFilter = memo(() => {
         checked={available}
         onChange={() => setAvailable((prev) => !prev)}
       />
-      In Stock
+      In stock
     </label>
   );
 });
@@ -265,7 +265,7 @@ AvailabilityFilter.displayName = 'AvailabilityFilter';
 
 ---
 
-## Step 6: Apply and Reset Buttons
+## Step 6: Apply and Reset buttons
 
 File: `components/filter/FilterButtons.tsx`
 
@@ -289,10 +289,13 @@ export function ApplyButton({ onApply }: { onApply?: () => void }) {
     priceTo !== null   ? params.set('maxPrice', String(priceTo))   : params.delete('maxPrice');
     color              ? params.set('color', color)                : params.delete('color');
     inStock            ? params.set('in_stock', 'true')            : params.delete('in_stock');
-    params.delete('page'); // reset pagination
+    params.delete('page'); // reset pagination — ALWAYS do this, even if
+    // the catalog is currently on infinite scroll: the parameter may appear later,
+    // and the string is harmless. In infinite scroll additionally re-mount the grid
+    // (`key` from the filter string), otherwise loaded pages will remain in state.
 
     replace(`${pathname}?${params.toString()}`);
-    onApply?.(); // close modal
+    onApply?.(); // close the modal
   };
 
   return <button onClick={handleApply}>Apply</button>;
@@ -380,7 +383,7 @@ export default async function ShopPage({ params, searchParams }) {
 
 ---
 
-## Important Details
+## Important details
 
 ```md
 ✅ Filter panel created. Key rules:
@@ -396,12 +399,12 @@ export default async function ShopPage({ params, searchParams }) {
 
 ---
 
-## Step 8: Playwright E2E Tests
+## Step 8: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> To set up Playwright — first `/setup-playwright`.
+> For setting up Playwright — first `/setup-playwright`.
 
-### 8.1 Add `data-testid` to Components
+### 8.1 Add `data-testid` to components
 
 For selector stability — add `data-testid` when generating filter panel components:
 
@@ -442,7 +445,7 @@ For selector stability — add `data-testid` when generating filter panel compon
 // AvailabilityFilter
 <label>
   <input data-testid="filter-instock" type="checkbox" ... />
-  In Stock
+  In stock
 </label>
 
 // FilterButtons
@@ -450,16 +453,16 @@ For selector stability — add `data-testid` when generating filter panel compon
 <button data-testid="filter-reset" onClick={handleReset}>Reset</button>
 ```
 
-### 8.2 Gather Test Parameters and Fill `.env.local`
+### 8.2 Gather test parameters and fill `.env.local`
 
-**Algorithm (perform step by step, do not ask in one list):**
+**Algorithm (execute step by step, do not ask in one list):**
 
 1. **Path to the page with the product list and filter panel** — ask: "Where is the FilterPanel located? (e.g. `/shop`, `/catalog`)". 
-   - Silent → Glob (`app/**/shop/**/page.tsx`, `app/**/catalog/**/page.tsx`) + Grep for `<FilterPanel`. Inform: "Found FilterPanel in `{path}` — using it".
-2. **Color value for the test** — **do not ask the user**: take the first `value` from the results of the already running `/inspect-api` (listTitles of the color attribute) or from `getColorOptions`. Inform: "For the color filter test, using `color={value}` — the first value from the project's listTitles".
-3. **Price range** — take `additional.prices.min/max` from `getProductFilterOptions`, narrow it down to the middle (e.g. `min = ⌈avg - 10%⌉`, `max = ⌊avg + 10%⌋`), so that products are guaranteed to fall within the range. Inform: "For the price filter test, using the range `{min}-{max}` (middle of the project's real range)".
-4. **Query parameter keys** — check yourself via Grep on the implemented `ApplyButton` (which keys are written to the URL): `minPrice`/`maxPrice`/`color`/`in_stock`. If the project has other keys — replace them in the spec file. Inform: "URL filter keys: `{minPrice, maxPrice, color, in_stock}` — taken from ApplyButton".
-5. **Fill `.env.local`** (yourself, through Edit/Write):
+   - Silent → Glob (`app/**/shop/**/page.tsx`, `app/**/catalog/**/page.tsx`) + Grep for `<FilterPanel`. Inform: "Found FilterPanel at `{path}` — using it".
+2. **Color value for the test** — **do not ask the user**: take the first `value` from the results of the already running `/inspect-api` (listTitles of the color attribute) or from `getColorOptions`. Inform: "Using `color={value}` for the color filter test — the first value from the project's listTitles".
+3. **Price range** — take `additional.prices.min/max` from `getProductFilterOptions`, narrow it down to the middle (e.g. `min = ⌈avg - 10%⌉`, `max = ⌊avg + 10%⌋`) to ensure products are guaranteed to fall within the range. Inform: "Using range `{min}-{max}` for the price filter test (middle of the project's real range)".
+4. **Query parameter keys** — check yourself via Grep on the implemented `ApplyButton` (which keys are written to the URL): `minPrice`/`maxPrice`/`color`/`in_stock`. If the project has different keys — replace them in the spec file. Inform: "URL filter keys: `{minPrice, maxPrice, color, in_stock}` — taken from ApplyButton".
+5. **Fill `.env.local`** (yourself, via Edit/Write):
 
 ```bash
 # e2e filter-panel
@@ -490,7 +493,7 @@ async function openPanel(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('filter-panel-body')).toBeVisible();
 }
 
-test.describe('Filter Panel', () => {
+test.describe('Filter panel', () => {
   test('panel opens on click and shows all sections', async ({ page }) => {
     await openPanel(page);
     await expect(page.getByTestId('filter-price')).toBeVisible();
@@ -512,13 +515,13 @@ test.describe('Filter Panel', () => {
     await expect(page).toHaveURL(new RegExp(`maxPrice=${FILTER_MAX_PRICE}`));
   });
 
-  test('before Apply, changes in input do NOT change URL (Context-buffer)', async ({ page }) => {
+  test('before Apply, changes in input DO NOT change URL (Context-buffer)', async ({ page }) => {
     test.skip(!FILTER_MIN_PRICE, 'E2E_FILTER_MIN_PRICE not set');
     await openPanel(page);
 
     const initialUrl = page.url();
     await page.getByTestId('filter-price-from').fill(FILTER_MIN_PRICE);
-    // Wait for a tick in the event loop — URL should not change
+    // Wait for tick event loop — URL should not change
     await page.waitForTimeout(200);
     expect(page.url()).toBe(initialUrl);
   });
@@ -543,7 +546,7 @@ test.describe('Filter Panel', () => {
   });
 
   test('Reset clears all filters from URL', async ({ page }) => {
-    // Arriving with filters already in URL
+    // Arriving with filters in URL
     const qs = [
       FILTER_MIN_PRICE && `minPrice=${FILTER_MIN_PRICE}`,
       FILTER_MAX_PRICE && `maxPrice=${FILTER_MAX_PRICE}`,
@@ -577,7 +580,7 @@ test.describe('Filter Panel', () => {
 });
 ```
 
-### 8.4 Report to the User on Decisions Made
+### 8.4 Report to the user about the decisions made
 
 Before completing the task — explicitly inform:
 
@@ -587,12 +590,12 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_SHOP_PATH, E2E_FILTER_COLOR, E2E_FILTER_MIN_PRICE, E2E_FILTER_MAX_PRICE)
 
 Decisions made automatically:
-- Path to the page with the panel: {SHOP_PATH} — {user-specified / found via Glob+Grep for <FilterPanel}
-- Color for the test: {FILTER_COLOR} — the first value from the listTitles of the color attribute (from getColorOptions)
-- Price range: {MIN}-{MAX} — the middle of the real range of the project (from additional.prices)
+- Path to the page with the panel: {SHOP_PATH} — {user specified / found via Glob+Grep for <FilterPanel}
+- Color for the test: {FILTER_COLOR} — first value from the listTitles of the color attribute (from getColorOptions)
+- Price range: {MIN}-{MAX} — middle of the real range of the project (from additional.prices)
 - URL filter keys: minPrice/maxPrice/color/in_stock — taken from the implementation of ApplyButton (checked via Grep)
 
 Run: npm run test:e2e -- filter-panel.spec.ts
 ```
 
-If the project uses different query parameter keys (e.g., `price_min` instead of `minPrice`) — adjust the regex in `toHaveURL` to match the actual implementation of `ApplyButton`.
+If different query parameter keys are used in the project (e.g. `price_min` instead of `minPrice`) — adjust the regex in `toHaveURL` to match the actual implementation of `ApplyButton`.
