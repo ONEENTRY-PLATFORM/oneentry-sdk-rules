@@ -293,13 +293,13 @@ OneEntry is a headless CMS for e-commerce and content projects.
 
 ### Skills for typical tasks
 
-| Task                   | Skill                      |
-|------------------------|----------------------------|
+| Task                    | Skill                      |
+|-------------------------|----------------------------|
 | Project initialization  | `/setup-oneentry`          |
-| Orders page            | `/create-orders-list`      |
+| Orders page             | `/create-orders-list`      |
 | Authentication form     | `/create-auth` (check)     |
-| Page                   | `/create-page`             |
-| Server Action          | `/create-server-action`    |
+| Page                    | `/create-page`             |
+| Server Action           | `/create-server-action`    |
 | Inspect API markers     | `/inspect-api`             |
 
 ### Before each new component
@@ -319,31 +319,31 @@ OneEntry is a headless CMS for e-commerce and content projects.
 
 ## Available skills
 
-| Skill                          | What it creates                                      |
-|-------------------------------|------------------------------------------------------|
-| `/setup-nextjs`               | Create a Next.js project from scratch                |
-| `/setup-oneentry`             | SDK initialization in an existing project            |
+| Skill                         | What it creates                                          |
+|-------------------------------|----------------------------------------------------------|
+| `/setup-nextjs`               | Create a Next.js project from scratch                    |
+| `/setup-oneentry`             | SDK initialization in an existing project                |
 | `/create-auth`                | Authentication: login, registration, logout, AuthContext |
-| `/create-google-oauth`        | Google OAuth: redirect, callback, code exchange      |
-| `/create-profile`             | User profile page                                   |
-| `/create-orders-list`         | Orders list page with cancellation and pagination     |
-| `/create-checkout`            | Checkout: delivery form, timeInterval, payment      |
-| `/create-product-list`        | Product list with filtering and pagination           |
-| `/create-product-card`        | Product card                                        |
-| `/create-product-page`        | Product page                                        |
-| `/create-page`                | Page from CMS (Pages API)                           |
-| `/create-menu`                | Navigation menu                                     |
-| `/create-form`                | Form from Forms API                                 |
-| `/create-cart-manager`        | Cart (CartContext / Redux)                          |
-| `/create-favorites`           | Favorites                                           |
-| `/create-filter-panel`        | Filter panel by attributes                           |
-| `/create-locale-switcher`     | Language switcher                                   |
-| `/create-search`              | Search for products / pages                          |
-| `/create-reviews`             | Product reviews                                     |
-| `/create-subscription-events` | Subscription for product events (price, availability) |
-| `/create-server-action`       | Server Action for public SDK methods                |
-| `/inspect-api`                | API exploration: markers, response structure        |
-| `/setup-playwright`           | E2E testing: Playwright + MCP server                |
+| `/create-google-oauth`        | Google OAuth: redirect, callback, code exchange          |
+| `/create-profile`             | User profile page                                        |
+| `/create-orders-list`         | Orders list page with cancellation and pagination        |
+| `/create-checkout`            | Checkout: delivery form, timeInterval, payment           |
+| `/create-product-list`        | Product list with filtering and pagination               |
+| `/create-product-card`        | Product card                                             |
+| `/create-product-page`        | Product page                                             |
+| `/create-page`                | Page from CMS (Pages API)                                |
+| `/create-menu`                | Navigation menu                                          |
+| `/create-form`                | Form from Forms API                                      |
+| `/create-cart-manager`        | Cart (CartContext / Redux)                               |
+| `/create-favorites`           | Favorites                                                |
+| `/create-filter-panel`        | Filter panel by attributes                               |
+| `/create-locale-switcher`     | Language switcher                                        |
+| `/create-search`              | Search for products / pages                              |
+| `/create-reviews`             | Product reviews                                          |
+| `/create-subscription-events` | Subscription for product events (price, availability)    |
+| `/create-server-action`       | Server Action for public SDK methods                     |
+| `/inspect-api`                | API exploration: markers, response structure             |
+| `/setup-playwright`           | E2E testing: Playwright + MCP server                     |
 
 ## Instructions for AI
 
@@ -2122,7 +2122,8 @@ getFile(id, type, entity, filename, template?): Response   // raw fetch Response
 ### Filters
 
 ```ts
-getFilterByMarker(marker, langCode?): IContentFilter            // tree of items (IContentFilterItem[])
+// tree of items (IContentFilterItem[])
+getFilterByMarker(marker, langCode?): IContentFilter
 ```
 
 Content filter — a customizable tree of nodes in the admin panel (pages, products, attributes, discounts, bonuses, payment methods). `IContentFilterItem.type` = `'page' | 'product' | 'admin' | 'attribute' | 'discount' | 'personal-discount' | 'bonus' | 'payment-method' | 'custom'`. Nodes are nested via `children`. Public (app-token).
@@ -2130,7 +2131,8 @@ Content filter — a customizable tree of nodes in the admin panel (pages, produ
 ### Forms
 
 ```ts
-getAllForms(langCode?, offset?, limit?): IFormsResponse   // paginated: { total, items: IFormsEntity[] } — iterate over .items
+// paginated: { total, items: IFormsEntity[] } — iterate over .items
+getAllForms(langCode?, offset?, limit?): IFormsResponse
 getFormByMarker(marker, langCode?): IFormsEntity
 ```
 
