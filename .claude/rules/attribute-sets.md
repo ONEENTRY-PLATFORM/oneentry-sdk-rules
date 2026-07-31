@@ -21,14 +21,14 @@ AttributesSets methods return **schema/metadata**, not the attribute values of e
 ```ts
 // ❌ INCORRECT — attributeSet does not contain actual values of products/pages
 const attrs = await getApi().AttributesSets.getAttributesByMarker('products')
-const price = attrs[0].value // {} — empty!
+const price = attrs[0].value // null — empty! (before v1.0.157 it came as {})
 
 // ✅ CORRECT — values are taken from the entity itself
 const product = await getApi().Products.getProductById(id)
 const price = product.attributeValues.price?.value // actual value
 ```
 
-**Exception:** `timeInterval` — if the "Receive values" option is enabled in the admin panel, the `value` field will contain raw schedule data. Expand ready slots `[[startISO, endISO], ...]` using `expandAttributeTimeIntervals(attr, { from, to })` (SDK ≥ 1.0.156; computed field `timeIntervals` from the response is removed). See `rules/attribute-values.md`.
+**Exception:** `timeInterval` — if the "Receive values" option is enabled in the admin panel, the `value` field will contain raw schedule data. Expand ready slots `[[startISO, endISO], ...]` using `expandAttributeTimeIntervals(attr, { from, to })` (SDK ≥ 1.0.156; the computed field `timeIntervals` from the response has been removed). See `rules/attribute-values.md`.
 
 ---
 
@@ -37,13 +37,14 @@ const price = product.attributeValues.price?.value // actual value
 ```ts
 {
   type: "string" | "text" | "image" | "list" | ..., // attribute type
-  value: {},              // always empty in schema (except timeInterval with Receive values enabled)
+  value: null,            // always empty in the schema (v1.0.157: null instead of the previous {});
+                          // exception — timeInterval with Receive values enabled
   marker: "product_name", // unique identifier — used in attributeValues of the entity
   position: 1,            // display order
   listTitles: [...],      // options for radioButton and list
   validators: {...},      // validation rules
   localizeInfos: { title: "Product Name" }, // human-readable title
-  additionalFields: {...} // nested attributes (Record, key = marker; array only when rawData)
+  additionalFields: {...} // nested attributes (Record, key = marker; array only with rawData)
 }
 ```
 
@@ -69,13 +70,13 @@ const swatches = options.map((opt: any) => ({
 }))
 ```
 
-**Important:** `value` in listTitles — option identifier; type `number | string`, and for `entity` attributes — object `IListTitleEntityValue` (`{ id, depth, parentId, position, isPinned }`). For `radioButton` / `list` this is usually a string-ID, and it is stored in `attributeValues` of the entity upon selection.
+**Important:** `value` in listTitles — option identifier; type `number | string`, and for `entity` attributes — object `IListTitleEntityValue` (`{ id, depth, parentId, position, isPinned }`). For `radioButton` / `list`, this is usually a string-ID, and it is stored in `attributeValues` of the entity when selected.
 
 ---
 
 ## additionalFields — Nested Attributes
 
-`additionalFields` is configured in the admin panel on the attribute. The **raw** API returns it as an array, but the SDK normalizes it to `Record<marker, field>` **in all contexts** — both in `attributeValues` of entities (Products, Pages, Blocks), and in the schema from `getAttributesByMarker` / `getSingleAttributeByMarkerSet`, and in form attributes. The array remains only when `rawData: true` in the config.
+`additionalFields` is configured in the admin panel on the attribute. The **Raw** API returns it as an array, but the SDK normalizes it to `Record<marker, field>` **in all contexts** — both in `attributeValues` of entities (Products, Pages, Blocks), and in the schema from `getAttributesByMarker` / `getSingleAttributeByMarkerSet`, and in form attributes. The array remains only with `rawData: true` in the config.
 
 ```ts
 // RAW API (rawData: true) — array:
@@ -84,7 +85,7 @@ const swatches = options.map((opt: any) => ({
     { type: "integer", marker: "fieldB", value: 0 }
 ] }
 
-// Default (rawData: false) — both in schema and in entity the same Record (key = marker):
+// Default (rawData: false) — both in schema and entity the same Record (key = marker):
 attr.additionalFields
 // → { fieldA: { type: "string", value: "...", ... }, fieldB: { type: "integer", value: 0, ... } }
 // Empty → {} (not [])
@@ -124,7 +125,8 @@ Use `validators` when dynamically generating forms (for example, a field is requ
 ```ts
 // ✅ Correct
 attrs.product_name?.value
-attrs.main_image?.value?.[0]?.downloadLink
+attrs.main_image?.value?.downloadLink        // 1 file — object (v1.0.157)
+attrs.main_image?.value?.[0]?.downloadLink   // 2+ files — array
 
 // ❌ Incorrect — spaces, uppercase letters
 attrs['Product Name']?.value
@@ -142,4 +144,4 @@ attrs['2nd_price']?.value
 | Get a single attribute by marker                | `getSingleAttributeByMarkerSet(setMarker, attrMarker)` |
 | Get all attribute sets                          | `getAttributes()`                                      |
 
-**DO NOT use AttributesSets to get values of products/pages.** For that, use `Products.getProducts()`, `Pages.getPageByUrl()`, etc. — they have `attributeValues` with actual data.
+**DO NOT use AttributesSets to get values of products/pages.** For that, use `Products.getProducts()`, `Pages.getPageByUrl()`, etc. — they have `attributeValues` with real data.

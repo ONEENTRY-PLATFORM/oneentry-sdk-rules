@@ -4,14 +4,14 @@ description: Inspect OneEntry API to get markers and data
 ---
 ---
 name: inspect-api
-description: Get the project URL and token, then make requests to OneEntry via the SDK to retrieve real markers, attributes, and data structures before writing code
+description: Get the project URL and token, then make requests to OneEntry via SDK to retrieve actual markers, attributes, and data structures before writing code
 argument-hint: "pages|menus <marker>|forms|products|product-statuses|auth-providers|all"
 allowed-tools: Read, Write, Bash
 ---
 
 # Inspect api
 
-> **IMPORTANT: All requests are made ONLY through the SDK, and NOT via curl.**
+> **IMPORTANT: All requests are made ONLY through the SDK, NOT via curl.**
 >
 > The SDK normalizes data before returning it to the application:
 > - `additionalFields` — from an array to `Record<marker, field>` (key = marker of the field)
@@ -55,7 +55,7 @@ Look for `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`.
 If the data is not found in any of the sources — ask:
 
 > Project URL and App Token not found. Please provide:
-> - Project URL (e.g.: `https://my-project.oneentry.cloud`)
+> - Project URL (e.g., `https://my-project.oneentry.cloud`)
 > - App Token (Settings → App Token in OneEntry Admin Panel)
 
 ## Step 2: Create a temporary inspection script
@@ -125,7 +125,7 @@ async function inspect() {
         if (Array.isArray(f.attributes)) {
           f.attributes.forEach(a => {
             console.log(`    attr: marker="${a.marker}" type="${a.type}" isLogin=${a.isLogin} isSignUp=${a.isSignUp}`);
-            // additionalFields already normalized by SDK: Record<marker, field>
+            // additionalFields is already normalized by SDK: Record<marker, field>
             if (a.additionalFields && Object.keys(a.additionalFields).length > 0) {
               console.log(`      additionalFields:`, JSON.stringify(a.additionalFields));
             }
@@ -147,7 +147,7 @@ async function inspect() {
       console.log(`  title: ${p.localizeInfos?.title ?? ''}`);
       console.log(`  statusIdentifier: "${p.statusIdentifier}"`);
       console.log(`  price: ${p.price}`);
-      const attrs = p.attributeValues ?? {}; // already normalized by SDK by requested locale (keys — markers)
+      const attrs = p.attributeValues ?? {}; // already normalized by SDK by the requested locale (keys — markers)
       console.log('  attributeValues:');
       Object.entries(attrs).forEach(([marker, attr]) => {
         const a = attr;
@@ -231,7 +231,7 @@ After running the script, output a structured report:
 ### Products (example attributes of the first product — already normalized by SDK)
 statusIdentifier: "in_stock"
 attributeValues:
-  - "pic" type="image" — value: array of objects with downloadLink
+  - "pic" type="image" — value: object with downloadLink (1 file) / array of such objects (2+)
   - "price" type="integer" — value: 45
   - "color" type="list" — value: [{ title, value, extended }]
   - "additionalFields" of attributes — Record<marker, field> (already normalized)

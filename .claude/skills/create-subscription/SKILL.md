@@ -12,23 +12,29 @@ Creates a flow for paid subscriptions through the `Subscriptions` module of OneE
 
 ---
 
-## Step 0: Know Subscription Markers
+## Step 0: Get Subscription Markers
 
 Plan markers are configured in OneEntry Admin. You can get a list of available ones directly from the SDK:
 
 ```ts
-const markers = await getApi().Subscriptions.getAllSubscriptions()   // string[] — markers of all plans
+// SDK ≥ 1.0.157 — ISubscriptionEntity[], plan objects (previously was string[] markers)
+const plans = await getApi().Subscriptions.getAllSubscriptions()
+// [{ id, identifier, localizeInfos: { title }, productIds, periodInDays, paymentAccountId, isUsed }]
 ```
 
-> ⚠️ `getAllSubscriptions()` returns **only markers** (`string[]`), without names/prices. Keep the titles and prices of the plans in your own dictionary (or create them as entities in the admin panel and pull them separately). If there are no plans in the admin panel — create an entry in [`MISMATCH-LOG.md`](../../rules/mismatch-log.md) (section C.8 / Subscriptions).
+> ⚠️ **Breaking (v1.0.157):** `getAllSubscriptions()` returns `ISubscriptionEntity[]`, not `string[]`. The old code `markers.map(m => ...)` now receives objects — the marker is in `identifier`, the name in `localizeInfos.title`, and the duration in `periodInDays`. `getActiveSubscriptions()` **has not changed** — it still returns `string[]` markers, so activity is checked as `activeMarkers.includes(plan.identifier)`.
+
+**There is no price in the response** — `ISubscriptionEntity` describes the plan (name, period, composition of `productIds`, payment account), but not the amount. Keep the prices in your own dictionary or create them as entities in the admin panel. The name and period can already be taken from the API — there is no need to duplicate them in the dictionary.
 
 ```ts
-// app/config/subscriptions.ts — mapping dictionary (markers are real from the admin panel)
-export const SUBSCRIPTION_PLANS: Record<string, { title: string; priceLabel: string }> = {
-  pro_monthly: { title: 'Pro (month)', priceLabel: '$9 / month' },
-  pro_yearly:  { title: 'Pro (year)',   priceLabel: '$90 / year' },
+// app/config/subscriptions.ts — only what is not in the API (real markers from the admin panel)
+export const SUBSCRIPTION_PRICES: Record<string, string> = {
+  pro_monthly: '$9 / month',
+  pro_yearly:  '$90 / year',
 };
 ```
+
+> If there are no plans in the admin panel — create an entry in [`MISMATCH-LOG.md`](../../rules/mismatch-log.md) (section C.8 / Subscriptions).
 
 ---
 
@@ -40,15 +46,17 @@ File: `app/hooks/useSubscriptions.ts`
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import type { ISubscriptionEntity } from 'oneentry/dist/subscriptions/subscriptionsInterfaces';
 import { getApi, isError, reDefine, hasActiveSession } from '@/lib/oneentry';
 
 export function useSubscriptions(locale: string) {
-  const [available, setAvailable] = useState<string[]>([]);
+  // v1.0.157: plans — ISubscriptionEntity objects; active — still markers
+  const [available, setAvailable] = useState<ISubscriptionEntity[]>([]);
   const [active, setActive] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ⚠️ Subscriptions require a user session — restoring the token before calls
+  // ⚠️ Subscriptions require a user session — restore the token before calls
   const ensureSession = useCallback(async () => {
     if (hasActiveSession()) return;
     const refreshToken = localStorage.getItem('refresh-token');
@@ -84,11 +92,16 @@ export function useSubscriptions(locale: string) {
   }, [ensureSession, load]);
 
   // Cancel subscription
+  // ⚠️ v1.0.157: the method actually returns IError on API refusal (previously always true).
+  // Check strictly `!== true` — the error object is also truthy.
   const cancel = useCallback(async (marker: string) => {
     setError(null);
     await ensureSession();
     const result = await getApi().Subscriptions.cancelSubscription({ marker });
-    if (isError(result)) { setError(result.message); return; }
+    if (result !== true) {
+      setError(isError(result) ? result.message : 'Failed to cancel subscription');
+      return;
+    }
     await load();
   }, [ensureSession, load]);
 
@@ -97,7 +110,10 @@ export function useSubscriptions(locale: string) {
     setError(null);
     await ensureSession();
     const result = await getApi().Subscriptions.recoverSubscriptions({ marker });
-    if (isError(result)) { setError(result.message); return; }
+    if (result !== true) {
+      setError(isError(result) ? result.message : 'Failed to recover subscription');
+      return;
+    }
     await load();
   }, [ensureSession, load]);
 
@@ -117,7 +133,7 @@ File: `app/components/SubscriptionPlans.tsx`
 'use client';
 
 import { useSubscriptions } from '@/app/hooks/useSubscriptions';
-import { SUBSCRIPTION_PLANS } from '@/app/config/subscriptions';
+import { SUBSCRIPTION_PRICES } from '@/app/config/subscriptions';
 
 export function SubscriptionPlans({ locale }: { locale: string }) {
   const { available, isActive, loading, error, subscribe, cancel } = useSubscriptions(locale);
@@ -128,13 +144,15 @@ export function SubscriptionPlans({ locale }: { locale: string }) {
 
   return (
     <ul data-testid="subscription-plans">
-      {available.map((marker) => {
-        const plan = SUBSCRIPTION_PLANS[marker] ?? { title: marker, priceLabel: '' };
+      {available.map((plan) => {
+        const marker = plan.identifier;
         const activeNow = isActive(marker);
         return (
-          <li key={marker} data-testid="subscription-plan" data-marker={marker}>
-            <span>{plan.title}</span>
-            <span>{plan.priceLabel}</span>
+          <li key={plan.id} data-testid="subscription-plan" data-marker={marker}>
+            {/* name and period — from API, price — from your dictionary */}
+            <span>{plan.localizeInfos?.title || marker}</span>
+            <span>{plan.periodInDays} days</span>
+            <span>{SUBSCRIPTION_PRICES[marker] ?? ''}</span>
             {activeNow ? (
               <button data-testid="subscription-cancel" onClick={() => cancel(marker)}>
                 Cancel
@@ -166,12 +184,12 @@ import { useSubscriptions } from '@/app/hooks/useSubscriptions';
 
 export default function SuccessPage() {
   const { reload } = useSubscriptions('en_US');
-  useEffect(() => { reload(); }, [reload]);   // subscription status will update after the payment webhook
+  useEffect(() => { reload(); }, [reload]);   // subscription status will update after payment webhook
   return <p>Thank you! The subscription will be activated after payment confirmation.</p>;
 }
 ```
 
-> Activation occurs **after** payment confirmation via webhook on the OneEntry side — `getActiveSubscriptions()` may return a new marker not instantly. If necessary — make several retries with an interval (like polling `paymentUrl` for orders in [`rules/orders.md`](../../rules/orders.md)).
+> Activation occurs **after** payment confirmation via webhook on the OneEntry side — `getActiveSubscriptions()` may not return the new marker immediately. If needed — make several repeated reads with an interval (like polling `paymentUrl` for orders in [`rules/orders.md`](../../rules/orders.md)).
 
 ---
 
@@ -181,9 +199,11 @@ export default function SuccessPage() {
 ✅ Subscription flow created (Subscriptions API). Key rules:
 
 1. All methods require a user session — ensureSession() (reDefine) before each call
-2. getAllSubscriptions/getActiveSubscriptions return string[] MARKERS, not objects — keep names/prices in your dictionary or admin entities
-3. subscribe() → { paymentUrl } → redirect to Stripe (like createSession for orders)
-4. An active subscription will appear in getActiveSubscriptions() after the payment webhook — not instantly
-5. recoverSubscriptions({ marker }) sends a request for recovery (via Stripe Billing Portal on the OneEntry side) and returns boolean | IError — the redirect URL is NOT returned; after success, just reload getActiveSubscriptions()
-6. Do not confuse with Events subscriptions for products (/create-subscription-events)
+2. getAllSubscriptions() → ISubscriptionEntity[] (v1.0.157, previously string[]): marker = identifier, name = localizeInfos.title, duration = periodInDays. There is NO price in the response — keep it in your dictionary or admin entities
+3. getActiveSubscriptions() still returns string[] MARKERS — check against plan.identifier
+4. subscribe() → { paymentUrl } → redirect to Stripe (like createSession for orders)
+5. An active subscription will appear in getActiveSubscriptions() after the payment webhook — not immediately
+6. cancelSubscription/recoverSubscriptions from v1.0.157 actually return IError on API refusal (previously silently responded true). Check the result strictly: `if (result !== true)`, not `if (result)`
+7. recoverSubscriptions({ marker }) sends a request for recovery (via Stripe Billing Portal on the OneEntry side) — the redirect URL is NOT returned; after success, simply reload getActiveSubscriptions()
+8. Do not confuse with Events subscriptions for products (/create-subscription-events)
 ```

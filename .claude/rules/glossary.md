@@ -1,8 +1,8 @@
-# Glossary of OneEntry SDK Terms
+# OneEntry SDK Glossary
 
-## Glossary of OneEntry SDK Terms
+## OneEntry SDK Glossary
 
-A quick reference for key concepts. If you're unsure about a term, check here.
+A quick reference for key concepts. If you're unsure about a term — check here.
 
 ---
 
@@ -10,7 +10,7 @@ A quick reference for key concepts. If you're unsure about a term, check here.
 
 A string identifier for an entity in OneEntry (page, menu, form, attribute, authorization provider).
 
-- **DO NOT guess markers** — always obtain them via `/inspect-api` or the API
+- **DO NOT guess markers** — always obtain them via `/inspect-api` or API
 - `pageUrl` for pages is also a marker, not a Next.js route URL
 - Examples: `'home'`, `'main-menu'`, `'contact_us'`, `'email'`
 
@@ -27,7 +27,7 @@ Prefer `marker`/`pageUrl` where possible — they are stable when transferring d
 
 ### pageUrl
 
-The marker for a page in the `Pages` API. NOT the Next.js route path.
+The marker for a page for the `Pages` API. NOT the Next.js route path.
 
 ```typescript
 // ❌ INCORRECT — this is a Next.js route, not a pageUrl
@@ -56,7 +56,7 @@ const title = attrs.title?.value      // if you know the marker
 
 ### attributeSets
 
-A set of attributes (template) assigned to the entity. Do not confuse with `attributeValues` — this is a schema, not values.
+A set of attributes (template) assigned to an entity. Do not confuse with `attributeValues` — this is a schema, not values.
 
 > Rules: `.claude/rules/attribute-sets.md`
 
@@ -82,7 +82,7 @@ getApi().Pages.getPageByUrl('home', locale)
 
 ### getApi()
 
-Get the current instance of the SDK. Singleton — **do not create new instances** via `defineOneEntry()` in components.
+Get the current SDK instance. Singleton — **do not create new instances** via `defineOneEntry()` in components.
 
 ```typescript
 import { getApi } from '@/lib/oneentry'
@@ -125,7 +125,7 @@ No need to manage the token manually — just save it on the first login.
 
 ### isError()
 
-Type guard to check the SDK response for an error. Create it in `lib/oneentry.ts`.
+Type guard to check the SDK response for an error. Create in `lib/oneentry.ts`.
 
 ```typescript
 const result = await getApi().Products.getProducts()
@@ -142,12 +142,12 @@ if (isError(result)) {
 
 ### fingerprint
 
-Data about the user's device (header `x-device-metadata`) that the SDK sends on POST requests and when refreshing the token.
+User device data (header `x-device-metadata`) that the SDK sends on POST requests and during token refresh.
 On the server, `deviceInfo.browser` will be `"Node.js/..."` — therefore:
 
 **`auth()`, `signUp()`, `generateCode()`, `checkCode()` — only from Client Component**
 
-**Override fingerprint (SDK ≥ 1.0.155):** set explicitly — `config.deviceMetadata`, or `setDeviceMetadata(str)` / `getDeviceMetadata()` (methods on each module, state shared across the instance; chainable; `''` — reset). NOT on the root object `defineOneEntry` — call via the module: `getApi().AuthProvider.getDeviceMetadata()`.
+**Override fingerprint (SDK ≥ 1.0.155):** set explicitly — `config.deviceMetadata`, or `setDeviceMetadata(str)` / `getDeviceMetadata()` (methods on each module, state shared across instance; chainable; `''` — reset). NOT on the root object `defineOneEntry` — call through the module: `getApi().AuthProvider.getDeviceMetadata()`.
 
 Refresh tokens are tied to this header. The server-side OAuth code exchange must stamp the **browser** fingerprint (get it in the browser via `getDeviceMetadata()` and pass it to the server) — otherwise, the token will not refresh from the browser. The pattern is a per-request instance: `defineOneEntry(url, { token, deviceMetadata })`.
 
@@ -155,9 +155,9 @@ Refresh tokens are tied to this header. The server-side OAuth code exchange must
 
 ---
 
-### image vs groupOfImages
+### image / file vs groupOfImages
 
-The `image` type in the SDK expands into an **OBJECT** only when there is one image (single-element array → object); when there are multiple, it remains an **ARRAY**. The form depends on the number of images and the response path (the same product comes as an object from `getProductById`, but as an array within a block), and **NOT** on the type of entity. Therefore, handle both cases:
+The types `image` and `file` are expanded into an **OBJECT** when there is only one file (single-element array → object); when there are two or more — it remains an **ARRAY**. Starting from v1.0.157, this works in **all** modules (blocks, pages, users, orders, and others — previously only products/menus/forms/attribute-sets), so the form depends **only on the number of files**, not on the entity type or response path. Capture both variants:
 
 ```typescript
 const raw = attrs.pic?.value
@@ -165,9 +165,9 @@ const img = Array.isArray(raw) ? raw[0] : raw
 const url = img?.downloadLink
 ```
 
-`groupOfImages` is always an **ARRAY**: `attrs.marker?.value?.[0]?.downloadLink`
+`groupOfImages` — always an **ARRAY**: `attrs.marker?.value?.[0]?.downloadLink`
 
-> ⚠️ **ALWAYS** run `/inspect-api` or `console.log(attrs.marker?.value)` before use.
+> ⚠️ The number of files is determined by the project content — run `/inspect-api` or `console.log(attrs.marker?.value)` before use and write code resilient to both forms.
 > Details: `.claude/rules/attribute-values.md`
 
 ---
@@ -188,7 +188,7 @@ if (attr.type === 'spam') {
 
 ### moduleFormConfigs / formModuleConfigId
 
-Mandatory parameters for submitting a form via `postFormsData`. Obtain from `getFormByMarker()`.
+Required parameters for submitting a form via `postFormsData`. Obtain from `getFormByMarker()`.
 
 ```typescript
 const form = await getApi().Forms.getFormByMarker('contact_us')
@@ -204,7 +204,7 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 
 | Concept | Example | Where to use |
 | --- | --- | --- |
-| `pageUrl` (marker) | `'about'` | Argument of `getPageByUrl()` |
+| `pageUrl` (marker) | `'about'` | Argument `getPageByUrl()` |
 | Next.js route | `'/[locale]/about'` | Folders in `app/` |
 | `href` for Link | `'/about'` | `<Link href>` |
 
@@ -212,19 +212,19 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 
 ### guestId / guest mode
 
-Identifier for an anonymous visitor. The SDK sends it in the header `x-guest-id` on requests without authorization — this enables guest cart, wishlist, activity tracking, and contextual recommendations.
+Identifier for an anonymous visitor. The SDK sends it in the header `x-guest-id` on unauthenticated requests — this includes guest cart, wishlist, activity tracking, and contextual recommendations.
 
 - **Browser** — generated and stored automatically (`localStorage` key `oneentry_guest_id`). No setup is needed.
-- **Server** — NOT generated by itself; pass explicitly: `config.guestId` or `getApi().Users.setGuestId(id)` (method available on each module, state shared across the instance; chainable; `''` — reset).
+- **Server** — NOT generated automatically; pass explicitly: `config.guestId` or `getApi().Users.setGuestId(id)` (method available on each module, state shared across instance; chainable; `''` — reset).
 - When `accessToken` is present, the header `x-guest-id` **is not sent**.
 
-> Details: `03-sdk-init.md` (section "Guest Mode").
+> Details: `03-sdk-init.md` (section "Guest mode").
 
 ---
 
 ### cart / wishlist (server-side)
 
-The cart and wishlist that are stored **on the OneEntry server** and synchronized between devices — for authorized users or guests (by `guestId`).
+The cart and wishlist that are stored **on the OneEntry server** and synchronized between devices — for authenticated users or guests (by `guestId`).
 
 ```typescript
 await getApi().Users.addCartItem({ productId: 123, qty: 2 })
@@ -252,6 +252,6 @@ The user's internal bonus "currency" (accruals/deductions). Separate from coupon
 
 ### content filter (Filters)
 
-A customizable tree of nodes in the admin panel (`Filters.getFilterByMarker(marker)`), combining heterogeneous entities — pages, products, attributes, discounts, bonuses, payment methods. Nodes are nested through `children`, the node type is in `item.type`.
+A customizable tree of nodes in the admin panel (`Filters.getFilterByMarker(marker)`), combining heterogeneous entities — pages, products, attributes, discounts, bonuses, payment methods. Nodes are nested via `children`, the node type is in `item.type`.
 
 > Do not confuse with catalog filters (`IFilterParams[]` in `Products.getProducts`) — these are different things. Skill: `/create-content-filter`.

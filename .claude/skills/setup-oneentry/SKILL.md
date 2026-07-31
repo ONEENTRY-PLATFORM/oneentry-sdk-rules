@@ -10,11 +10,11 @@ allowed-tools: Read, Glob, Write, Edit
 
 # /setup-oneentry - Setup oneentry
 
-Initialize the OneEntry SDK in the current project. Follow the steps in order.
+Initialize OneEntry SDK in the current project. Follow the steps in order.
 
-## Step 1: Check for existing file
+## Step 1: Check existing file
 
-Check if `lib/oneentry.ts` exists. If it does — read and show the current content, then ask if it needs to be overwritten.
+Check if `lib/oneentry.ts` exists. If yes — read and show the current content, then ask if it needs to be overwritten.
 
 ## Step 2: Create lib/oneentry.ts
 
@@ -52,7 +52,8 @@ export function getLang(): string {
 }
 
 // Extracts the image URL from the OneEntry attribute value:
-// array [{ downloadLink }] (image in Pages/Blocks, groupOfImages) or object { downloadLink } (image in Products, file).
+// object { downloadLink } (image/file with a single file — in all modules, SDK ≥ 1.0.157)
+// or array [{ downloadLink }] (multiple files, groupOfImages, as well as image/file on SDK < 1.0.157).
 export function getImageUrl(value: unknown): string {
   const v = Array.isArray(value) ? value[0] : value;
   return (v as { downloadLink?: string } | null | undefined)?.downloadLink ?? '';
@@ -78,7 +79,7 @@ export function hasActiveSession(): boolean {
 
 // Synchronizes tokens directly in the current instance.
 // Use in login() INSTEAD of reDefine(): after auth() tokens are already written in the SDK state,
-// and reDefine will recreate the instance without accessToken — before the first SDK request it will make
+// and reDefine will recreate the instance without accessToken — before the first SDK request it will do
 // an unnecessary /refresh, unnecessarily rotating the just issued one-time refresh token.
 export function syncTokens(accessToken: string, refreshToken: string): void {
   apiInstance.AuthProvider.setAccessToken(accessToken);
@@ -130,7 +131,7 @@ NEXT_PUBLIC_ONEENTRY_TOKEN=<entered token>
 
 **If the file exists:**
 
-Read it and check for the presence of `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the variables are missing — add them (asking the user for values). If they already exist — do nothing.
+Read it and check for the presence of `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the variables are not present — add them (asking the user for values). If they already exist — do nothing.
 
 ## Step 5: Show the result
 
@@ -145,7 +146,7 @@ Find the token: in the OneEntry admin panel → Settings → App Token
 
 ## Step 6: Check oneentry import
 
-Check if the `oneentry` package is installed in `package.json`. If not — inform:
+Check that the `oneentry` package is installed in `package.json`. If not — inform:
 
 ```text
 ⚠️ Install the package: npm install oneentry

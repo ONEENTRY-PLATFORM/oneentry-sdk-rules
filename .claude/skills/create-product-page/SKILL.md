@@ -28,11 +28,11 @@ What to look for in `items[0].attributeValues`:
 
 1. **Page route** — for example `app/[locale]/shop/product/[id]/page.tsx`
 2. **Are similar products needed?** (`getRelatedProductsById`)
-3. **Is an image gallery needed or just one image?**
+3. **Is an image gallery or a single image needed?**
 4. **Is there a layout?** — if yes, copy it exactly
 
 > **🛒 The "Add to Cart" button is ALWAYS added by default.**
-> Do not ask the user "is the button needed?". If the user **explicitly** did not say "without a button" — add it.
+> Do not ask the user "do you need a button?". If the user **explicitly** said "without a button" — add it.
 > If the cart is not yet implemented — first run `/create-cart-manager`.
 > The "Add to Favorites" button is added **only at the user's request** (→ `/create-favorites`).
 
@@ -40,7 +40,7 @@ What to look for in `items[0].attributeValues`:
 
 ## Step 3: Create Server Action (if not already)
 
-> If `app/actions/products.ts` already exists — read it and supplement, do not duplicate.
+> If `app/actions/products.ts` already exists — read it and supplement it, do not duplicate.
 
 ```typescript
 // app/actions/products.ts
@@ -59,13 +59,13 @@ export async function getRelatedProducts(
   id: number,
   locale = 'en_US',
   limit = 6,
-  statusMarker?: string, // only in-stock products in the related block — optional
+  statusMarker?: string, // only products in stock in the related block — optional
 ) {
-  // Query type — IProductsRelatedQuery (SDK >= 1.0.154). statusMarker — actual marker
+  // Query type — IProductsRelatedQuery (SDK >= 1.0.154). statusMarker — real marker
   // from /inspect-api product-statuses, do not hardcode 'in_stock'.
-  // ⚠️ Do not confuse with listing methods (getProducts, etc.): there statusMarker in query
-  // is absent (TS error) and status is filtered through IFilterParams body (see rules/product-statuses.md);
-  // getRelatedProductsById has no body filters — statusMarker is passed in query
+  // ⚠️ Do not confuse with listing methods (getProducts, etc.): there statusMarker is absent in query
+  // (TS error) and status is filtered through IFilterParams body (see rules/product-statuses.md);
+  // in getRelatedProductsById there are no body filters — statusMarker is passed in query
   // (in 1.0.154 types are aligned with actually supported endpoint parameters).
   const result = await getApi().Products.getRelatedProductsById(id, locale, {
     offset: 0,
@@ -106,21 +106,23 @@ export default async function ProductPage({
   const attrs = product.attributeValues || {};
 
   // ⚠️ Replace markers with real ones from /inspect-api!
-  // image: value can be an OBJECT or an ARRAY (does not depend on the entity type) — handle universally
+  // image: 1 file → OBJECT, 2+ → ARRAY (v1.0.157, same in all modules) — capture universally
   const rawPic = attrs.pic?.value;
   const imageUrl = (Array.isArray(rawPic) ? rawPic[0] : rawPic)?.downloadLink || '';
   const title = product.localizeInfos?.title || '';
-  const price = attrs.price?.value || 0;
-  const oldPrice = attrs.sale?.value || 0;
+  // integer/float/real: from v1.0.157 comes as a number or null (not a string and not 0)
+  const price = attrs.price?.value ?? 0;
+  const oldPrice = attrs.sale?.value ?? 0;
 
-  // text: value can be an ARRAY or an object with htmlValue/plainValue — same wrapper
+  // text: value ARRAY or object with htmlValue/plainValue — same wrapper
   const rawDesc = attrs.description?.value;
   const descBlock = Array.isArray(rawDesc) ? rawDesc[0] : rawDesc;
   const description = descBlock?.htmlValue || descBlock?.plainValue || '';
 
-  // Status: replace 'in_stock' with the actual one from /inspect-api
+  // Status: replace 'in_stock' with real one from /inspect-api
   const inStock = product.statusIdentifier === 'in_stock';
-  const stockQty = Number(attrs.units_product?.value) || 0;
+  // integer: number or null (not filled) — from v1.0.157 an empty field no longer comes as 0
+  const stockQty = Number(attrs.units_product?.value ?? 0);
   const isOutOfStock = !inStock || stockQty === 0;
 
   return (
@@ -189,11 +191,11 @@ export default async function ProductPage({
   const relatedProducts = relatedData.items;
 
   const attrs = product.attributeValues || {};
-  // image and text: value can be an array or an object — handle the wrapper universally
+  // image (1 file → object, 2+ → array) and text (always array) — capture wrapper universally
   const rawPic = attrs.pic?.value;
   const imageUrl = (Array.isArray(rawPic) ? rawPic[0] : rawPic)?.downloadLink || '';
   const title = product.localizeInfos?.title || '';
-  const price = attrs.price?.value || 0;
+  const price = attrs.price?.value ?? 0;   // number or null (v1.0.157)
   const rawDesc = attrs.description?.value;
   const description = (Array.isArray(rawDesc) ? rawDesc[0] : rawDesc)?.htmlValue || '';
 
@@ -208,7 +210,8 @@ export default async function ProductPage({
           <div className="grid grid-cols-4 gap-4">
             {relatedProducts.map((p) => {
               const a = p.attributeValues || {};
-              const img = a.pic?.value?.downloadLink || '';
+              const rawImg = a.pic?.value;
+              const img = (Array.isArray(rawImg) ? rawImg[0] : rawImg)?.downloadLink || '';
               return (
                 <div key={p.id}>
                   {img && <Image src={img} alt={p.localizeInfos?.title || ''} width={200} height={200} />}
@@ -254,9 +257,10 @@ const gallery = attrs.gallery?.value || [];
 
 ```md
 1. params in Next.js 15+ — this is a Promise, await is required
-2. image → value is an OBJECT or an ARRAY (does not depend on the entity type) → const i = Array.isArray(v) ? v[0] : v; i?.downloadLink
+2. image/file → 1 file: OBJECT, 2+: ARRAY (v1.0.157, same in all modules) → const i = Array.isArray(v) ? v[0] : v; i?.downloadLink
 2. groupOfImages → value is always an ARRAY → attrs.gallery?.value?.[0]?.downloadLink
 3. text → array OR object → (Array.isArray(v) ? v[0] : v)?.htmlValue or ?.plainValue
+4. Numeric attributes (integer/float/real) — number or null; unfilled no longer comes as 0 → use ?? 0
 4. statusIdentifier — check via /inspect-api, do not hardcode 'in_stock'
 5. Promise.all for parallel requests (product + related + blocks)
 6. notFound() on error — do not render an empty page
@@ -268,7 +272,7 @@ const gallery = attrs.gallery?.value || [];
 ## Step 6: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> To set up Playwright — first `/setup-playwright`.
+> For Playwright setup — first `/setup-playwright`.
 
 ### 6.1 Add `data-testid` to the product page
 
@@ -341,17 +345,17 @@ return (
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (execute step by step, do not ask in one list):**
+**Algorithm (perform step by step, do not ask in one list):**
 
 1. **Product page route** — taken from the path of the created file (`app/[locale]/shop/product/[id]/page.tsx`). Claude knows the pattern itself. Inform: "Tests will go to `/{locale}/shop/product/{id}` — I will substitute real id and locale".
-2. **Real product ID** — take it yourself via `/inspect-api products`: `items[0].id`. Inform: "For the test, I will use product id=`{value}` (`{title}`) — the first from /inspect-api".
+2. **ID of a real product** — take it yourself via `/inspect-api products`: `items[0].id`. Inform: "For the test, I will use product id=`{value}` (`{title}`) — the first from /inspect-api".
 3. **Locale** — the first from `/inspect-api` (usually `en_US`). If the project is monolocal and the route does not have `[locale]` — adjust `E2E_PRODUCT_PATH_TEMPLATE` (remove the prefix).
-4. **Gallery presence** — check via `/inspect-api`: whether the product has the attribute `groupOfImages` with a non-empty array. If not — the gallery test will include `test.skip`. Inform: "The product `id={id}` {has a gallery of N images / no groupOfImages — gallery test disabled}".
-5. **Non-existent product ID** — generate a random one: `99999999 + Math.floor(Math.random() * 1000)`. Guaranteed not to exist, will check `notFound()`.
+4. **Gallery presence** — check via `/inspect-api`: whether the product has the attribute `groupOfImages` with a non-empty array. If not — the gallery test will include `test.skip`. Inform: "Product `id={id}` {has a gallery of N images / no groupOfImages — gallery test disabled}".
+5. **ID of a non-existent product** — generate a random one: `99999999 + Math.floor(Math.random() * 1000)`. Guaranteed not to exist, will check `notFound()`.
 6. **Fill in `.env.local`** (yourself, via Edit):
 
 ```bash
-E2E_PRODUCT_ID=42                                      # real product id from /inspect-api
+E2E_PRODUCT_ID=42                                      # id of a real product from /inspect-api
 E2E_PRODUCT_PATH_TEMPLATE=/en_US/shop/product/         # prefix to which id is added
 E2E_PRODUCT_EXPECT_GALLERY=true                        # true if the product has groupOfImages
 ```
@@ -360,7 +364,7 @@ If any value is not defined — leave it empty, the test will be `test.skip`.
 
 ### 6.3 Create `e2e/product-page.spec.ts`
 
-> ⚠️ Tests work with the real OneEntry project — they use the real product id from `/inspect-api`.
+> ⚠️ Tests work with the real OneEntry project — use real product id from `/inspect-api`.
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -404,7 +408,7 @@ test.describe('Product page', () => {
   });
 
   test('gallery renders multiple images (groupOfImages)', async ({ page }) => {
-    test.skip(!EXPECT_GALLERY, 'The product has no groupOfImages — gallery test disabled');
+    test.skip(!EXPECT_GALLERY, 'Product does not have groupOfImages — gallery test disabled');
 
     await page.goto(`${PATH_TEMPLATE}${PRODUCT_ID}`);
     const gallery = page.getByTestId('product-page-gallery');
@@ -448,9 +452,9 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_PRODUCT_ID, E2E_PRODUCT_PATH_TEMPLATE, E2E_PRODUCT_EXPECT_GALLERY)
 
 Decisions made automatically:
-- Test product: id={PRODUCT_ID} ({title}) — the first from /inspect-api products
+- Test product: id={PRODUCT_ID} ({title}) — first from /inspect-api products
 - Path template: {PATH_TEMPLATE} — from the route of the created file
-- Locale: {locale} — the first available in the project (from /inspect-api)
+- Locale: {locale} — first available in the project (from /inspect-api)
 - Gallery: {has groupOfImages — test included / no — test.skip}
 - 404 test: random id in the range 99_999_999+, guaranteed not to exist
 

@@ -4,7 +4,7 @@ oneentry — OneEntry NPM package
 
 **SDK Documentation:** <https://js-sdk.oneentry.cloud/docs/index/>
 
-This file is the core of the context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
+This file is the core context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
 
 ## Project Context
 
@@ -133,7 +133,7 @@ Keyword from the prompt found → **first skill, then code**. Multiple triggers 
 | `jsdoc.md` | projects with strict JSDoc standard |
 | `admin-api.md`, `admin-ui.md` | scripts for writing to admin |
 
-## Main rule: check types and markers BEFORE the code
+## Main Rule: Check Types and Markers BEFORE Code
 
 Applies to **every** subtask.
 
@@ -150,12 +150,12 @@ Import types: `import type { IPagesEntity } from 'oneentry/dist/pages/pagesInter
 
 ### 2. Markers — from API via `/inspect-api`, not from memory
 
-Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). If there is no `.env.local` — ask for the URL and token.
+Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). If no `.env.local` — ask for URL and token.
 
 **🚨 Existing code is NOT the source of truth:**
 
 ```typescript
-// ❌ If you see it in the code — DO NOT repeat without verification:
+// ❌ If you see it in code — DO NOT repeat without verification:
 const inStock = product.statusIdentifier === 'in_stock'
 const stockQty = attrs.units_product?.value
 // Confirm these markers through `/inspect-api` before use.
@@ -165,11 +165,11 @@ const stockQty = attrs.units_product?.value
 
 If asked "add form X" / "connect product Y" — first confirm existence via API (`Forms.getAllForms()`, `Pages.getRootPages()`, `Products.getProducts()`, `AttributesSets.getAttributes()`).
 
-If not found → respond: **“First create [name] in the OneEntry Admin Panel, then I will connect it in the code.”**
+If not found → respond: **“First create [name] in OneEntry Admin Panel, then I will connect it in the code.”**
 
-### 4. SDK binding immediately, without static stubs
+### 4. SDK binding immediately, without static stub
 
-If the user provided the layout of a component that should work with the SDK — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
+If the user provided the layout of a component that should work with SDK — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
 
 ### 5. Forms — ALWAYS dynamic
 
@@ -181,14 +181,15 @@ In Next.js 15+ `params` — is `Promise<{locale: string}>`, need to `await param
 
 ### 7. attributeValues — by `type`, not randomly
 
-| Context | Access to image |
+| Context | Access to value |
 | --- | --- |
-| **Products** | `attrs.marker?.value?.downloadLink` (OBJECT) |
-| **Pages/Blocks** | `attrs.marker?.value?.[0]?.downloadLink` (ARRAY) |
-| **groupOfImages** | `attrs.marker?.value?.[0]?.downloadLink` (ARRAY) |
+| **image / file, 1 file** | `attrs.marker?.value?.downloadLink` (OBJECT — in any module, v1.0.157) |
+| **image / file, 2+ files** | `attrs.marker?.value?.[0]?.downloadLink` (ARRAY) |
+| **groupOfImages** | `attrs.marker?.value?.[0]?.downloadLink` (always ARRAY) |
+| **integer / float / real** | `attrs.marker?.value` — number or `null` (not `0`!) |
 | **spam** (reCAPTCHA) | Render `<FormReCaptcha>`, NOT `<input>` |
 
-If you don't know the type — `console.log(attrs.marker)`. Full table: `attribute-values.md`.
+The file `value` form depends only on **the number of files**, not on the module (Products/Pages/Blocks/Orders — the same). Stable access: `const v = attrs.marker?.value; const f = Array.isArray(v) ? v[0] : v;`. If you don't know the type — `console.log(attrs.marker)`. Full table: `attribute-values.md`.
 
 ### 8. "Add to Cart" button — by default, without question
 
@@ -196,28 +197,28 @@ For card / catalog / product page `AddToCartButton` is added automatically. If t
 
 ### 9. `isError` + singleton SDK + exact types
 
-Check each API call using type guard `isError`. One instance of SDK in `lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** a new `defineOneEntry()`.
+Check each API call through type guard `isError`. One instance of SDK in `lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** a new `defineOneEntry()`.
 
 ### 10. Server Action — thin proxy
 
 Do not create intermediate types and do not map API responses to custom objects. Only `filter` and `sort` are allowed; everything else — in the component. Breakdown with examples: `common-mistakes.md`.
 
-## 📋 Composite prompt = step-by-step execution
+## 📋 Composite Prompt = Step-by-Step Execution
 
 “Do X + add Y + create Z” — this is **not** a single pass. Real case: skipping the flag `isCheckCode: true` in the auth flow due to “general pass”.
 
-**Step 1. Decomposition in TodoWrite:** for each subtask, define the required skill (see “Context Map”) and relevant rules.
+**Step 1. Decomposition in TodoWrite:** for each subtask define the required skill (see “Context Map”) and relevant rules.
 
 **Step 2. Execution mode:**
 
 - **Sequentially** (default) — one subtask → its rules → checklist → next.
-- **In parallel** — only for completely independent tasks without shared dependencies (different pages/components without common AuthContext/`lib/oneentry.ts`). Through Agent tool, each with full context.
+- **In parallel** — only for completely independent tasks without common dependencies (different pages/components without shared AuthContext/`lib/oneentry.ts`). Through Agent tool, each with full context.
 
 **Step 3. Checklist after each subtask:** have all rules been applied, have all API fields been processed, have all flags (`isCheckCode`, `systemCodeTlsSec`, …) been considered.
 
 ❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in one message without a checklist in between.
 
-## When to stop and ask the user
+## When to Stop and Ask the User
 
 - **Don’t know the marker** → `/inspect-api`; no Bash — ask.
 - **403 Forbidden** → check: is `AuthProvider.auth/signUp/generateCode` called via Server Action? Move to Client Component (fingerprint). Or check group permissions in the admin panel.
@@ -225,13 +226,13 @@ Do not create intermediate types and do not map API responses to custom objects.
 - **Don’t understand the data source** → “Where should the data for [component] come from?”
 - **Multiple solution options** → “X or Y, which do you prefer?”
 
-## API permissions for the "Guests" group
+## API Permissions for the "Guests" Group
 
 By default, the "Guests" group has a limit of **10 objects** per entity. Before requests:
 
 1. Open the admin panel: `PROJECT_URL/users/groups/edit-group/1?tab`
 2. For each entity (Pages, Products, Forms, …): **Read: Yes, with restriction → without restrictions**
-3. Without this, `getPages()`, `getProducts()` etc. will return a maximum of 10 records.
+3. Without this, `getPages()`, `getProducts()`, etc. will return a maximum of 10 records.
 
 Error `403 “Permission data not found. Provide the permission for requested url”` = route not granted to the group — skill `/admin-grant-permissions`. Programmatic content writing (public SDK — read-only) — internal admin API: `admin-api.md`, skills `/admin-fill-content` and `/admin-upload-images`; web UI of the admin panel — `admin-ui.md`.
 
@@ -239,7 +240,7 @@ Error `403 “Permission data not found. Provide the permission for requested ur
 
 - **Pages — from CMS** (`getPageByUrl` + `getBlocksByPageUrl`), not hardcoded. The main one is usually `'home'`. Skill: `/create-page`.
 - **Exactly copy the user's layout** (Tailwind/JSX) — change only hardcoded data to API data.
-- **Linter:** write code according to the project's linter config. Do not fix someone else's linting/formatting — this is the user's job.
+- **Linter:** write code according to the project's linter config. Do not fix someone else's linting/formatting — that’s the user's job.
 - **Pagination, loading states, markers instead of IDs** — recommended by default.
 
 ## SDK Initialization
@@ -395,9 +396,10 @@ import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
 
 | Type | Access to value |
 | --- | --- |
-| `string`, `integer`, `real`, `float` | `attrs.marker?.value` |
+| `string` | `attrs.marker?.value` — string or `null` |
+| `integer`, `real`, `float` | `attrs.marker?.value` — **number** or `null` (v1.0.157, not `0`) |
 | `text`, `textWithHeader` | `(Array.isArray(v) ? v[0] : v)?.htmlValue` (`v = attrs.marker?.value`) |
-| `image`, `file` | `attrs.marker?.value?.downloadLink` — object |
+| `image`, `file` | 1 file → object (`value.downloadLink`), 2+ → array — v1.0.157, same in all modules |
 | `groupOfImages` | `attrs.marker?.value?.[0]?.downloadLink` — **ARRAY** |
 | `date`, `dateTime`, `time` | `attrs.marker?.value?.fullDate` |
 | `radioButton` | `attrs.marker?.value` — string-id |
@@ -408,10 +410,14 @@ import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
 
 ```typescript
 const title = attrs.title?.value
-const img = attrs.photo?.value?.downloadLink         // image — object
+const img = attrs.photo?.value?.downloadLink         // image, 1 file — object
 const imgs = attrs.photos?.value?.[0]?.downloadLink  // groupOfImages — array
 
-// Don't know the marker — search by type:
+// Resilient to 1 and 2+ files (the content manager can add a second):
+const v = attrs.photo?.value
+const first = (Array.isArray(v) ? v[0] : v)?.downloadLink
+
+// If you don't know the marker — search by type:
 const imgAttr = Object.values(attrs).find((a: any) => a?.type === 'image')
 ```
 
@@ -422,7 +428,7 @@ Examples for each type, `plainValue`/`mdValue`, `extended` — `attribute-values
 | Operator | Description | Example |
 | --- | --- | --- |
 | `in` / `nin` | in list / not in list | `"red,blue,green"` |
-| `eq` / `neq` | equals / not equals | `100` |
+| `eq` / `neq` | equal / not equal | `100` |
 | `mth` / `lth` | greater / less | `50` |
 | `exs` / `nexs` | exists / does not exist | — |
 
@@ -444,7 +450,7 @@ Contains data for the request language. Direct access to fields, **without nesti
 page.localizeInfos?.title        // title
 page.localizeInfos?.menuTitle    // menu title
 page.localizeInfos?.htmlContent  // HTML content (check first)
-// plainContent is in the API response, but not in the ILocalizeInfo type — in strict TS a cast is needed:
+// plainContent is in the API response, but not in the ILocalizeInfo type — in strict TS you need a cast:
 (page.localizeInfos as any)?.plainContent
 ```
 
@@ -457,7 +463,7 @@ const products = block.products ?? []                // product_block → IProdu
 const similar  = block.similarProducts?.items ?? []   // similar_products_block → IProductsResponse
 ```
 
-Fields are not available when `traficLimit: true` — access only through `?? []`. Details — `pages-blocks.md`.
+Fields are not available when `traficLimit: true` — access only through `?? []`. For details — `pages-blocks.md`.
 
 ## Working with Real Project Data
 

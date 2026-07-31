@@ -25,7 +25,7 @@ Run `/inspect-api pages` — the skill uses the SDK and will return a list of `p
 
 ---
 
-## Step 3: Determine the file path for the page
+## Step 3: Determine the path to the page file
 
 Ask the user (or determine from context):
 - The route of the page in Next.js, for example: `app/[locale]/about/page.tsx`
@@ -98,12 +98,12 @@ export default async function HomePage({
           .map((block: any) => {
             const attrs = block.attributeValues || {};
             // Access by marker (if known): attrs.title?.value
-            // image: value array OR object — (Array.isArray(v) ? v[0] : v)?.downloadLink
+            // image: 1 file → object, 2+ → array (v1.0.157) — (Array.isArray(v) ? v[0] : v)?.downloadLink
             // text: same wrapper — (Array.isArray(v) ? v[0] : v)?.htmlValue
             // Products are already loaded by SDK (>=1.0.153) — no separate requests to Products needed:
             //   product_block          → block.products ?? []               (IProductsEntity[], first 30)
             //   similar_products_block → block.similarProducts?.items ?? []  (IProductsResponse { total, items })
-            // Only through optional chaining: with traficLimit:true fields are absent, on load error SDK puts [].
+            // Only through optional chaining: with traficLimit:true fields are absent, on load error SDK returns [].
             return (
               <section key={block.id}>
                 {/* render block */}
@@ -128,12 +128,12 @@ After creating the file, output:
 
 ```md
 1. pageUrl = marker ("about"), NOT route path ("/[locale]/about")
-2. params in Next.js 15+ — this is a Promise, always await
+2. params in Next.js 15+ — is a Promise, always await
 3. localizeInfos.htmlContent — HTML content, localizeInfos.title — title
-4. Blocks/Pages: image → value ARRAY → attrs.bg?.value?.[0]?.downloadLink
+4. image/file: 1 file → OBJECT, 2+ → array (v1.0.157 — in blocks and pages too; previously it was always an array). Universally: const v = attrs.bg?.value; (Array.isArray(v) ? v[0] : v)?.downloadLink
 5. Sort blocks by position before rendering
 6. Attribute markers of blocks — find out via /inspect-api
-7. product_block / similar_products_block: getBlocksByPageUrl already returns products in block.products / block.similarProducts?.items (SDK ≥1.0.153) — do not make duplicate requests to Products; fields are absent with traficLimit: true (access via `?? []`)
+7. product_block / similar_products_block: getBlocksByPageUrl already returns products in block.products / block.similarProducts?.items (SDK ≥1.0.153) — do not make duplicate requests to Products; fields are absent with traficLimit: true (access through `?? []`)
 ```
 
 ---
@@ -141,7 +141,7 @@ After creating the file, output:
 ## Step 6: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> To set up Playwright — first `/setup-playwright`.
+> For Playwright setup — first `/setup-playwright`.
 
 ### 6.1 Add `data-testid` to the page component
 
@@ -182,16 +182,16 @@ return (
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Page path in Next.js** — taken from the route of the created file (`app/[locale]/about/page.tsx` → `/about` or `/{locale}/about`). Claude knows the path itself — do not ask. Inform: "The test will go to `{path}`".
+1. **Path of the page in Next.js** — taken from the route of the created file (`app/[locale]/about/page.tsx` → `/about` or `/{locale}/about`). Claude knows the path itself — do not ask. Inform: "The test will go to `{path}`".
 2. **`pageUrl` marker** — already known from the skill argument (example: `about`, `home`). Use as is. If locale is required — take the first from `/inspect-api` (usually `en_US`).
 3. **Expected content** — check yourself via `/inspect-api pages`:
    - `page.localizeInfos.title` — should not be empty, check length > 0.
-   - If the page has blocks — count them via `getBlocksByPageUrl(pageUrl, locale)` (in a multilingual project, pass the locale — otherwise blocks will return in the default language of the SDK). Inform: "Found `{N}` blocks for page `{marker}` — the test will check their rendering".
-4. **Non-existent pageUrl** for a 404 test — generate a random one: `random-${Math.random().toString(36).slice(2,10)}`. This marker definitely does not exist, the test will check `notFound()`.
+   - If the page has blocks — count them via `getBlocksByPageUrl(pageUrl, locale)` (in a multilingual project pass the locale — otherwise blocks will return in the default language of the SDK). Inform: "The page `{marker}` has found `{N}` blocks — the test will check their rendering".
+4. **Non-existent pageUrl** for 404 test — generate a random one: `random-${Math.random().toString(36).slice(2,10)}`. This marker definitely does not exist, the test will check `notFound()`.
 5. **Fill in `.env.local`** (yourself, via Edit):
 
 ```bash
-E2E_CMS_PATH=/about              # Next.js route path
+E2E_CMS_PATH=/about              # path of Next.js route
 E2E_CMS_PAGE_URL=about           # pageUrl marker in OneEntry
 E2E_CMS_EXPECT_BLOCKS=3          # expected number of blocks (0 if without blocks)
 ```
@@ -209,7 +209,7 @@ const CMS_PATH = process.env.E2E_CMS_PATH || '/about';
 const EXPECT_BLOCKS = Number(process.env.E2E_CMS_EXPECT_BLOCKS ?? '0');
 
 test.describe('CMS page (OneEntry Pages)', () => {
-  test('renders the page with title from localizeInfos', async ({ page }) => {
+  test('renders page with title from localizeInfos', async ({ page }) => {
     await page.goto(CMS_PATH);
     await expect(page.getByTestId('cms-page')).toBeVisible();
     const title = page.getByTestId('cms-page-title');
@@ -219,7 +219,7 @@ test.describe('CMS page (OneEntry Pages)', () => {
 
   test('renders htmlContent from localizeInfos', async ({ page }) => {
     await page.goto(CMS_PATH);
-    // Content may be an empty string — check at least for the presence of the container
+    // Content may be an empty string — check at least the presence of the container
     await expect(page.getByTestId('cms-page-content')).toBeAttached();
   });
 

@@ -14,12 +14,12 @@ const categoryPage = await getApi().Pages.getPageByUrl('shop/category/ship_desig
 // ✅ CORRECT - passing only the page marker
 const categoryPage = await getApi().Pages.getPageByUrl('ship_designer', locale)
 
-// Same for Products
+// The same for Products
 const products = await getApi().Products.getProductsByPageUrl('ship_designer', [], locale)
 // NOT 'shop/category/ship_designer'!
 ```
 
-**Rule:** The route URL in Next.js (for example `/shop/category/ship_designer`) and `pageUrl` in OneEntry (`"ship_designer"`) are **different things**. When calling OneEntry SDK methods, always use only the marker from `pageUrl`.
+**Rule:** The route URL in Next.js (for example, `/shop/category/ship_designer`) and `pageUrl` in OneEntry (`"ship_designer"`) are **different things**. When calling OneEntry SDK methods, always use only the marker from `pageUrl`.
 
 ## Multilingual Content
 
@@ -51,7 +51,10 @@ const attrs = block.attributeValues || {}
 // Extracting attributes
 const title = attrs.title?.value || block.localizeInfos?.title || ''
 const description = attrs.description?.value || ''
-const bgImage = attrs.bg?.value?.[0]?.downloadLink || ''
+// image: with SDK ≥ 1.0.157, a single file in blocks comes as an OBJECT (previously — as an array),
+// multiple files — as an array. Handle both forms:
+const rawBg = attrs.bg?.value
+const bgImage = (Array.isArray(rawBg) ? rawBg[0] : rawBg)?.downloadLink || ''
 
 // Filtering page blocks
 const blocks = await getApi().Pages.getBlocksByPageUrl('home')
@@ -86,4 +89,4 @@ if (!isError(blocks)) {
 }
 ```
 
-Fields are only available for the corresponding `block.type` and are absent when `traficLimit: true` — always access through `?? []`.
+Fields are only available for the corresponding `block.type` and are absent when `traficLimit: true` — always access via `?? []`.

@@ -10,7 +10,7 @@ Rules for serving images from OneEntry CDN via `next/image`. Complements `.claud
 
 Applicable to projects that read `downloadLink` / `previewLink` from `attributeValues` OneEntry and serve them in `<Image src={…} />`.
 
-## ⚠️ `remotePatterns` — specifically, not `'**'`
+## ⚠️ `remotePatterns` — specific, not `'**'`
 
 `<Image>` refuses to render external URLs that are not declared in `next.config`. Specify exactly the domains of OneEntry CDN — a broad wildcard scheme `hostname: '**'` breaks the built-in protection against SSRF (through `/_next/image?url=…` you can proxy any external host).
 
@@ -39,7 +39,7 @@ const nextConfig: NextConfig = {
 
 ## Trim `deviceSizes` to actual design breakpoints
 
-Next.js by default generates 8 sizes (`[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`). This means that each OneEntry image rendered via `<Image>` goes through the optimizer **eight** times. If the design uses 4 breakpoints — the other four sizes are unnecessary work on the endpoint `/_next/image`.
+Next.js by default generates 8 sizes (`[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`). This means that each OneEntry image rendered via `<Image>` goes through the optimizer **eight** times. If the design uses 4 breakpoints — the other four sizes are wasted work on the endpoint `/_next/image`.
 
 ```typescript
 // ✅ CORRECT — follows the actual Tailwind grid (sm/md/lg/xl/2xl)
@@ -54,7 +54,7 @@ const nextConfig: NextConfig = {
 };
 ```
 
-`minimumCacheTTL` is important: without it, Next.js uses the `Cache-Control` of the source, and OneEntry CDN provides a short TTL — each image request turns into a repeated optimization.
+`minimumCacheTTL` is important: without it, Next.js uses the `Cache-Control` of the source, and OneEntry CDN provides a short TTL — each image request turns into a re-optimization.
 
 ## `sizes` — do not leave the default `100vw` for non-full-width images
 
@@ -84,7 +84,7 @@ const nextConfig: NextConfig = {
 | Context | `sizes` |
 | --- | --- |
 | Product card grid (4 in a row on desktop) | `(min-width: 1280px) 340px, (min-width: 768px) 33vw, 50vw` |
-| Main image on product page | `(min-width: 1024px) 50vw, 100vw` |
+| Main image of the product page | `(min-width: 1024px) 50vw, 100vw` |
 | Full-width hero banner | `100vw` |
 | Icon / avatar / small preview | `64px` |
 
@@ -93,7 +93,7 @@ const nextConfig: NextConfig = {
 `priority` injects `<link rel="preload">` into `<head>` and removes `loading="lazy"`. If set on every image in the first four cards of the grid, the browser will start downloading 4 files simultaneously with critical CSS — delaying LCP instead of speeding it up.
 
 ```tsx
-// ❌ INCORRECT — four competitors for critical budget
+// ❌ INCORRECT — four competitors for the critical budget
 {products.slice(0, 4).map((p) => (
   <Image key={p.id} src={p.image} priority alt={p.title} … />
 ))}
@@ -105,14 +105,14 @@ const nextConfig: NextConfig = {
 ))}
 ```
 
-One `priority` per route — usually the hero banner or the main image on the product page.
+One `priority` per route — usually the hero banner or the main image of the product page.
 
 ## Blur placeholder via LQIP from `previewLink`
 
-OneEntry returns `previewLink` and `downloadLink` in the image object (`attributeValues.<marker>.value` — object for a single image, otherwise an array element). In the image attributes of entities, `previewLink` — **object by presets** of the form `{ default: [lqip, previewUrl] }`, where `previewLink.default[0]` — **ready base64 LQIP string** (`data:image/webp;base64,…`), and `previewLink.default[1]` — URL of the reduced preview version. Base64 for `blurDataURL` **is already included in the response** — do not fetch it over the network and do not generate it on the client.
+OneEntry returns `previewLink` and `downloadLink` in the image object (`attributeValues.<marker>.value` — object for one image, array for multiple; from v1.0.157 this rule is the same across all modules, so `extractImage` below should handle both forms). In the image attributes of entities, `previewLink` — **object by presets** of the form `{ default: [lqip, previewUrl] }`, where `previewLink.default[0]` — **ready base64 LQIP string** (`data:image/webp;base64,…`), and `previewLink.default[1]` — URL of the reduced preview version. Base64 for `blurDataURL` **is already included in the response** — do not fetch it over the network and do not generate it on the client.
 
 ```tsx
-// ❌ INCORRECT — generated on the client / unnecessary fetch (base64 is already in the response)
+// ❌ INCORRECT — generated on the client / extra fetch (base64 is already in the response)
 'use client';
 const blur = await generateBlurDataURL(product.image);   // bad pattern
 
