@@ -14,9 +14,9 @@ Creates `generateMetadata`, `app/sitemap.ts`, `app/robots.ts`, `JsonLd` componen
 
 Do not hardcode anything. Four things are needed:
 
-1. **Base URL of the site** — ask the user (`SITE_URL`); in env it is `NEXT_PUBLIC_SITE_URL`. Without it, canonical and sitemap cannot be generated.
+1. **Base URL of the site** — ask the user (`SITE_URL`); in env it's `NEXT_PUBLIC_SITE_URL`. Without it, canonical and sitemap cannot be generated.
 2. **Locales** — `getApi().Locales.getLocales()` → `shortCode` of each. Do not invent `['en','ru']`.
-3. **Markers for image attributes and description** — through `/inspect-api products`. Usually `pic`/`image` and `description`, but check it carefully.
+3. **Markers for image attributes and description** — via `/inspect-api products`. Usually `pic`/`image` and `description`, but check for sure.
 4. **Catalog size** — `Products.getProducts([], locale, { offset: 0, limit: 1 })` → `total`. Needed to set the sitemap `limit` higher than necessary.
 
 If something is missing in the admin panel — create an entry in `MISMATCH-LOG.md` (`.claude/rules/mismatch-log.md`).
@@ -25,10 +25,10 @@ If something is missing in the admin panel — create an entry in `MISMATCH-LOG.
 
 ## Step 2: Clarify with the User
 
-1. **Product variants** — are color/size set as separate entities? If yes, the sitemap is built from the aggregated list; otherwise, there will be duplicate URLs.
+1. **Product variants** — are color/size established as separate entities? If yes, the sitemap is built from the aggregated list; otherwise, duplicate URLs will occur.
 2. **Which sections to block from indexing** beyond the default (`/cart`, `/favorites`, `/account`, `/checkout`, `/api`).
 3. **Should the site be open to AI crawlers** (GPTBot, ClaudeBot, PerplexityBot) — usually yes for a store, it's a traffic channel.
-4. **Is `llms.txt` needed?**
+4. **Is `llms.txt` needed** — a project map for assistants. Honestly warn: this is a proposed standard without confirmed support from major AI crawlers; visibility in AI search is more influenced by steps 5 (access for AI crawlers), 6 (JSON-LD), and server-side content rendering. Do it — only after them.
 
 ---
 
@@ -56,7 +56,7 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 }
 ```
 
-**Check:** the fetcher is wrapped in React `cache()` — otherwise, `generateMetadata` and `page.tsx` will make two identical requests (`.claude/rules/performance-streaming.md`).
+**Check:** the fetcher is wrapped in React `cache()` — otherwise `generateMetadata` and `page.tsx` will make two identical requests (`.claude/rules/performance-streaming.md`).
 
 ---
 
@@ -72,7 +72,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: SITE_URL, lastModified: now, changeFrequency: 'daily', priority: 1.0 },
   ]
 
-  // limit is deliberately higher than total from step 1 — the default 30 will silently truncate the map
+  // limit is intentionally higher than total from step 1 — default 30 will silently cut the map
   const catalog = await loadProducts({ unique: true, limit: 5000 })
   const productPages: MetadataRoute.Sitemap = catalog.items.map((p) => ({
     url: `${SITE_URL}/product/${p.id}`,
@@ -85,7 +85,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 }
 ```
 
-If the catalog is large (>5000), paginate in a loop by `offset`, rather than raising `limit` to infinity.
+If the catalog is large (>5000), paginate in a loop by `offset`, rather than raising `limit` indefinitely.
 
 ---
 
@@ -114,7 +114,7 @@ export default function robots(): MetadataRoute.Robots {
 // components/JsonLd.tsx — Server Component
 function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data)
-    .replace(/</g, '\\u003c')       // ← mandatory: </script in the product name will close the block
+    .replace(/</g, '\\u003c')       // ← mandatory: </script in product name will close the block
     .replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026')
     .replace(/\u2028/g, '\\u2028')
@@ -142,14 +142,49 @@ return { alternates: { canonical: `${SITE_URL}${path}`, languages } }
 
 ---
 
-## Step 8: Remind Key Rules
+## Step 8: `llms.txt` — if the user agreed in step 2
+
+Format — **markdown according to the specification llmstxt.org**, not arbitrary text: `# Title` → blockquote with one sentence → sections `## …` with lists `- [Title](URL): description`. Deviating from the structure deprives the file of meaning.
+
+```typescript
+// app/llms.txt/route.ts — segment with a dot in the name, serves exactly /llms.txt
+import { getApiSafe, isError } from '@/lib/oneentry'
+
+export const revalidate = 3600   // literal, not import or computation
+
+export async function GET() {
+  const lines = [`# ${SITE_NAME}`, '', `> ${SITE_DESCRIPTION}`, '']
+
+  const api = getApiSafe()          // not getApi(): OneEntry is unavailable → serve minimum, not 500
+  if (api) {
+    const pages = await api.Pages.getRootPages(DEFAULT_LOCALE)
+    if (!isError(pages)) {
+      lines.push('## Catalog', '')
+      for (const p of pages) {
+        const title = p.localizeInfos?.title ?? p.pageUrl
+        lines.push(`- [${title}](${SITE_URL}/${p.pageUrl})`)
+      }
+      lines.push('')
+    }
+  }
+  lines.push('## Information', '', `- [Sitemap](${SITE_URL}/sitemap.xml): complete list of products`)
+
+  return new Response(lines.join('\n'), { headers: { 'Content-Type': 'text/plain; charset=utf-8' } })
+}
+```
+
+What NOT to include: the entire catalog (there's a sitemap for that — sections and key pages are enough), cart/profile/checkout, sections that do not exist on the site.
+
+---
+
+## Step 9: Remind Key Rules
 
 ```md
 1. No SEO route requires force-dynamic — metadata is read by the same ISR loaders
-2. sitemap: explicit limit (default 30 will silently truncate the catalog) + aggregation of variants, otherwise duplicate URLs
-3. OG image — through a common getImageUrl, NOT value[0] (1 file comes as an object)
+2. sitemap: explicit limit (default 30 will silently cut the catalog) + aggregation of variants, otherwise duplicate URLs
+3. OG image — via common getImageUrl, NOT value[0] (1 file comes as an object)
 4. description — from plainContent/plainValue, not htmlContent (tags in the snippet)
-5. JSON-LD is escaped: </script in the product name = markup injection
+5. JSON-LD is escaped: </script in product name = markup injection
 6. AggregateRating — from top-level rating of the entity, not from attributeValues
 7. hreflang and canonical — from Locales.getLocales(), not hardcoded
 8. Private sections (cart/favorites/account/checkout/api) — in disallow
@@ -157,10 +192,10 @@ return { alternates: { canonical: `${SITE_URL}${path}`, languages } }
 
 ---
 
-## Step 9: Verification
+## Step 10: Verification
 
 1. `/sitemap.xml` opens, the number of URLs is comparable to `total` from step 1.
 2. `/robots.txt` contains a link to the sitemap and disallows private paths.
-3. Product page: the HTML source contains `<script type="application/ld+json">` with valid JSON (check via Rich Results Test).
+3. Product page: in the HTML source there is `<script type="application/ld+json">` with valid JSON (check via Rich Results Test).
 4. `<title>`, `<meta name="description">`, `og:image` are populated from CMS, not from defaults.
 5. A product with an apostrophe/angle bracket in the name does not break JSON-LD.
