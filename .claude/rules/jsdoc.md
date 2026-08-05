@@ -9,7 +9,7 @@ paths:
 
 # JSDoc — function formatting rules
 
-> **Optional rule.** Include in `data/project/main.md` if the project adheres to a strict JSDoc standard. Otherwise, the default "minimum comments" from `CLAUDE.md` applies.
+> **Optional rule.** Include in the project's `CLAUDE.md` if a strict JSDoc standard is adopted. Otherwise, the default "minimum comments" from `CLAUDE.md` applies.
 
 Every **declared function** in the project — React component, custom hook, utility, server action, handler, exported or not — must be accompanied by a JSDoc block above the declaration.
 
@@ -25,8 +25,8 @@ All JSDoc comments and inline comments in the code must be in English.
 
 ## Block structure
 
-1. **First line** — a short description using an em-dash: `Name — what it does.`
-2. An empty line.
+1. **First line** — short description with an em-dash: `Name — what it does.`
+2. Empty line.
 3. (optional) **Extended context** — why this way, nuances of behavior. Then another empty line.
 4. **`@param   {Type}   name           - Description.`** for each argument.
 5. For destructured props — **chain notation**: first the object `props` (type `{object}` or named type), then each field `props.fieldName` with its own type.
@@ -36,9 +36,9 @@ All JSDoc comments and inline comments in the code must be in English.
 
 ## Types — must duplicate TS signature
 
-All `@param` must have a type in curly braces — **even if that type is already in the TypeScript signature**. This is intentional duplication: it helps read the code in IDE tooltips, in hover previews, and in diffs without switching to the signature.
+All `@param` must have a type in curly braces — **even if that type is already present in the TypeScript signature**. This is a conscious duplication: it helps read the code in IDE tooltips, in hover previews, and in diffs without switching to the signature.
 
-`@returns` is written **without** a type — the description follows the tag with one space.
+`@returns` is written **without** a type — the description goes immediately after the tag with one space.
 
 ---
 
@@ -46,7 +46,7 @@ All `@param` must have a type in curly braces — **even if that type is already
 
 Columns `{Type}`, `name`, `- Description` for `@param` — align with spaces vertically within a single JSDoc block, so it reads like a table.
 
-If types vary significantly in length — a single space is allowed; the main thing is that the style is consistent within one block.
+If types are of significantly different lengths — a single space is allowed; the main thing is that the style is consistent within one block.
 
 ---
 
@@ -116,7 +116,7 @@ export const t = async (marker: string, fallback: string): Promise<string> => { 
 export const logInUser = async ({ method, login, password }: LogInProps) => { ... }
 ```
 
-See [`rules/auth-provider.md`](auth-provider.md) and [`rules/server-actions.md`](server-actions.md) — the extended context about the fingerprint must be indicated in JSDoc if the function is called from the client despite the path `app/api/server/...`.
+See `.claude/rules/auth-provider.md` and `.claude/rules/server-actions.md` — the extended context about the fingerprint must be indicated in JSDoc if the function is called from the client despite the path `app/api/server/...`.
 
 ---
 
@@ -137,7 +137,7 @@ When editing a file where a function already has a single-line JSDoc without `@p
 /** Submit form data. */
 export const submitForm = async (data: FormData) => { ... }
 
-// ✅ After editing (along with any other changes in the file)
+// ✅ After editing (along with any other edits to the file)
 /**
  * submitForm — submit form data via FormData API.
  *
@@ -154,6 +154,6 @@ export const submitForm = async (data: FormData) => { ... }
 The default `CLAUDE.md` — "minimum comments in code". **This rule (`jsdoc.md`) is an exception** for function declarations. Everything else still applies:
 
 - **Do not comment WHAT** — naming and signature already convey that.
-- **Comment WHY** — why this way and not otherwise; what is non-trivial; references to rules, incidents, specific bugs.
+- **Comment WHY** — why this way, not otherwise; what is non-trivial; references to rules, incidents, specific bugs.
 - **Do not leave** comments like `// added for the X flow` or `// fix from issue #123` — this is history, not a contract.
 - **Inside the function body** — comments only when WHY is not obvious (rule from the system prompt).

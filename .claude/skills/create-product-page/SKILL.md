@@ -2,7 +2,7 @@
 name: create-product-page
 description: Create product page
 ---
-# Create Product Page
+# Create product page
 
 ---
 
@@ -32,13 +32,13 @@ What to look for in `items[0].attributeValues`:
 4. **Is there a layout?** — if yes, copy it exactly
 
 > **🛒 The "Add to Cart" button is ALWAYS added by default.**
-> Do not ask the user "do you need a button?". If the user **explicitly** said "without a button" — add it.
+> Do not ask the user "do you need a button?". If the user **explicitly** did not say "without a button" — add it.
 > If the cart is not yet implemented — first run `/create-cart-manager`.
 > The "Add to Favorites" button is added **only at the user's request** (→ `/create-favorites`).
 
 ---
 
-## Step 3: Create Server Action (if not already)
+## Step 3: Create Server Action (if not already present)
 
 > If `app/actions/products.ts` already exists — read it and supplement it, do not duplicate.
 
@@ -59,12 +59,12 @@ export async function getRelatedProducts(
   id: number,
   locale = 'en_US',
   limit = 6,
-  statusMarker?: string, // only products in stock in the related block — optional
+  statusMarker?: string, // only in-stock products in the similar block — optional
 ) {
-  // Query type — IProductsRelatedQuery (SDK >= 1.0.154). statusMarker — real marker
+  // Query type — IProductsRelatedQuery (SDK >= 1.0.154). statusMarker — actual marker
   // from /inspect-api product-statuses, do not hardcode 'in_stock'.
   // ⚠️ Do not confuse with listing methods (getProducts, etc.): there statusMarker is absent in query
-  // (TS error) and status is filtered through IFilterParams body (see rules/product-statuses.md);
+  // (TS error) and status is filtered through IFilterParams body (see .claude/rules/product-statuses.md);
   // in getRelatedProductsById there are no body filters — statusMarker is passed in query
   // (in 1.0.154 types are aligned with actually supported endpoint parameters).
   const result = await getApi().Products.getRelatedProductsById(id, locale, {
@@ -81,7 +81,7 @@ export async function getRelatedProducts(
 
 ---
 
-## Step 4: Create the product page
+## Step 4: Create product page
 
 ### Basic template
 
@@ -89,6 +89,7 @@ export async function getRelatedProducts(
 // app/[locale]/shop/product/[id]/page.tsx
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
+import { sanitizeHtml } from '@/lib/sanitize-html';
 import { getProductById } from '@/app/actions/products';
 
 export default async function ProductPage({
@@ -119,7 +120,7 @@ export default async function ProductPage({
   const descBlock = Array.isArray(rawDesc) ? rawDesc[0] : rawDesc;
   const description = descBlock?.htmlValue || descBlock?.plainValue || '';
 
-  // Status: replace 'in_stock' with real one from /inspect-api
+  // Status: replace 'in_stock' with the real one from /inspect-api
   const inStock = product.statusIdentifier === 'in_stock';
   // integer: number or null (not filled) — from v1.0.157 an empty field no longer comes as 0
   const stockQty = Number(attrs.units_product?.value ?? 0);
@@ -151,9 +152,9 @@ export default async function ProductPage({
             {oldPrice > 0 && <span className="line-through">{oldPrice}</span>}
           </div>
 
-          {/* Description */}
+          {/* Description — HTML from CMS, only through sanitizer (.claude/rules/security.md) */}
           {description && (
-            <div dangerouslySetInnerHTML={{ __html: description }} />
+            <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(description) }} />
           )}
 
           {/* Cart button — always by default */}
@@ -168,7 +169,7 @@ export default async function ProductPage({
 }
 ```
 
-### With parallel requests (product + related)
+### With parallel requests (product + similar)
 
 ```tsx
 export default async function ProductPage({
@@ -179,7 +180,7 @@ export default async function ProductPage({
   const { locale, id } = await params;
   const productId = Number(id);
 
-  // In parallel — product and related
+  // In parallel — product and similar
   const [productData, relatedData] = await Promise.all([
     getProductById(productId, locale),
     getRelatedProducts(productId, locale),
@@ -203,7 +204,7 @@ export default async function ProductPage({
     <main>
       {/* ... main content ... */}
 
-      {/* Related products */}
+      {/* Similar products */}
       {relatedProducts.length > 0 && (
         <section>
           <h2>Related products</h2>
@@ -256,13 +257,13 @@ const gallery = attrs.gallery?.value || [];
 ✅ Page created. Key rules:
 
 ```md
-1. params in Next.js 15+ — this is a Promise, await is required
+1. params in Next.js 15+ — this is a Promise, must use await
 2. image/file → 1 file: OBJECT, 2+: ARRAY (v1.0.157, same in all modules) → const i = Array.isArray(v) ? v[0] : v; i?.downloadLink
 2. groupOfImages → value is always an ARRAY → attrs.gallery?.value?.[0]?.downloadLink
-3. text → array OR object → (Array.isArray(v) ? v[0] : v)?.htmlValue or ?.plainValue
+3. text → array OR object → (Array.isArray(v) ? v[0] : v)?.htmlValue or ?.plainValue; htmlValue in dangerouslySetInnerHTML — only through sanitizeHtml (.claude/rules/security.md)
 4. Numeric attributes (integer/float/real) — number or null; unfilled no longer comes as 0 → use ?? 0
 4. statusIdentifier — check via /inspect-api, do not hardcode 'in_stock'
-5. Promise.all for parallel requests (product + related + blocks)
+5. Promise.all for parallel requests (product + similar + blocks)
 6. notFound() on error — do not render an empty page
 7. next/image requires remotePatterns in next.config.ts for *.oneentry.cloud
 ```
@@ -272,7 +273,7 @@ const gallery = attrs.gallery?.value || [];
 ## Step 6: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> For Playwright setup — first `/setup-playwright`.
+> To set up Playwright — first `/setup-playwright`.
 
 ### 6.1 Add `data-testid` to the product page
 
@@ -305,7 +306,7 @@ return (
         {description && (
           <div
             data-testid="product-page-description"
-            dangerouslySetInnerHTML={{ __html: description }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(description) }}
           />
         )}
 
@@ -332,7 +333,7 @@ return (
       </div>
     )}
 
-    {/* Related products */}
+    {/* Similar products */}
     {relatedProducts.length > 0 && (
       <section data-testid="product-page-related">
         <h2>Related products</h2>
@@ -345,12 +346,12 @@ return (
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (perform step by step, do not ask in one list):**
+**Algorithm (execute step by step, do not ask in one list):**
 
 1. **Product page route** — taken from the path of the created file (`app/[locale]/shop/product/[id]/page.tsx`). Claude knows the pattern itself. Inform: "Tests will go to `/{locale}/shop/product/{id}` — I will substitute real id and locale".
-2. **ID of a real product** — take it yourself via `/inspect-api products`: `items[0].id`. Inform: "For the test, I will use product id=`{value}` (`{title}`) — the first from /inspect-api".
+2. **ID of a real product** — take it directly via `/inspect-api products`: `items[0].id`. Inform: "For the test, I will use product id=`{value}` (`{title}`) — the first from /inspect-api".
 3. **Locale** — the first from `/inspect-api` (usually `en_US`). If the project is monolocal and the route does not have `[locale]` — adjust `E2E_PRODUCT_PATH_TEMPLATE` (remove the prefix).
-4. **Gallery presence** — check via `/inspect-api`: whether the product has the attribute `groupOfImages` with a non-empty array. If not — the gallery test will include `test.skip`. Inform: "Product `id={id}` {has a gallery of N images / no groupOfImages — gallery test disabled}".
+4. **Presence of a gallery** — check via `/inspect-api`: does the product have the `groupOfImages` attribute with a non-empty array. If not — the gallery test will include `test.skip`. Inform: "The product `id={id}` {has a gallery of N images / does not have groupOfImages — gallery test disabled}".
 5. **ID of a non-existent product** — generate a random one: `99999999 + Math.floor(Math.random() * 1000)`. Guaranteed not to exist, will check `notFound()`.
 6. **Fill in `.env.local`** (yourself, via Edit):
 
@@ -364,7 +365,7 @@ If any value is not defined — leave it empty, the test will be `test.skip`.
 
 ### 6.3 Create `e2e/product-page.spec.ts`
 
-> ⚠️ Tests work with the real OneEntry project — use real product id from `/inspect-api`.
+> ⚠️ Tests work with the real OneEntry project — use the real product id from `/inspect-api`.
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -408,7 +409,7 @@ test.describe('Product page', () => {
   });
 
   test('gallery renders multiple images (groupOfImages)', async ({ page }) => {
-    test.skip(!EXPECT_GALLERY, 'Product does not have groupOfImages — gallery test disabled');
+    test.skip(!EXPECT_GALLERY, 'The product does not have groupOfImages — gallery test disabled');
 
     await page.goto(`${PATH_TEMPLATE}${PRODUCT_ID}`);
     const gallery = page.getByTestId('product-page-gallery');

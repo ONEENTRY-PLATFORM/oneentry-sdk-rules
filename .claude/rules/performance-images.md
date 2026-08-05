@@ -6,13 +6,13 @@ rulePaths: ["next.config.ts", "next.config.js", "next.config.mjs", "**/*Image*.t
 
 # Performance: Images — OneEntry Rules
 
-Rules for serving images from OneEntry CDN via `next/image`. Complements `.claude/rules/performance.md` (which discusses `useNearViewport` for repeating cards) — this section is specifically about `next.config` configuration, formats, sizes, and blur placeholders.
+Rules for serving images from OneEntry CDN via `next/image`. Complements `.claude/rules/performance.md` (which covers `useNearViewport` for repeating cards) — this section specifically addresses `next.config` configuration, formats, sizes, and blur placeholders.
 
 Applicable to projects that read `downloadLink` / `previewLink` from `attributeValues` OneEntry and serve them in `<Image src={…} />`.
 
 ## ⚠️ `remotePatterns` — specific, not `'**'`
 
-`<Image>` refuses to render external URLs that are not declared in `next.config`. Specify exactly the domains of OneEntry CDN — a broad wildcard scheme `hostname: '**'` breaks the built-in protection against SSRF (through `/_next/image?url=…` you can proxy any external host).
+`<Image>` refuses to render external URLs that are not declared in `next.config`. Specify only OneEntry CDN domains — a broad wildcard scheme `hostname: '**'` breaks the built-in protection against SSRF (through `/_next/image?url=…` you can proxy any external host).
 
 ```typescript
 // ❌ INCORRECT — open to any host
@@ -35,11 +35,11 @@ const nextConfig: NextConfig = {
 };
 ```
 
-`hostname: '*.oneentry.cloud'` covers all OneEntry instances, including dev/stage subdomains. If the front end works with a single fixed project — leave a specific subdomain (`example-project.oneentry.cloud`).
+`hostname: '*.oneentry.cloud'` covers all OneEntry instances, including dev/stage subdomains. If the front end works with one fixed project — leave a specific subdomain (`example-project.oneentry.cloud`).
 
 ## Trim `deviceSizes` to actual design breakpoints
 
-Next.js by default generates 8 sizes (`[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`). This means that each OneEntry image rendered via `<Image>` goes through the optimizer **eight** times. If the design uses 4 breakpoints — the other four sizes are wasted work on the endpoint `/_next/image`.
+Next.js generates 8 sizes by default (`[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`). This means that each OneEntry image rendered through `<Image>` goes through the optimizer **eight** times. If the design uses 4 breakpoints — the other four sizes are unnecessary work on the `/_next/image` endpoint.
 
 ```typescript
 // ✅ CORRECT — follows the actual Tailwind grid (sm/md/lg/xl/2xl)
@@ -54,7 +54,7 @@ const nextConfig: NextConfig = {
 };
 ```
 
-`minimumCacheTTL` is important: without it, Next.js uses the `Cache-Control` of the source, and OneEntry CDN provides a short TTL — each image request turns into a re-optimization.
+`minimumCacheTTL` is important: without it, Next.js uses the `Cache-Control` of the source, and OneEntry CDN provides a short TTL — each image request turns into a repeated optimization.
 
 ## `sizes` — do not leave the default `100vw` for non-full-width images
 
@@ -85,15 +85,15 @@ const nextConfig: NextConfig = {
 | --- | --- |
 | Product card grid (4 in a row on desktop) | `(min-width: 1280px) 340px, (min-width: 768px) 33vw, 50vw` |
 | Main image of the product page | `(min-width: 1024px) 50vw, 100vw` |
-| Full-width hero banner | `100vw` |
+| Hero banner full width | `100vw` |
 | Icon / avatar / small preview | `64px` |
 
 ## `priority` — only for one LCP candidate, not for the entire first row
 
-`priority` injects `<link rel="preload">` into `<head>` and removes `loading="lazy"`. If set on every image in the first four cards of the grid, the browser will start downloading 4 files simultaneously with critical CSS — delaying LCP instead of speeding it up.
+`priority` injects `<link rel="preload">` into `<head>` and removes `loading="lazy"`. If applied to every image in the first four cards of the grid, the browser will start downloading 4 files simultaneously with critical CSS — delaying LCP instead of speeding it up.
 
 ```tsx
-// ❌ INCORRECT — four competitors for the critical budget
+// ❌ INCORRECT — four competitors for critical budget
 {products.slice(0, 4).map((p) => (
   <Image key={p.id} src={p.image} priority alt={p.title} … />
 ))}
@@ -109,14 +109,16 @@ One `priority` per route — usually the hero banner or the main image of the pr
 
 ## Blur placeholder via LQIP from `previewLink`
 
-OneEntry returns `previewLink` and `downloadLink` in the image object (`attributeValues.<marker>.value` — object for one image, array for multiple; from v1.0.157 this rule is the same across all modules, so `extractImage` below should handle both forms). In the image attributes of entities, `previewLink` — **object by presets** of the form `{ default: [lqip, previewUrl] }`, where `previewLink.default[0]` — **ready base64 LQIP string** (`data:image/webp;base64,…`), and `previewLink.default[1]` — URL of the reduced preview version. Base64 for `blurDataURL` **is already included in the response** — do not fetch it over the network and do not generate it on the client.
+OneEntry returns `previewLink` and `downloadLink` in the image object (`attributeValues.<marker>.value` — object for one image, array for multiple; from v1.0.157 this rule is the same across all modules, so `extractImage` below should handle both forms). In the image attributes of entities, `previewLink` is **an object by presets** of the form `{ default: [lqip, previewUrl] }`, where `previewLink.default[0]` is **the ready base64 LQIP string** (`data:image/webp;base64,…`), and `previewLink.default[1]` is the URL of the reduced preview version. Base64 for `blurDataURL` **is already included in the response** — do not fetch it over the network and do not generate it on the client.
 
 ```tsx
-// ❌ INCORRECT — generated on the client / extra fetch (base64 is already in the response)
+// ❌ INCORRECT — generated on the client / unnecessary fetch (base64 is already in the response)
 'use client';
 const blur = await generateBlurDataURL(product.image);   // bad pattern
 
 // ✅ CORRECT — base64 LQIP taken directly from previewLink, without request
+// Single image parsing lives in lib/oneentry.ts (getImageUrl/getImageUrls),
+// see .claude/rules/attribute-values.md — do not create a parallel extractImage
 import { extractImage } from '@/utils/attribute-values';
 import { getLqip } from '@/utils/blur';
 
@@ -143,7 +145,7 @@ const ProductCard = ({ product }: { product: IProductEntity }) => {
 ```typescript
 // utils/blur.ts
 // previewLink in image attributes — Record<preset, [lqip, previewUrl]>;
-// previewLink can only be a string outside of image attributes (forms-data / orders)
+// previewLink as a string only occurs outside image attributes (forms-data / orders)
 type PreviewLink = Record<string, [string, string]> | string | null | undefined;
 
 export function getLqip(previewLink: PreviewLink): string | undefined {
@@ -169,6 +171,18 @@ const isSvg = image.downloadLink.endsWith('.svg');
 
 For other formats — let the optimizer work. And check the `Content-Type` from OneEntry CDN: it should be `image/jpeg`/`image/png`/`image/webp`, not `application/octet-stream` (the latter breaks format detection in `next/image`).
 
+### Third case: the optimizer itself became a point of failure
+
+`/_next/image` is a proxy, meaning **an additional point of failure between the visitor and the image**. In some deployments under competitive load, a noticeable portion of requests to it fail (`ERR_ABORTED` in the browser, images "flash" empty), while OneEntry CDN already serves reasonably compressed previews.
+
+This is not a license to set `unoptimized: true` by default — it is a diagnosis that must be **confirmed** before disabling the optimizer:
+
+1. in DevTools → Network filter `/_next/image` and ensure that the failures are indeed there, not on the CDN;
+2. check the server's stdout — 400s due to DNS64/NAT64 look similar but are treated differently (see `.claude/rules/troubleshooting.md`, "400 on `/_next/image`");
+3. compare sizes: if the CDN serves previews 2–3 times heavier than optimized, it is cheaper to fix the deployment than to serve originals.
+
+If the diagnosis is confirmed — a global `images.unoptimized: true` in `next.config.ts` is permissible. Keep `remotePatterns` **(the component can revert to optimization via `unoptimized={false}`)**, and document the deviation in `MISMATCH-LOG.md`, section "Conscious Deviations" — otherwise, the next agent will come to "fix" it under the same rule (see `.claude/rules/mismatch-log.md`).
+
 ## Checklist before commit
 
 - [ ] `next.config.ts` declares `remotePatterns` specifically — without `hostname: '**'`
@@ -178,7 +192,7 @@ For other formats — let the optimizer work. And check the `Content-Type` from 
 - [ ] Each `<Image>` has a meaningful `sizes`, not the default `100vw`
 - [ ] `priority` is set on **one** image of the route — LCP candidate
 - [ ] For repeating cards, `loading="lazy"` + `useNearViewport` is enabled (see `performance.md`)
-- [ ] Blur placeholder is taken from `previewLink` OneEntry, base64-encoded on the server with cache
-- [ ] `unoptimized` is set only for SVG and animated GIFs
+- [ ] Blur placeholder is taken from OneEntry's `previewLink`, base64-encoded on the server with caching
+- [ ] `unoptimized` is set only for SVG and animated GIFs — or globally, but with a confirmed diagnosis and entry in `MISMATCH-LOG.md`
 
 > Related rules: `.claude/rules/performance.md` (`useNearViewport` for repeating images), `.claude/rules/attribute-values.md` (structure of `attributeValues.image` — `downloadLink` / `previewLink`).

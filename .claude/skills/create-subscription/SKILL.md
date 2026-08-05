@@ -8,7 +8,7 @@ Creates a flow for paid subscriptions through the `Subscriptions` module of OneE
 
 > ⚠️ **All methods require an authorized user.** Call after `reDefine(refreshToken)` on the client, then `getApi().Subscriptions.*` from the Client Component. Without authorization, the server will return `IError`.
 
-> ⚠️ This is NOT subscriptions for product events (availability/price) — for those, use `/create-subscription-events` (module `Events`). Here — **paid** subscriptions (billing through Stripe).
+> ⚠️ This is NOT subscriptions for product events (availability/price) — for them, use `/create-subscription-events` (module `Events`). Here — **paid** subscriptions (billing through Stripe).
 
 ---
 
@@ -34,7 +34,7 @@ export const SUBSCRIPTION_PRICES: Record<string, string> = {
 };
 ```
 
-> If there are no plans in the admin panel — create an entry in [`MISMATCH-LOG.md`](../../rules/mismatch-log.md) (section C.8 / Subscriptions).
+> If there are no plans in the admin panel — create an entry in `MISMATCH-LOG.md` (rule `.claude/rules/mismatch-log.md`, section C.8 / Subscriptions).
 
 ---
 
@@ -56,7 +56,7 @@ export function useSubscriptions(locale: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // ⚠️ Subscriptions require a user session — restore the token before calls
+  // ⚠️ Subscriptions require a user session — restoring the token before calls
   const ensureSession = useCallback(async () => {
     if (hasActiveSession()) return;
     const refreshToken = localStorage.getItem('refresh-token');
@@ -184,12 +184,12 @@ import { useSubscriptions } from '@/app/hooks/useSubscriptions';
 
 export default function SuccessPage() {
   const { reload } = useSubscriptions('en_US');
-  useEffect(() => { reload(); }, [reload]);   // subscription status will update after payment webhook
+  useEffect(() => { reload(); }, [reload]);   // subscription status will update after the payment webhook
   return <p>Thank you! The subscription will be activated after payment confirmation.</p>;
 }
 ```
 
-> Activation occurs **after** payment confirmation via webhook on the OneEntry side — `getActiveSubscriptions()` may not return the new marker immediately. If needed — make several repeated reads with an interval (like polling `paymentUrl` for orders in [`rules/orders.md`](../../rules/orders.md)).
+> Activation occurs **after** payment confirmation via webhook on the OneEntry side — `getActiveSubscriptions()` may return a new marker not instantly. If needed — make several repeated reads with an interval (like polling `paymentUrl` for orders in `.claude/rules/orders.md`).
 
 ---
 
@@ -202,8 +202,8 @@ export default function SuccessPage() {
 2. getAllSubscriptions() → ISubscriptionEntity[] (v1.0.157, previously string[]): marker = identifier, name = localizeInfos.title, duration = periodInDays. There is NO price in the response — keep it in your dictionary or admin entities
 3. getActiveSubscriptions() still returns string[] MARKERS — check against plan.identifier
 4. subscribe() → { paymentUrl } → redirect to Stripe (like createSession for orders)
-5. An active subscription will appear in getActiveSubscriptions() after the payment webhook — not immediately
-6. cancelSubscription/recoverSubscriptions from v1.0.157 actually return IError on API refusal (previously silently responded true). Check the result strictly: `if (result !== true)`, not `if (result)`
-7. recoverSubscriptions({ marker }) sends a request for recovery (via Stripe Billing Portal on the OneEntry side) — the redirect URL is NOT returned; after success, simply reload getActiveSubscriptions()
+5. An active subscription will appear in getActiveSubscriptions() after the payment webhook — not instantly
+6. cancelSubscription/recoverSubscriptions from v1.0.157 indeed return IError on API refusal (previously silently responded true). Check the result strictly: `if (result !== true)`, not `if (result)`
+7. recoverSubscriptions({ marker }) sends a request for recovery (via Stripe Billing Portal on the OneEntry side) — the redirect URL is NOT returned; after success, just reload getActiveSubscriptions()
 8. Do not confuse with Events subscriptions for products (/create-subscription-events)
 ```

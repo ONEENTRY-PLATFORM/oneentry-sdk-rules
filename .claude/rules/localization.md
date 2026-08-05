@@ -37,7 +37,7 @@ getApi().Pages.getPageByUrl('home', locale)
 
 ## langCode — optional parameter
 
-`langCode` is set when initializing `defineOneEntry(url, { token, langCode })` (`token` is required — from 1.0.154 SDK throws `Error` if it's missing) and is used by default.
+`langCode` is set when initializing `defineOneEntry(url, { token, langCode })` (`token` is required — since 1.0.154 SDK throws `Error` if it is missing) and is used by default. 
 Pass `locale` explicitly only in the multilingual route `app/[locale]/`.
 
 ```typescript
@@ -67,12 +67,13 @@ const lang = getLang() // 'en_US' or another SDK initialization language
 
 ```typescript
 page.localizeInfos?.title        // title
-page.localizeInfos?.htmlContent  // HTML content (for dangerouslySetInnerHTML)
+page.localizeInfos?.htmlContent  // HTML content — in dangerouslySetInnerHTML only through sanitizeHtml()
 
-// plain text — runtime field plainContent, which is not in type ILocalizeInfo → needs casting
-const plain = (page.localizeInfos as { plainContent?: string | null })?.plainContent
+// plain text — with v1.0.158 declared in ILocalizeInfo (`plainContent?: string | null`), no cast needed.
+// In SDK ≤ 1.0.157 the field was present, but it was not in the type — a cast was still needed.
+const plain = page.localizeInfos?.plainContent
 
-// Blocks: localizeInfos as fallback if there are no attributes
+// Blocks: localizeInfos as fallback if attributes are not present
 const title = attrs.title?.value || block.localizeInfos?.title || ''
 ```
 
@@ -80,13 +81,13 @@ const title = attrs.title?.value || block.localizeInfos?.title || ''
 
 ## UI String Dictionary — `static_content` AttributeSet + `t()` helper
 
-For UI microcopy (`"Add to cart"`, `"No reviews yet"`, section headers) — create an AttributeSet in the admin panel with the marker `static_content`. Each attribute inside is a pair `marker → value` for one locale. On the frontend — a single helper `t(marker, fallback)`.
+For UI microcopy (`"Add to cart"`, `"No reviews yet"`, section headers) — create an AttributeSet in the admin panel with the marker `static_content`. Each attribute inside is a pair `marker → value` for one locale. On the front end — a single helper `t(marker, fallback)`.
 
 **Why this way, and not `<h2>Add to cart</h2>` in JSX:**
 
 - The user edits microcopy through the admin panel without touching the code.
 - One source of truth for each string — no duplicates of `"Add to cart"` in 5 files.
-- Translating to another locale — adding a new localization in the admin panel, no code release needed.
+- Translating to another locale — adding a new localization in the admin panel, no code release.
 
 **Implementation (Server Component):**
 
@@ -105,7 +106,7 @@ const getCachedData = async <T>(key: string, fetchFn: () => Promise<T>): Promise
   return data;
 };
 
-// locale is required in a multilingual route: without it getAttributesByMarker takes the language
+// locale is required in multilingual route: without it getAttributesByMarker takes the language
 // of SDK initialization (this.state.lang) and will return one language for all locales.
 const fetchDictionary = async (locale?: string): Promise<IAttributeValues> => {
   try {
@@ -114,7 +115,8 @@ const fetchDictionary = async (locale?: string): Promise<IAttributeValues> => {
 
     const dict = {} as IAttributeValues;
     for (const raw of attributes as unknown as Array<{ marker: string; value?: unknown; initialValue?: string }>) {
-      // value may come empty {} if the value for the current locale is not set — fallback to initialValue (default from admin panel)
+      // value may come empty {} if no value is set for the current locale — fallback to initialValue (default from admin).
+      // Forms of initialValue (flat / language-keyed) — .claude/rules/attribute-sets.md, section "initialValue"
       const isEmpty = raw.value == null || (typeof raw.value === 'object' && Object.keys(raw.value as object).length === 0);
       dict[raw.marker] = { ...raw, value: isEmpty ? (raw.initialValue ?? '') : raw.value } as unknown as IAttributeValue;
     }
@@ -158,6 +160,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 }
 ```
 
-**If the marker is not in the admin panel** — `t()` returns fallback. Add an entry in [`MISMATCH-LOG.md`](mismatch-log.md) (section C.4) with the table `marker | type | title | notes`, so the user can create the missing markers in the AttributeSet `static_content`.
+**If the marker is not in the admin panel** — `t()` returns fallback. Add an entry in `MISMATCH-LOG.md` (rule `.claude/rules/mismatch-log.md`) (section C.4) with the table `marker | type | title | notes`, so the user can create the missing markers in the AttributeSet `static_content`.
 
 > For Client Components — extract the dictionary through React Context (`<DictionaryProvider value={dict}>`) or through props from the nearest Server Component, rather than calling the SDK on the client.

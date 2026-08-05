@@ -8,9 +8,9 @@ Creates a favorites list on the **native server API** OneEntry (`Users.getWishli
 
 > ℹ️ **Server Wishlist vs Redux+localStorage.** The server version is cross-device and survives device changes. By default, we use the server API.
 
-> ⚠️ Wishlist methods work for **user OR guest**. In the browser, the guest id is created automatically (`localStorage` key `oneentry_guest_id`) — no setup is needed. We manage favorites from the **Client Component** via `getApi()`. About guest mode — `03-sdk-init.md`.
+> ⚠️ Wishlist methods work for **user OR guest**. In the browser, the guest id is created automatically (`localStorage` key `oneentry_guest_id`) — no setup is needed. We manage favorites from the **Client Component** via `getApi()`. About guest mode — `.claude/rules/sdk-init.md`.
 
-> If you have already done `/create-cart-manager` — the pattern is identical (Context + optimistic updates), the wishlist is simpler (stores only `productId`).
+> If you have already done `/create-cart-manager` — the pattern is identical (Context + optimistic updates), the wishlist is simpler (only stores `productId`).
 
 ---
 
@@ -106,7 +106,7 @@ export function useFavorites() {
 
 ---
 
-## Step 2: Wrap the Application in the Provider
+## Step 2: Wrap the application in the provider
 
 ```tsx
 // app/layout.tsx
@@ -153,7 +153,7 @@ export function FavoriteButton({ productId }: { productId: number }) {
 
 ## Step 4: Favorites Page (Loading Products)
 
-The wishlist stores only `productId` — full data is loaded via `Products.getProductsByIds`:
+The wishlist only stores `productId` — full data is loaded via `Products.getProductsByIds`:
 
 ```tsx
 'use client';
@@ -225,12 +225,12 @@ async function mergeGuestWishlistIntoUser(guestIds: number[]) {
 ```md
 ✅ Favorites created on the server API. Key rules:
 
-1. The wishlist on the server (Users.*) — cross-device, works for user and guest (guest id auto in the browser)
+1. The wishlist on the server (Users.*) is cross-device, works for user and guest (guest id is auto in the browser)
 2. Each mutating method returns the updated wishlist — apply as truth, rollback to prev on IError
 3. Stores only productId — load full products via getProductsByIds
 4. toggle is more convenient for the heart button; add/remove — for explicit actions
-5. After login, guest and user have different wishlists; if necessary, merge via setWishlist (Step 5)
-6. On the server (SSR/Server Action), guest id is NOT auto — explicit setGuestId from cookie is needed (see 03-sdk-init.md)
+5. After login, guest and user have different wishlists; merge if necessary via setWishlist (Step 5)
+6. On the server (SSR/Server Action), guest id is NOT auto — explicit setGuestId from cookie is needed (see `.claude/rules/sdk-init.md`)
 ```
 
 ---
@@ -242,7 +242,7 @@ async function mergeGuestWishlistIntoUser(guestIds: number[]) {
 
 > ⚠️ Persistence is now **server-side**: after `reload()`, favorites are saved, as guest id in `localStorage` (`oneentry_guest_id`) is stable and the server stores the wishlist under it. The test reload checks this (not `persist:favorites-slice`).
 
-### 6.1 `data-testid` Already in Components (Steps 3–4)
+### 6.1 `data-testid` already in components (Steps 3–4)
 
 `favorite-button` (+`aria-pressed`), `favorites-root`, `favorites-list`, `favorite-item`, `favorites-empty`.
 
@@ -313,7 +313,7 @@ test.describe('Favorites (server API, guest mode)', () => {
 });
 ```
 
-### 6.4 Report to the User
+### 6.4 Report to the user
 
 ```
 ✅ e2e/favorites.spec.ts created (server wishlist, guest mode)

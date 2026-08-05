@@ -1,3 +1,13 @@
+<!-- META
+type: rules
+fileName: error-handling.md
+rulePaths: ["lib/oneentry.ts","lib/oneentry/**/*.ts","app/actions/**/*.ts"]
+paths:
+  - "lib/oneentry.ts"
+  - "lib/oneentry/**/*.ts"
+  - "app/actions/**/*.ts"
+-->
+
 # Error Handling in OneEntry SDK — Advanced Patterns
 
 The basic rule (`isError` + `IError` structure) is in CLAUDE.md, section "Error Handling". Here is what you need for large projects.
@@ -85,7 +95,7 @@ try {
 } catch (e) {
   // we only reach here when isShell:false (or non-SDK throw).
   // With default isShell:true, network/parsing/unexpected do NOT throw, but
-  // are returned as the value of order (raw Error without statusCode → isError does not catch it).
+  // return as order value (raw Error without statusCode → isError does not catch it).
   const apiError = handleApiError('createOrder', e);
   return { ok: false, error: apiError.message };
 }
@@ -95,7 +105,7 @@ try {
 
 ## Normalizing `message`
 
-The type declares `message: string`, but in case of form validator errors (`postFormsData`), the API actually sends **an array of strings**:
+The type declares `message: string`, but in form validator errors (`postFormsData`), the API actually sends an **array of strings**:
 
 ```typescript
 function normalizeErrorMessage(message: string | string[]): string {
@@ -106,16 +116,48 @@ function normalizeErrorMessage(message: string | string[]): string {
 
 ## "Resource is closed" — graceful fallback
 
-`statusCode: 403` + `message: "Resource is closed"` means that the resource is not open in the admin panel (the page, form, block is not configured). This is **not a real authorization error** — it's a signal that "the admin has not set it up yet". Handle it as an empty result and log the item in `mismatch-log.md` (Section C):
+`statusCode: 403` + `message: "Resource is closed"` means that the resource is not open in the admin panel (the page, form, block is not set up). This is **not a real authorization error** — it is a signal that "the admin has not set it up yet". Handle it as an empty result and log the item in `mismatch-log.md` (Section C):
 
 ```typescript
 const reviews = await getProductReviews(productId);
 // graceful fallback: will return [] instead of throw if the review_form is not open in the admin panel
 ```
 
+## Trace for intentionally swallowed errors
+
+`handleApiError` is for errors that are **returned upwards**. It does not cover another, more common case: the loader returned `null`/`[]` from `catch`, the section simply did not render, the error object did not reach anyone. The display looks functional, but half of the blocks are empty — and it's unclear whether to fix the content or the code.
+
+A tiny logger in each `catch` of degradation paths is sufficient:
+
+```typescript
+// lib/oneentry/log.ts
+const explicitlyEnabled = process.env.OE_LOG_CAUGHT === '1' || process.env.OE_PROFILE === '1'
+// dev logs by default, prod — only by flag
+const enabled = explicitlyEnabled || process.env.NODE_ENV !== 'production'
+
+export function logCaught(scope: string, err: unknown): void {
+  if (!enabled) return
+  console.warn(`[oe] ${scope} swallowed:`, err)
+}
+
+// in the loader
+try {
+  const res = await getApi().Blocks.getBlockByMarker(marker)
+  if (isError(res)) return null
+  return res
+} catch (err) {
+  logCaught(`blocks.getBlockByMarker(${marker})`, err)
+  return null
+}
+```
+
+The difference from `handleApiError` is that it logs **always**; here, a trace that can be turned off in production is needed, otherwise the expected degradation (unclosed resource, empty collection) clogs the logs. Write `scope` with the call arguments: `blocks.getBlockByMarker(hero)` finds the problem immediately, `error in loader` does not.
+
+> Degradation **during assembly** is a separate case, where `console.warn` is needed without a flag: see `.claude/rules/troubleshooting.md`. Profiling the same loaders — `.claude/rules/observability.md`.
+
 ## Response Codes
 
-| Code | Value | What to do |
+| Code | Meaning | What to do |
 | --- | --- | --- |
 | 400 | Bad Request | check the request body — see `troubleshooting.md` |
 | 401 | Unauthorized | no or expired token — retry with the token from localStorage, log out only after retry |
@@ -124,4 +166,4 @@ const reviews = await getProductReviews(productId);
 | 429 | Rate Limit | backoff |
 | 500, 502, 503, 504 | Server Error | retry, then graceful fallback |
 
-Full breakdown of specific messages — `troubleshooting.md`.
+A complete breakdown of specific messages — `troubleshooting.md`.

@@ -4,16 +4,16 @@ description: Create Next.js page with content from OneEntry CMS
 ---
 # Create Next.js page with content from OneEntry CMS
 
-Argument: `pageMarker` (page marker in OneEntry, for example `about` or `home`)
+Argument: `pageMarker` (page marker in OneEntry, e.g. `about` or `home`)
 
 ---
 
 ## Step 1: Define the page marker
 
 If the argument is not provided — ask the user:
-- "What is the `pageUrl` of the page in OneEntry? (You can find out through `/inspect-api pages`)"
+- "What is the `pageUrl` of the page in OneEntry? (You can find out via `/inspect-api pages`)"
 
-**⚠️ IMPORTANT:** `pageUrl` is the marker (one word, for example `"about"`), NOT the full path (`"shop/about"`).
+**⚠️ IMPORTANT:** `pageUrl` is the marker (one word, e.g. `"about"`), NOT the full path (`"shop/about"`).
 
 ---
 
@@ -25,10 +25,10 @@ Run `/inspect-api pages` — the skill uses the SDK and will return a list of `p
 
 ---
 
-## Step 3: Determine the path to the page file
+## Step 3: Determine the file path for the page
 
 Ask the user (or determine from context):
-- The route of the page in Next.js, for example: `app/[locale]/about/page.tsx`
+- The route of the page in Next.js, e.g.: `app/[locale]/about/page.tsx`
 - Is there multilingual support (`[locale]` in the path)?
 - Are page blocks needed (`getBlocksByPageUrl`)?
 
@@ -41,12 +41,13 @@ Ask the user (or determine from context):
 ```tsx
 // app/[locale]/about/page.tsx
 import { getApi, isError } from '@/lib/oneentry';
+import { sanitizeHtml } from '@/lib/sanitize-html';
 import { notFound } from 'next/navigation';
 
 export default async function AboutPage({
   params,
 }: {
-  params: Promise<{ locale: string }>;
+  params: Promise<{ locale: string }> ;
 }) {
   const { locale } = await params;  // ⚠️ Next.js 15+: params is a Promise!
 
@@ -56,9 +57,10 @@ export default async function AboutPage({
   return (
     <main>
       <h1>{page.localizeInfos?.title}</h1>
+      {/* HTML from CMS — only through sanitizer (.claude/rules/security.md) */}
       <div
         dangerouslySetInnerHTML={{
-          __html: page.localizeInfos?.htmlContent || page.localizeInfos?.htmlValue || '',
+          __html: sanitizeHtml(page.localizeInfos?.htmlContent || page.localizeInfos?.htmlValue),
         }}
       />
     </main>
@@ -71,12 +73,13 @@ export default async function AboutPage({
 ```tsx
 // app/[locale]/home/page.tsx
 import { getApi, isError } from '@/lib/oneentry';
+import { sanitizeHtml } from '@/lib/sanitize-html';
 import { notFound } from 'next/navigation';
 
 export default async function HomePage({
   params,
 }: {
-  params: Promise<{ locale: string }>;
+  params: Promise<{ locale: string }> ;
 }) {
   const { locale } = await params;
 
@@ -123,17 +126,18 @@ export default async function HomePage({
 After creating the file, output:
 
 > Localization rules (locale from params, localizeInfos, langCode): `.claude/rules/localization.md`
+> Sanitization of CMS-HTML before `dangerouslySetInnerHTML`: `.claude/rules/security.md`
 
 ✅ File created. Key rules:
 
 ```md
 1. pageUrl = marker ("about"), NOT route path ("/[locale]/about")
 2. params in Next.js 15+ — is a Promise, always await
-3. localizeInfos.htmlContent — HTML content, localizeInfos.title — title
+3. localizeInfos.htmlContent — HTML content (in dangerouslySetInnerHTML only through sanitizeHtml, see .claude/rules/security.md), localizeInfos.title — title
 4. image/file: 1 file → OBJECT, 2+ → array (v1.0.157 — in blocks and pages too; previously it was always an array). Universally: const v = attrs.bg?.value; (Array.isArray(v) ? v[0] : v)?.downloadLink
 5. Sort blocks by position before rendering
 6. Attribute markers of blocks — find out via /inspect-api
-7. product_block / similar_products_block: getBlocksByPageUrl already returns products in block.products / block.similarProducts?.items (SDK ≥1.0.153) — do not make duplicate requests to Products; fields are absent with traficLimit: true (access through `?? []`)
+7. product_block / similar_products_block: getBlocksByPageUrl already returns products in block.products / block.similarProducts?.items (SDK ≥1.0.153) — do not make duplicate requests to Products; fields are absent with traficLimit: true (access via `?? []`)
 ```
 
 ---
@@ -156,7 +160,7 @@ return (
     <div
       data-testid="cms-page-content"
       dangerouslySetInnerHTML={{
-        __html: page.localizeInfos?.htmlContent || page.localizeInfos?.htmlValue || '',
+        __html: sanitizeHtml(page.localizeInfos?.htmlContent || page.localizeInfos?.htmlValue),
       }}
     />
 
@@ -182,16 +186,16 @@ return (
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Path of the page in Next.js** — taken from the route of the created file (`app/[locale]/about/page.tsx` → `/about` or `/{locale}/about`). Claude knows the path itself — do not ask. Inform: "The test will go to `{path}`".
+1. **Page path in Next.js** — taken from the route of the created file (`app/[locale]/about/page.tsx` → `/about` or `/{locale}/about`). Claude knows the path itself — do not ask. Inform: "The test will go to `{path}`".
 2. **`pageUrl` marker** — already known from the skill argument (example: `about`, `home`). Use as is. If locale is required — take the first from `/inspect-api` (usually `en_US`).
 3. **Expected content** — check yourself via `/inspect-api pages`:
    - `page.localizeInfos.title` — should not be empty, check length > 0.
-   - If the page has blocks — count them via `getBlocksByPageUrl(pageUrl, locale)` (in a multilingual project pass the locale — otherwise blocks will return in the default language of the SDK). Inform: "The page `{marker}` has found `{N}` blocks — the test will check their rendering".
-4. **Non-existent pageUrl** for 404 test — generate a random one: `random-${Math.random().toString(36).slice(2,10)}`. This marker definitely does not exist, the test will check `notFound()`.
+   - If the page has blocks — count them via `getBlocksByPageUrl(pageUrl, locale)` (in a multilingual project, pass the locale — otherwise blocks will return in the SDK's default language). Inform: "Found `{N}` blocks for page `{marker}` — the test will check their rendering".
+4. **Non-existent pageUrl** for a 404 test — generate a random one: `random-${Math.random().toString(36).slice(2,10)}`. This marker is guaranteed not to exist, the test will check `notFound()`.
 5. **Fill in `.env.local`** (yourself, via Edit):
 
 ```bash
-E2E_CMS_PATH=/about              # path of Next.js route
+E2E_CMS_PATH=/about              # Next.js route path
 E2E_CMS_PAGE_URL=about           # pageUrl marker in OneEntry
 E2E_CMS_EXPECT_BLOCKS=3          # expected number of blocks (0 if without blocks)
 ```
@@ -209,7 +213,7 @@ const CMS_PATH = process.env.E2E_CMS_PATH || '/about';
 const EXPECT_BLOCKS = Number(process.env.E2E_CMS_EXPECT_BLOCKS ?? '0');
 
 test.describe('CMS page (OneEntry Pages)', () => {
-  test('renders page with title from localizeInfos', async ({ page }) => {
+  test('renders the page with the title from localizeInfos', async ({ page }) => {
     await page.goto(CMS_PATH);
     await expect(page.getByTestId('cms-page')).toBeVisible();
     const title = page.getByTestId('cms-page-title');

@@ -4,8 +4,8 @@ description: Setup OneEntry SDK
 ---
 ---
 name: setup-oneentry
-description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with a singleton pattern, configure next.config.ts for images
-allowed-tools: Read, Glob, Write, Edit
+description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with singleton pattern, configure next.config.ts for images
+allowed-tools: Read, Glob, Write, Edit, Bash
 ---
 
 # /setup-oneentry - Setup oneentry
@@ -79,7 +79,7 @@ export function hasActiveSession(): boolean {
 
 // Synchronizes tokens directly in the current instance.
 // Use in login() INSTEAD of reDefine(): after auth() tokens are already written in the SDK state,
-// and reDefine will recreate the instance without accessToken — before the first SDK request it will do
+// and reDefine will recreate the instance without accessToken — before the first SDK request it will make
 // an unnecessary /refresh, unnecessarily rotating the just issued one-time refresh token.
 export function syncTokens(accessToken: string, refreshToken: string): void {
   apiInstance.AuthProvider.setAccessToken(accessToken);
@@ -95,7 +95,7 @@ export function isError(result: unknown): result is { statusCode: number; messag
 }
 ```
 
-> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if tokens are issued to the user by the server (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; at runtime — `getApi().AuthProvider.setDeviceMetadata(browserString)`, an empty string resets the override). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
+> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if the server issues tokens to the user (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; at runtime — `getApi().AuthProvider.setDeviceMetadata(browserString)`, an empty string resets the override). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
 
 ## Step 3: Configure next.config.ts for images
 
@@ -131,20 +131,52 @@ NEXT_PUBLIC_ONEENTRY_TOKEN=<entered token>
 
 **If the file exists:**
 
-Read it and check for the presence of `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the variables are not present — add them (asking the user for values). If they already exist — do nothing.
+Read it and check for the presence of `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLIC_ONEENTRY_TOKEN`. If the variables are missing — add them (asking the user for values). If they already exist — do nothing.
 
-## Step 5: Show the result
+## Step 5: Configure `.mcp.json` — with version pinning and no secrets in the file
+
+`.mcp.json` **is committed to the repository**. This implies two requirements.
+
+**1. Pin the server version, not `@latest`.** With `@latest`, the rules change underfoot between sessions: the behavior of last week cannot be reproduced, and without a network, the launch breaks completely.
+
+```bash
+npm view @oneentry/mcp-server version    # find out the current version
+```
+
+**2. Do not write the token in the file** — only substitution from the environment:
+
+```json
+{
+  "mcpServers": {
+    "oneentry": {
+      "command": "npx",
+      "args": ["-y", "@oneentry/mcp-server@1.0.157"],
+      "env": {
+        "ONEENTRY_URL": "${NEXT_PUBLIC_ONEENTRY_URL:-}",
+        "ONEENTRY_TOKEN": "${NEXT_PUBLIC_ONEENTRY_TOKEN:-}"
+      }
+    }
+  }
+}
+```
+
+The syntax `${VAR:-}` — is the only supported way: the value is taken from the environment, and only the variable name goes to the repository. A hardcoded token in `.mcp.json` is a leaked token (see `.claude/rules/security.md`).
+
+When updating the server version, change the number consciously and check the changelog: the rules may have changed.
+
+## Step 6: Show the result
 
 Output the message:
 
 ```
 ✅ lib/oneentry.ts created
 ✅ .env.local configured
+✅ .mcp.json — server version pinned, token through ${VAR:-}
 
 Find the token: in the OneEntry admin panel → Settings → App Token
 ```
 
-## Step 6: Check oneentry import
+## Step 7: Check oneentry import
 
 Check that the `oneentry` package is installed in `package.json`. If not — inform:
 

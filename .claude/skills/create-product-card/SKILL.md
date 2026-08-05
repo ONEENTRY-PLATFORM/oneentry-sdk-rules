@@ -32,9 +32,9 @@ What to look for in `items[0].attributeValues`:
 2. **Where does the card link lead?** — for example `/shop/product/[id]` or `/${locale}/product/[id]`
 
 > **🛒 The "Add to Cart" button is ALWAYS added by default.**
-> Do not ask the user "do you need the button?". If the user **explicitly** did not say "without the button" — add it.
+> Do not ask the user "do you need a button?". If the user **explicitly** did not say "without a button" — add it.
 > If the cart is not yet implemented — first run `/create-cart-manager`.
-> The "Add to Favorites" button is added **only at the user's request** (→ `/create-favorites`).
+> The "Add to Favorites" button is added **only upon user request** (→ `/create-favorites`).
 
 ---
 
@@ -43,7 +43,7 @@ What to look for in `items[0].attributeValues`:
 With SDK ≥ 1.0.157, the `value` form for `image`/`file` depends **only on the number of files** and is the same across all modules (Products, Pages, Blocks, Orders): one file → **OBJECT**, two or more → **ARRAY**.
 
 ```typescript
-// ✅ Resilient to both forms. value: unknown → we narrow down with a cast
+// ✅ Resilient to both forms. value: unknown → narrowing with cast
 type FileValue = { downloadLink?: string };
 const rawPic = attrs.pic?.value as FileValue | FileValue[] | undefined;
 const imageUrl = (Array.isArray(rawPic) ? rawPic[0] : rawPic)?.downloadLink || '';
@@ -58,13 +58,13 @@ For `groupOfImages` — `value` is always **ARRAY** (a collection by definition,
 const firstImg = (attrs.gallery?.value as Array<{ downloadLink?: string }> | undefined)?.[0]?.downloadLink || '';
 ```
 
-> ⚠️ Prior to v1.0.157, Pages and Blocks returned a single `image` as an array — old code with `value[0]` there will now get `undefined`. Check the actual form via `/inspect-api` or `console.log(attrs.marker?.value)` and write code that can handle the addition of a second file in the admin panel.
+> ⚠️ Before v1.0.157, Pages and Blocks returned a single `image` as an array — old code with `value[0]` there will now return `undefined`. Check the actual form via `/inspect-api` or `console.log(attrs.marker?.value)` and write code that survives the addition of a second file in the admin panel.
 
 ---
 
 ## Step 4: Create the card component
 
-### Basic Template
+### Basic template
 
 > ⚠️ The "Add to Cart" button is **mandatory by default**. The "Add to Favorites" button — only upon request.
 > The card is a Client Component (`'use client'`), as the cart button requires interactivity (dispatch in Redux store).
@@ -88,13 +88,13 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 
   // ⚠️ Replace markers with real ones from /inspect-api!
   // image: 1 file → object, 2+ → array (v1.0.157, the same across all modules).
-  // value has type unknown — we narrow it down at the access point
-  // (rules/typescript.md § "Narrowing unknown at the access point"), as any is prohibited.
+  // value has type unknown — narrow at the access point
+  // (.claude/rules/typescript.md § "Narrowing unknown at the access point"), as any is prohibited.
   const rawPic = attrs.pic?.value as { downloadLink?: string } | Array<{ downloadLink?: string }> | undefined;
   const imageUrl = (Array.isArray(rawPic) ? rawPic[0] : rawPic)?.downloadLink || '';
 
   const title = product.localizeInfos?.title || '';
-  // numeric attributes with v1.0.157 come as a number or null (not a string and not 0)
+  // numeric attributes from v1.0.157 come as a number or null (not a string and not 0)
   const price = Number(attrs.price?.value ?? 0);
   const oldPrice = Number(attrs.sale?.value ?? 0);
 
@@ -139,13 +139,13 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 }
 ```
 
-> **Where `product` comes from.** Besides `Products.getProducts*` / catalog, products come ready inside page blocks from `Pages.getBlocksByPageUrl` (SDK ≥ 1.0.153): `block.products` (`IProductsEntity[]`) for `product_block` blocks and `block.similarProducts` (`IProductsResponse { total, items }`) for `similar_products_block`. Both contain `IProductsEntity` and are rendered with the same `<ProductCard>` without additional requests. Access defensively — `const items = block.products ?? []; const similar = block.similarProducts?.items ?? []` — fields are only present when traffic-saving (`traficLimit`) is off and only for these two types of blocks; on load failure, the SDK will place `[]`.
+> **Where `product` comes from.** Besides `Products.getProducts*` / catalog, products come ready inside page blocks from `Pages.getBlocksByPageUrl` (SDK ≥ 1.0.153): `block.products` (`IProductsEntity[]`) for `product_block` blocks and `block.similarProducts` (`IProductsResponse { total, items }`) for `similar_products_block`. Both contain `IProductsEntity` and are rendered with the same `<ProductCard>` without additional requests. Access defensively — `const items = block.products ?? []; const similar = block.similarProducts?.items ?? []` — fields are only present when traffic-saving (`traficLimit`) is off and only for these two types of blocks; on load failure, the SDK returns `[]`.
 
-### With Stickers (list with extended)
+### With stickers (list with extended)
 
 ```tsx
 // Stickers/badges — type list, value is an array of objects with extended
-// extended.value.downloadLink — URL of the sticker icon (value: unknown → we narrow down with a cast)
+// extended.value.downloadLink — URL of the sticker icon (value: unknown → narrowing with cast)
 const stickers = (attrs.stickers?.value as Array<{ title?: string; extended?: { value?: { downloadLink?: string } } }> | undefined) || [];
 const stickerIconUrl = stickers[0]?.extended?.value?.downloadLink || '';
 
@@ -155,10 +155,10 @@ const stickerIconUrl = stickers[0]?.extended?.value?.downloadLink || '';
 )}
 ```
 
-### With Stock Quantity
+### With stock quantity
 
 ```tsx
-// Stock quantity — type integer: with v1.0.157 comes as a number or null (not filled).
+// Stock quantity — type integer: from v1.0.157 comes as a number or null (not filled).
 // ⚠️ Previously, an unfilled integer came as 0 — now null, and "no value"
 // is distinguishable from "zero in stock". Decide consciously how to treat null.
 const rawQty = attrs.units_product?.value as number | null | undefined;
@@ -172,7 +172,7 @@ const isOutOfStock = !inStock || stockQty === 0;
 }
 ```
 
-### With Favorites Button (via context)
+### With favorites button (via context)
 
 ```tsx
 // If there is a FavoritesContext
@@ -208,14 +208,14 @@ export function ProductCard({ product, locale }: ProductCardProps) {
 ```md
 1. image/file (v1.0.157, any module): 1 file → value OBJECT, 2+ → ARRAY. Resilient: const r = attrs.pic?.value as F | F[] | undefined; (Array.isArray(r) ? r[0] : r)?.downloadLink
 1. groupOfImages → value ALWAYS ARRAY → (attrs.gallery?.value as Array<{ downloadLink?: string }>)?.[0]?.downloadLink
-1. Prior to v1.0.157, Pages/Blocks returned a single image as an array — old code with value[0] there will now return undefined
-1. IAttributeValue.value has type unknown — narrow it down with a cast at the access point (rules/typescript.md); numeric attributes come as a number or null (not 0) — use ?? 0, not || 0; as any is prohibited
+1. Before v1.0.157, Pages/Blocks returned a single image as an array — old code with value[0] will now return undefined
+1. IAttributeValue.value has type unknown — narrow with cast at the access point (.claude/rules/typescript.md); numeric attributes come as a number or null (not 0) — use ?? 0, not || 0; as any is prohibited
 1. Always check the structure via /inspect-api before writing code
 2. Attribute markers are unique to the project — check via /inspect-api
-3. statusIdentifier — the real status from /inspect-api, do not guess 'in_stock'
+3. statusIdentifier — real status from /inspect-api, do not guess 'in_stock'
 4. Stickers (list with extended) → (attrs.stickers?.value as Array<{ extended?: { value?: { downloadLink?: string } } }>)?.[0]?.extended?.value?.downloadLink
 5. next/image requires remotePatterns in next.config.ts for *.oneentry.cloud
-6. If there is a layout — copy classes exactly, changing only the data
+6. If there is a layout — copy classes exactly, change only the data
 ```
 
 ---
@@ -273,13 +273,13 @@ return (
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (execute step by step, do not ask in one list):**
+**Algorithm (perform step by step, do not ask in one list):**
 
-1. **Where is `ProductCard` used** — determine it yourself via Grep (`<ProductCard` / `ProductCard `) in `app/**` and `components/**`. Usually — in the catalog grid. Report: "The card is used in `{path}` — opening this page for the test".
+1. **Where is `ProductCard` used** — determine it yourself via Grep (`<ProductCard` / `ProductCard `) in `app/**` and `components/**`. Usually — in the catalog grid. Report: "Card is used in `{path}` — opening this page for the test".
 2. **Path of the catalog with cards** — if a catalog page was found in step 1, use its path. If not found — ask: "On which page should the card be rendered for the test? (route path, for example `/shop`)".
 3. **Route of the product page** — take from the Link template in the card itself (`href={`/${locale}/shop/product/${product.id}`}`). Determine the pattern with regex — it is needed for the click test.
-4. **ID of the real product** — find it yourself via `/inspect-api products`: take `items[0].id` — the first product in the catalog. Report: "For the click test, I use the product with `id={value}` — the first from /inspect-api".
-5. **Presence of buttons** (favorites / add-to-cart) — determine via Grep from the generated `ProductCard.tsx`. If `AddToCartButton` is present — the `AddToCart` test is included, otherwise `test.skip`. If `toggleFavorite` — the favorites test is included.
+4. **ID of the real product** — find it yourself via `/inspect-api products`: take `items[0].id` — the first product in the catalog. Report: "For the click test, I will use the product with `id={value}` — the first from /inspect-api".
+5. **Presence of buttons** (favorites / add-to-cart) — determine via Grep in the generated `ProductCard.tsx`. If `AddToCartButton` is present — the `AddToCart` test is included, otherwise `test.skip`. If `toggleFavorite` — the favorites test is included.
 6. **Fill in `.env.local`** (yourself, via Edit):
 
 ```bash
@@ -288,7 +288,7 @@ E2E_CARD_PRODUCT_ID=42                 # id of the first product from /inspect-a
 E2E_CARD_PRODUCT_PATH_RE=^/[^/]+/shop/product/   # regex for redirect on click
 ```
 
-If any value is not defined — leave it empty, the test will be `test.skip`.
+If any value is not determined — leave it empty, the test will be `test.skip`.
 
 ### 6.3 Create `e2e/product-card.spec.ts`
 
@@ -325,7 +325,7 @@ test.describe('ProductCard', () => {
     expect(hasImage || hasNoImage).toBe(true);
   });
 
-  test('clicking the card leads to the product page', async ({ page }) => {
+  test('clicking on the card leads to the product page', async ({ page }) => {
     const card = page.getByTestId('product-card').first();
     await card.getByTestId('product-card-link').click();
     await expect(page).toHaveURL(PRODUCT_PATH_RE, { timeout: 10_000 });
@@ -333,13 +333,13 @@ test.describe('ProductCard', () => {
 
   test('out-of-stock product shows badge and hides AddToCart', async ({ page }) => {
     const outOfStockCard = page.locator('[data-testid="product-card"]:has([data-testid="product-card-out-of-stock"])').first();
-    test.skip(!(await outOfStockCard.isVisible().catch(() => false)), 'There are no out-of-stock products in the catalog');
+    test.skip(!(await outOfStockCard.isVisible().catch(() => false)), 'No out-of-stock products in the catalog');
 
     await expect(outOfStockCard.getByTestId('product-card-out-of-stock')).toBeVisible();
     await expect(outOfStockCard.getByTestId('product-card-add-to-cart')).toHaveCount(0);
   });
 
-  test('the "Add to Cart" button responds to clicks (in-stock product)', async ({ page }) => {
+  test('the "Add to Cart" button works on click (in-stock product)', async ({ page }) => {
     const addBtn = page.getByTestId('product-card-add-to-cart').first();
     test.skip(!(await addBtn.isVisible().catch(() => false)), 'AddToCartButton not found — either the catalog is empty or the button is not added');
 
@@ -359,12 +359,12 @@ Before completing the task — explicitly inform:
 ✅ data-testid added to ProductCard
 ✅ .env.local updated (E2E_CARD_CATALOG_PATH, E2E_CARD_PRODUCT_ID, E2E_CARD_PRODUCT_PATH_RE)
 
-Automatically made decisions:
+Decisions made automatically:
 - Page for the test: {CATALOG_PATH} — {found via Grep <ProductCard / specified by user}
 - Test product: id={PRODUCT_ID} — first `items[0].id` from /inspect-api products
 - Regex for product page: {PRODUCT_PATH_RE} — extracted from Link template in ProductCard
 - Test "Add to Cart": {included — AddToCartButton found / test.skip — button not present}
-- Test out-of-stock: test.skip activates automatically if there are no such products
+- Test out-of-stock: test.skip activates automatically if no such products are present
 
 Run: npm run test:e2e -- product-card.spec.ts
 ```

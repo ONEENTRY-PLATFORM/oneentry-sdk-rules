@@ -4,7 +4,7 @@ oneentry — OneEntry NPM package
 
 **SDK Documentation:** <https://js-sdk.oneentry.cloud/docs/index/>
 
-This file is the core context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
+This file is the core of the context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
 
 ## Project Context
 
@@ -73,15 +73,15 @@ Keyword from the prompt found → **first skill, then code**. Multiple triggers 
 | Skill | Triggers in the prompt | What it creates |
 | --- | --- | --- |
 | `/setup-nextjs` | create next.js project | Next.js project from scratch |
-| `/setup-oneentry` | connect SDK, set up oneentry | `lib/oneentry.ts`, `next.config.ts`, environment variables |
+| `/setup-oneentry` | connect SDK, configure oneentry | `lib/oneentry.ts`, `next.config.ts`, environment variables |
 | `/inspect-api` | markers, response structure, what pages/forms/products are available | report with real markers and attribute types |
 | `/create-auth` | login, registration, authorization, personal account, auth | login, registration, logout, AuthContext |
 | `/create-google-oauth` | google login, oauth, login via google/facebook | redirect, callback, code exchange |
 | `/create-profile` | profile, user personal data | profile page |
 | `/create-orders-list` | orders, order history | list of orders with cancellation and pagination |
-| `/create-checkout` | checkout, order processing | delivery form, timeInterval, payment |
+| `/create-checkout` | checkout, checkout process | delivery form, timeInterval, payment |
 | `/create-product-list` | product list, catalog | catalog with filtering and pagination |
-| `/create-product-card` | product card (in the list) | product card |
+| `/create-product-card` | product card (in list) | product card |
 | `/create-product-page` | product page (detailed) | product page |
 | `/create-page` | page from CMS | page on Pages API |
 | `/create-menu` | menu, navigation | navigation menu |
@@ -91,14 +91,17 @@ Keyword from the prompt found → **first skill, then code**. Multiple triggers 
 | `/create-favorites` | favorites, wishlist | favorites on server-side wishlist API |
 | `/create-filter-panel` | filters, filter panel | filter panel by attributes |
 | `/create-content-filter` | content filter, filter tree | content filter tree |
-| `/create-search` | search, search bar | search for products / pages |
+| `/create-search` | search, search bar | search for products/pages |
 | `/create-reviews` | reviews, reviews | reviews with hierarchy |
-| `/create-subscription-events` | product subscription, price/availability notifications | subscription to product events |
+| `/create-subscription-events` | product subscription, notifications about price/availability | subscription to product events |
 | `/create-subscription` | paid subscriptions, rates | subscriptions + Stripe |
 | `/create-locale-switcher` | language switcher, locale switcher | language switcher |
 | `/create-server-action` | server action, server action | Server Action for public SDK methods |
 | `/setup-playwright` | e2e tests, playwright | Playwright + MCP server |
-| `/admin-fill-content` | fill admin with a script, upload content programmatically | content entry via internal admin API |
+| `/setup-vitest` | unit tests, vitest, cover adapters with tests | Vitest + OneEntry response fixtures |
+| `/create-seo` | seo, metadata, sitemap, robots, microdata, JSON-LD | `generateMetadata`, `sitemap.ts`, `robots.ts`, `JsonLd` |
+| `/setup-pwa` | pwa, manifest, service worker, offline | `manifest.ts`, `sw.js`, offline fallback |
+| `/admin-fill-content` | fill admin panel with a script, upload content programmatically | content entry via internal admin API |
 | `/admin-upload-images` | upload images to CMS with a script, preview/LQIP not created | image upload with preview |
 | `/admin-grant-permissions` | 403 Permission data not found, group rights | granting route to a user group |
 
@@ -106,21 +109,21 @@ Keyword from the prompt found → **first skill, then code**. Multiple triggers 
 
 | Rule | When needed |
 | --- | --- |
-| `sdk-modules.md` | need SDK method signature or list of module methods |
+| `sdk-modules.md` | need method signature of SDK or list of module methods |
 | `glossary.md` | unclear term: marker, pageUrl, attributeSets, fingerprint, guestId, bonus, … |
-| `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, complete summary of call contexts |
+| `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, full summary of call contexts |
 | `error-handling.md` | centralized `ApiError`/`handleApiError`, "Resource is closed" |
 | `troubleshooting.md` | specific error 400/401/403/404/500 or build/environment issue |
-| `common-mistakes.md` | before reviewing your code — what AI usually makes up |
+| `common-mistakes.md` | before reviewing your code — what AI usually invents |
 | `common-patterns.md` | pagination, filtering, SSR/SSG strategies, `user.state`, RTK Query, parallel requests |
-| `scenarios.md` | typical scenarios for e-commerce, authorization, CMS pages in full |
+| `scenarios.md` | typical scenarios for e-commerce, authorization, CMS pages as a whole |
 | `scenarios-advanced.md` | FormData, IntegrationCollections, catalog with filters, category navigation |
 | `pages-blocks.md` | Pages/Blocks API, multilingual content, products in blocks |
-| `mismatch-log.md` | entity not in admin — recording the discrepancy |
+| `mismatch-log.md` | entity not in admin panel — record discrepancy or conscious deviation from rules (section D) |
 
-### Rules — auto-connected by project files
+### Rules — auto-connectable by project files
 
-| Rule | "Fingerprint" files |
+| Rule | File "fingerprints" |
 | --- | --- |
 | `linting.md`, `typescript.md` | `**/*.ts`, `**/*.tsx` |
 | `nextjs-pages.md`, `localization.md` | `app/**/page.tsx`, `app/**/layout.tsx` |
@@ -129,9 +132,15 @@ Keyword from the prompt found → **first skill, then code**. Multiple triggers 
 | `auth-provider.md` | auth components and actions |
 | `forms.md`, `orders.md`, `product-statuses.md` | corresponding features |
 | `performance*.md` | see "Performance" section |
-| `playwright-e2e.md` | `e2e/**` |
+| `playwright-e2e.md` | `e2e/**`, `playwright.config.ts` |
+| `unit-testing.md` | `**/*.test.ts(x)`, `vitest.config.ts` |
+| `security.md` | `next.config.ts`, `middleware.ts`, components with `dangerouslySetInnerHTML` |
+| `seo-metadata.md` | `app/sitemap.ts`, `app/robots.ts`, `generateMetadata` in pages |
+| `isr-config.md` | `lib/isr.ts`, pages with `revalidate` |
+| `observability.md` | `lib/**`, `app/api/**` |
+| `pwa.md` | `app/manifest.ts`, `public/sw.js` |
 | `jsdoc.md` | projects with strict JSDoc standard |
-| `admin-api.md`, `admin-ui.md` | scripts for writing to admin |
+| `admin-api.md`, `admin-ui.md` | scripts for writing to the admin panel (`scripts/**`) |
 
 ## Main Rule: Check Types and Markers BEFORE Code
 

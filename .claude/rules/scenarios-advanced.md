@@ -1,4 +1,4 @@
-# Extended OneEntry Scenarios
+# Advanced OneEntry Scenarios
 
 ## Order Form from OneEntry Forms API
 
@@ -8,9 +8,9 @@
 
 1. `getApi().Orders.getAllOrdersStorage()` returns order storages, each with a `formIdentifier`
 2. `getApi().Forms.getFormByMarker(formIdentifier, locale)` returns the delivery form fields
-3. Form fields are rendered dynamically by type (`string`, `date`, `timeInterval`, etc.)
+3. The form fields are rendered dynamically by type (`string`, `date`, `timeInterval`, etc.)
 
-**The `timeInterval` field in the order form** is a field with a list of available delivery slots. Slots are obtained via `expandTimeIntervals(schedule, { from, to })` from `field.localizeInfos.intervals[]` (SDK ≥ 1.0.156; computed field `timeIntervals` removed) — the result is `[[start, end], ...]`, from which the following are determined:
+**The `timeInterval` field in the order form** is a field with a list of available delivery slots. You get the slots through `expandTimeIntervals(schedule, { from, to })` by `field.localizeInfos.intervals[]` (SDK ≥ 1.0.156; the computed field `timeIntervals` has been removed) — the result is `[[start, end], ...]`, from which the following are determined:
 
 - Available dates in the calendar (unique dates from start values)
 - Available times for the selected date (times from start values for that date)
@@ -62,7 +62,7 @@ export async function getFormSubmissions(marker: string) {
 
 **Updating Status / Deleting** (`updateFormsDataByid`, `updateFormsDataStatusByid`, `deleteFormsDataByid`):
 
-**⚠️ Require user authorization** — call from Client Component after `reDefine(refreshToken)`, NOT via app-token (unlike `getFormsDataByMarker`, which works with app-token).
+**⚠️ Require user authorization** — call from Client Component after `reDefine(refreshToken)`, NOT through app-token (unlike `getFormsDataByMarker`, which works with app-token).
 
 ```typescript
 await getApi().FormData.updateFormsDataStatusByid(id, { statusIdentifier: 'processed' });
@@ -71,13 +71,13 @@ await getApi().FormData.deleteFormsDataByid(id);
 
 **Reviews with Hierarchy** (`isExtended: 1`, `entityIdentifier`, `replayTo`) — skill **`/create-reviews`**.
 
-**⚠️ Reviews in OneEntry are implemented via FormData** — use skill **`/create-reviews`**.
+**⚠️ Reviews in OneEntry are implemented through FormData** — use skill **`/create-reviews`**.
 
 ## IntegrationCollections — Custom Collections
 
-IntegrationCollections are arbitrary data tables in OneEntry (FAQs, directories, arbitrary content). Full CRUD access is available without authorization.
+IntegrationCollections are arbitrary data tables in OneEntry (FAQ, directories, arbitrary content). Full CRUD access is available without authorization.
 
-**⚠️ Collection Marker:** obtain via `/inspect-api` or `getICollections()` — do not guess.
+**⚠️ Collection Marker:** obtain it through `/inspect-api` or `getICollections()` — do not guess.
 
 ```typescript
 // Reading rows
@@ -87,7 +87,7 @@ const rows = await getApi().IntegrationCollections.getICollectionRowsByMarker('f
 // Reading a single row
 const row = await getApi().IntegrationCollections.getICollectionRowByMarkerAndId('faq', id);
 
-// Creating a row — body as in FormData: formIdentifier + formData[{ marker, type, value }]
+// Creating a row — body like FormData: formIdentifier + formData[{ marker, type, value }]
 await getApi().IntegrationCollections.createICollectionRow('faq', {
   formIdentifier: 'faq-form',
   formData: [
@@ -128,12 +128,12 @@ await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', i
 }
 ```
 
-**Marker Validation** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT a boolean. ⚠️ Semantics — "marker **is free**": `true` = no collection with that marker exists (can create), `false` = marker is occupied (the same semantics confirmed by a live test at the twin endpoint `ProductStatuses.validateMarker`):
+**Marker Check** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT a boolean. ⚠️ Semantics — "marker **is free**": `true` = no collection with that marker exists (can create), `false` = marker is occupied (the same semantics confirmed by a live test at the twin endpoint `ProductStatuses.validateMarker`):
 
 ```typescript
 const { valid } = await getApi().IntegrationCollections.validateICollectionMarker('faq');
 if (!valid) {
-  /* marker is occupied — collection faq exists */
+  /* marker occupied — collection faq exists */
 }
 
 // Existence check — more reliable by list:
@@ -145,7 +145,7 @@ const exists = cols.some((c) => c.identifier === 'faq');
 
 **⚠️ IMPORTANT:** `getRootPages()` and `getPages()` do NOT return `catalog_page` (product catalogs).
 Pages have a `type` field (`PageType`): `common_page`, `error_page`, `catalog_page`, `external_page`.
-To obtain a catalog, use `getPageByUrl()` — it finds pages of any type.
+To get the catalog, use `getPageByUrl()` — it finds pages of any type.
 `getChildPagesByParentUrl()` also returns `catalog_page` child pages.
 
 ```typescript

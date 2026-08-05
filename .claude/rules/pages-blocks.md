@@ -19,7 +19,7 @@ const products = await getApi().Products.getProductsByPageUrl('ship_designer', [
 // NOT 'shop/category/ship_designer'!
 ```
 
-**Rule:** The route URL in Next.js (for example, `/shop/category/ship_designer`) and `pageUrl` in OneEntry (`"ship_designer"`) are **different things**. When calling OneEntry SDK methods, always use only the marker from `pageUrl`.
+**Rule:** The route URL in Next.js (e.g., `/shop/category/ship_designer`) and `pageUrl` in OneEntry (`"ship_designer"`) are **different things**. When calling OneEntry SDK methods, always use only the marker from `pageUrl`.
 
 ## Multilingual Content
 
@@ -33,7 +33,7 @@ const menuEN = await getApi().Menus.getMenusByMarker('main', 'en_US')
 
 ## Navigation Menu with Hierarchy
 
-To create a navigation menu with support for submenus and URL prefixes, use the skill **`/create-menu`** — it will correctly handle the hierarchy through `parentId`, normalize `pages`, and build the URL.
+To create a navigation menu with submenu support and URL prefixes, use the skill **`/create-menu`** — it will correctly handle the hierarchy through `parentId`, normalize `pages`, and build the URL.
 
 ## Working with Blocks and Attributes
 

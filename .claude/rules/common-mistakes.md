@@ -12,11 +12,11 @@ if (isError(product)) return
 console.log(product.attributeValues.title)
 ```
 
-> Detailed error-handling — section **Error Handling**.
+> For more details on error handling — see the **Error Handling** section.
 
 ## Creating SDK Instance in Component
 
-`defineOneEntry()` in the component = new instance on every render. Use singleton via `getApi()`. Full pattern — section **SDK Initialization**.
+`defineOneEntry()` in a component = new instance on every render. Use singleton via `getApi()`. Full pattern — see the **SDK Initialization** section.
 
 ## Guessing Menu Markers and Filtering by Titles
 
@@ -27,7 +27,7 @@ const quickLinks = menu.pages.filter(p =>
   ['Shop', 'Contact us'].includes(p.localizeInfos?.title)
 )
 
-// ✅ Ask for marker and get the required menu directly
+// ✅ Ask for marker and get the desired menu directly
 const quickLinksMenu = await getApi().Menus.getMenusByMarker('quick_links', 'en_US')
 ```
 
@@ -64,7 +64,7 @@ field.validators?.stringInspectionValidator?.stringMax
 field.listTitles   // full objects with title, value, extended
 ```
 
-**Rule:** Server Action — thin proxy. The only permissible operations: `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
+**Rule:** Server Action — a thin proxy. The only allowed operations: `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
 
 ## Inventing API Fields and Creating Unnecessary Transformations
 
@@ -88,7 +88,9 @@ const rootItems = Array.isArray(pages) ? pages : [pages]
 
 On 401 — retry with the current token from localStorage (another operation may have updated it). Log out ONLY on confirmed 401/403 after retry.
 
-**Never do `localStorage.removeItem('refreshToken')`** on form/data loading error — this destroys the fresh token that another operation just wrote.
+**Never do `localStorage.removeItem('refresh-token')`** on form/data loading errors — this destroys the fresh token just written by another operation.
+
+⚠️ Key — **with a hyphen**: `'refresh-token'`. This is written by `saveFunction` SDK. `'refreshToken'` — a common hallucination: `getItem` will return `null`, and retry will go without a token. For details — see `.claude/rules/tokens.md`.
 
 > Full patterns: `/create-profile`, `/create-orders-list`.
 
@@ -131,14 +133,14 @@ const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 
 - Do not call `setState`/`dispatch` synchronously in the body of `useEffect`.
 - Initial value — in `useState(initialValue)` or via `useMemo`.
-- For "is the component mounted" — `useSyncExternalStore`, not `useEffect + setMounted`.
-- Asynchronous calls (fetch, dispatch after `await`) — are permissible.
+- For "is the component mounted" — use `useSyncExternalStore`, not `useEffect + setMounted`.
+- Asynchronous calls (fetch, dispatch after `await`) — are allowed.
 
-## Frequent AI Hallucinations
+## Common AI Hallucinations
 
 ### Hardcoding OAuth Provider URL or Skipping Redirect
 
-`config.oauthAuthUrl` from `getAuthProviderByMarker` contains the base URL. Do not hardcode — take from the config. `oauth(marker, body)` accepts `body: IOauthData`, where `code` is one of the required fields (`client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri`); `code` is available only after redirect.
+`config.oauthAuthUrl` from `getAuthProviderByMarker` contains the base URL. Do not hardcode — take it from the config. `oauth(marker, body)` accepts `body: IOauthData`, where `code` is one of the required fields (`client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri`); `code` is only available after redirect.
 
 ```typescript
 // ❌ Hardcoded URL
@@ -153,7 +155,7 @@ window.location.href = `${baseUrl}?client_id=...&redirect_uri=...`
 
 **OAuth flow:** button → `getAuthProviderByMarker` → `config.oauthAuthUrl` + params → redirect → callback reads `code` → `oauth(marker, body)` via Server Action (`body` — `IOauthData`: `client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri`).
 
-> Details: `.claude/rules/auth-provider.md` (section "OAuth Providers").
+> For details: `.claude/rules/auth-provider.md` (section "OAuth Providers").
 
 ### Searching for Child Menu Items via `parentId` Filter Instead of `children`
 
@@ -170,7 +172,7 @@ The captcha type in OneEntry is **`'spam'`**, not `'captcha'`. This is an invisi
 ```typescript
 // ✅ Entire catalog
 await getApi().Products.getProducts([], locale, { offset: 0, limit: 30 })
-// ✅ Products of category (marker catalog_page in OneEntry)
+// ✅ Category products (marker catalog_page in OneEntry)
 await getApi().Products.getProductsByPageUrl('soft_toys', [], locale, { offset: 0, limit: 30 })
 ```
 
@@ -178,7 +180,7 @@ await getApi().Products.getProductsByPageUrl('soft_toys', [], locale, { offset: 
 
 ### Hardcoding langCode
 
-In Next.js 15+ `params` — Promise, `await params` is mandatory. Do not hardcode `'en_US'`. Details: `.claude/rules/localization.md`.
+In Next.js 15+ `params` — Promise, `await params` is mandatory. Do not hardcode `'en_US'`. For details: `.claude/rules/localization.md`.
 
 ### Hardcoding Filter Data (Colors, Price Range)
 
@@ -186,4 +188,4 @@ Get from the API. Full pattern for catalog with filters — skill **`/create-pro
 
 ### Passing `filters` and `gridKey` as Server Props in ShopView
 
-`ShopView` MUST read `activeFilters` and `gridKey` from `useSearchParams`, otherwise `loadMore` ignores filters. Full pattern — skill **`/create-product-list`**.
+`ShopView` MUST read `activeFilters` and `gridKey` from `useSearchParams`, otherwise `loadMore` ignores the filters. Full pattern — skill **`/create-product-list`**.

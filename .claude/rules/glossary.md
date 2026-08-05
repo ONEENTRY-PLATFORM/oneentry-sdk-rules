@@ -1,6 +1,6 @@
-# OneEntry SDK Glossary
+# Glossary of OneEntry SDK Terms
 
-## OneEntry SDK Glossary
+## Glossary of OneEntry SDK Terms
 
 A quick reference for key concepts. If you're unsure about a term — check here.
 
@@ -8,26 +8,26 @@ A quick reference for key concepts. If you're unsure about a term — check here
 
 ### marker
 
-A string identifier for an entity in OneEntry (page, menu, form, attribute, authorization provider).
+A string identifier for an entity in OneEntry (pages, menus, forms, attributes, authorization providers).
 
-- **DO NOT guess markers** — always obtain them via `/inspect-api` or API
-- `pageUrl` for pages is also a marker, not a Next.js route URL
+- **DO NOT guess markers** — always obtain them via `/inspect-api` or the API
+- `pageUrl` for pages — this is also a marker, not a Next.js route URL
 - Examples: `'home'`, `'main-menu'`, `'contact_us'`, `'email'`
 
-> How to find a marker: `/inspect-api` | Rule: do not guess — `02-ai-rules.md`
+> How to find a marker: `/inspect-api` | Rule: do not guess — CLAUDE.md, section "Main rule: check types and markers BEFORE coding"
 
 ---
 
 ### id
 
 A numeric identifier. Use only when the API explicitly requires `id`.
-Prefer `marker`/`pageUrl` where possible — they are stable when transferring data.
+Prefer `marker`/`pageUrl` where possible — they are stable during data migration.
 
 ---
 
 ### pageUrl
 
-The marker for a page for the `Pages` API. NOT the Next.js route path.
+The marker for a page for the `Pages` API. NOT the Next.js route.
 
 ```typescript
 // ❌ INCORRECT — this is a Next.js route, not a pageUrl
@@ -56,7 +56,7 @@ const title = attrs.title?.value      // if you know the marker
 
 ### attributeSets
 
-A set of attributes (template) assigned to an entity. Do not confuse with `attributeValues` — this is a schema, not values.
+A set of attributes (template) assigned to the entity. Do not confuse with `attributeValues` — this is a schema, not values.
 
 > Rules: `.claude/rules/attribute-sets.md`
 
@@ -67,7 +67,7 @@ A set of attributes (template) assigned to an entity. Do not confuse with `attri
 Language code for API requests.
 
 - `locale` — a string from Next.js params (`'en_US'`, `'ru_RU'`)
-- `langCode` — the same, a parameter of SDK methods
+- `langCode` — the same, a parameter for SDK methods
 - **DO NOT hardcode** `'en_US'` in components — take it from `params`
 
 ```typescript
@@ -93,7 +93,7 @@ const products = await getApi().Products.getProducts()
 
 ### reDefine()
 
-Recreate the SDK instance with a different `refreshToken` and/or `langCode`. Used during authorization.
+Recreate the SDK instance with a different `refreshToken` and/or `langCode`. Used during authentication.
 
 ```typescript
 // ✅ ALWAYS check hasActiveSession() before calling
@@ -116,7 +116,7 @@ Check if the current SDK instance has an active `accessToken`.
 
 ### saveFunction
 
-A callback in the SDK config that is called **automatically** on each rotation of `refreshToken`.
+Callback in the SDK config that is called **automatically** on each rotation of the `refreshToken`.
 No need to manage the token manually — just save it on the first login.
 
 > Details: `.claude/rules/tokens.md`
@@ -125,7 +125,7 @@ No need to manage the token manually — just save it on the first login.
 
 ### isError()
 
-Type guard to check the SDK response for an error. Create in `lib/oneentry.ts`.
+Type guard for checking the SDK response for an error. Create it in `lib/oneentry.ts`.
 
 ```typescript
 const result = await getApi().Products.getProducts()
@@ -136,18 +136,18 @@ if (isError(result)) {
 // result here is guaranteed not to be an error
 ```
 
-> Details: `04-error-handling.md`
+> Details: CLAUDE.md, section "Error Handling"; advanced patterns — `.claude/rules/error-handling.md`
 
 ---
 
 ### fingerprint
 
-User device data (header `x-device-metadata`) that the SDK sends on POST requests and during token refresh.
+Data about the user's device (header `x-device-metadata`) that the SDK sends in POST requests and during token refresh.
 On the server, `deviceInfo.browser` will be `"Node.js/..."` — therefore:
 
 **`auth()`, `signUp()`, `generateCode()`, `checkCode()` — only from Client Component**
 
-**Override fingerprint (SDK ≥ 1.0.155):** set explicitly — `config.deviceMetadata`, or `setDeviceMetadata(str)` / `getDeviceMetadata()` (methods on each module, state shared across instance; chainable; `''` — reset). NOT on the root object `defineOneEntry` — call through the module: `getApi().AuthProvider.getDeviceMetadata()`.
+**Override fingerprint (SDK ≥ 1.0.155):** set explicitly — `config.deviceMetadata`, or `setDeviceMetadata(str)` / `getDeviceMetadata()` (methods on each module, state shared across the instance; chainable; `''` — reset). NOT on the root object `defineOneEntry` — call via the module: `getApi().AuthProvider.getDeviceMetadata()`.
 
 Refresh tokens are tied to this header. The server-side OAuth code exchange must stamp the **browser** fingerprint (get it in the browser via `getDeviceMetadata()` and pass it to the server) — otherwise, the token will not refresh from the browser. The pattern is a per-request instance: `defineOneEntry(url, { token, deviceMetadata })`.
 
@@ -157,7 +157,7 @@ Refresh tokens are tied to this header. The server-side OAuth code exchange must
 
 ### image / file vs groupOfImages
 
-The types `image` and `file` are expanded into an **OBJECT** when there is only one file (single-element array → object); when there are two or more — it remains an **ARRAY**. Starting from v1.0.157, this works in **all** modules (blocks, pages, users, orders, and others — previously only products/menus/forms/attribute-sets), so the form depends **only on the number of files**, not on the entity type or response path. Capture both variants:
+The types `image` and `file` are expanded into an **OBJECT** when there is one file (single-element array → object); with two or more — it remains an **ARRAY**. From v1.0.157 this works in **all** modules (blocks, pages, users, orders, and others — previously only products/menus/forms/attribute-sets), so the form depends **only on the number of files**, not on the entity type or response path. Capture both variants:
 
 ```typescript
 const raw = attrs.pic?.value
@@ -212,13 +212,13 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 
 ### guestId / guest mode
 
-Identifier for an anonymous visitor. The SDK sends it in the header `x-guest-id` on unauthenticated requests — this includes guest cart, wishlist, activity tracking, and contextual recommendations.
+Identifier for an anonymous visitor. The SDK sends it in the header `x-guest-id` on unauthenticated requests — this enables guest cart, wishlist, activity tracking, and contextual recommendations.
 
-- **Browser** — generated and stored automatically (`localStorage` key `oneentry_guest_id`). No setup is needed.
-- **Server** — NOT generated automatically; pass explicitly: `config.guestId` or `getApi().Users.setGuestId(id)` (method available on each module, state shared across instance; chainable; `''` — reset).
-- When `accessToken` is present, the header `x-guest-id` **is not sent**.
+- **Browser** — generated and stored automatically (`localStorage` key `oneentry_guest_id`). No setup needed.
+- **Server** — NOT generated by itself; pass explicitly: `config.guestId` or `getApi().Users.setGuestId(id)` (method exists on each module, state shared across the instance; chainable; `''` — reset).
+- If `accessToken` is present, the header `x-guest-id` **is NOT sent**.
 
-> Details: `03-sdk-init.md` (section "Guest mode").
+> Details: `.claude/rules/sdk-init.md` (section "Guest Mode").
 
 ---
 
@@ -242,7 +242,7 @@ const cart = await getApi().Users.getCart()  // { items: [{ productId, qty }], t
 
 The user's internal bonus "currency" (accruals/deductions). Separate from coupons and discounts.
 
-- `Discounts.getBonusBalance()` → `{ balance }` (⚠️ requires authorization).
+- `Discounts.getBonusBalance()` → `{ balance }` (⚠️ requires authentication).
 - `Discounts.getBonusHistory(...)` → transaction history (`IBonusTransactionEntity[]`).
 - Deduction of bonuses in an order — field `bonusAmount` in `previewOrder` / `createOrder`; in the response — `bonusApplied`, `totalDue`.
 

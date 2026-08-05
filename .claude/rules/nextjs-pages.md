@@ -1,8 +1,11 @@
----
+<!-- META
+type: rules
+fileName: nextjs-pages.md
+rulePaths: ["app/**/page.tsx","app/**/layout.tsx"]
 paths:
   - "app/**/page.tsx"
   - "app/**/layout.tsx"
----
+-->
 
 # Next.js Pages — OneEntry Rules
 
@@ -22,8 +25,8 @@ export default async function Page({
   params: Promise<{ locale: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { locale } = await params;     // ← mandatory!
-  const sp = await searchParams;       // ← mandatory!
+  const { locale } = await params;     // ← required!
+  const sp = await searchParams;       // ← required!
 }
 ```
 
@@ -43,6 +46,7 @@ getApi().Pages.getPageByUrl('about', locale)
 
 ```tsx
 import { getApi, isError } from '@/lib/oneentry';
+import { sanitizeHtml } from '@/lib/sanitize-html';
 import { notFound } from 'next/navigation';
 
 export default async function MyPage({
@@ -63,7 +67,8 @@ export default async function MyPage({
   return (
     <main>
       <h1>{page.localizeInfos?.title}</h1>
-      <div dangerouslySetInnerHTML={{ __html: page.localizeInfos?.htmlContent || '' }} />
+      {/* HTML from CMS — ONLY through sanitizer, see .claude/rules/security.md */}
+      <div dangerouslySetInnerHTML={{ __html: sanitizeHtml(page.localizeInfos?.htmlContent) }} />
     </main>
   );
 }

@@ -44,31 +44,31 @@ const result = await getApi().Products.getProductsByPageUrl('soft_toys', [], loc
 
 ⚠️ **Do not use `getProductsByPageUrl` to display the entire catalog** — it will return only products linked to a specific catalog_page.
 
-To create a single product page, use the skill **`/create-product-card`** — it will create a product page with `getProductById`, extracting attributes by type and marker, an image gallery, a price block, and a section for related products through `getRelatedProductsById`.
+To create a single product page, use the skill **`/create-product-card`** — it will create a product page with `getProductById`, extracting attributes by type and marker, an image gallery, a price block, and a section for related products via `getRelatedProductsById`.
 
-To create a user order list, use the skill **`/create-orders-list`** — it will create a Client Component with loading through all storages (`getAllOrdersStorage` + `getAllOrdersByMarker`), direct `getApi()` calls from the client, and client-side pagination.
+To create a list of user orders, use the skill **`/create-orders-list`** — it will create a Client Component with loading through all storages (`getAllOrdersStorage` + `getAllOrdersByMarker`), direct `getApi()` calls from the client, and client-side pagination.
 
 To create a checkout page, use the skill **`/create-checkout`** — it will create a form with fields from the Forms API (`getFormByMarker` by `formIdentifier` storage), handling the `timeInterval` type field (delivery slots), direct `getApi()` calls for `createOrder` + `createSession`, and redirecting to the payment page.
 
 To manage the cart (Redux slice + redux-persist, add/remove/quantity), use the skill **`/create-cart-manager`** — it will create a `CartSlice`, store with persistence, and `StoreProvider`.
 
-For a favorites list (Redux slice + persist, stores only product IDs), use the skill **`/create-favorites`** — it will create a `FavoritesSlice`, a button, and a page with data loading from the API.
+For the favorites list (Redux slice + persist, stores only product IDs), use the skill **`/create-favorites`** — it will create a `FavoritesSlice`, a button, and a page with data loading from the API.
 
 For the filter panel (price, color, availability + `FilterContext` + Apply/Reset), use the skill **`/create-filter-panel`**.
 
-To subscribe to price and availability changes of a product, use the skill **`/create-subscription-events`** — `Events.subscribeByMarker` / `unsubscribeByMarker`.
+To subscribe to changes in product price and availability, use the skill **`/create-subscription-events`** — `Events.subscribeByMarker` / `unsubscribeByMarker`.
 
 ## Authorization and Users
 
-To create an authorization/registration form, use the skill **`/create-auth`** — it will create a Client Component with direct SDK calls (fingerprint!) and Server Actions only for `getAuthProviders`/`logout`. Fields are dynamic from the Forms API, correct structure of `authData`, token synchronization.
+To create an authorization/registration form, use the skill **`/create-auth`** — it will create a Client Component with direct SDK calls (fingerprint!) and Server Actions only for `getAuthProviders`/`logout`. Fields are dynamic from the Forms API, correct `authData` structure, token synchronization.
 
 For the user profile page, use the skill **`/create-profile`** — fields from the Users API, data updating, handling token race condition.
 
-For the order list page, use the skill **`/create-orders-list`** — loading through all storages, cancellation, repeat, client-side pagination.
+For the orders list page, use the skill **`/create-orders-list`** — loading through all storages, cancellation, repeat, client-side pagination.
 
 For the language switcher, use the skill **`/create-locale-switcher`** — loads locales via `getLocales()`, builds links to the current page with a different locale segment.
 
-For the search bar, use the skill **`/create-search`** — debounce 300ms, Server Action, dropdown of results.
+For the search bar, use the skill **`/create-search`** — debounce 300ms, Server Action, dropdown results.
 
 ## Creating Pages with Content from CMS
 

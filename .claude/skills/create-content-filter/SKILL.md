@@ -2,17 +2,17 @@
 name: create-content-filter
 description: Render a content filter tree from Filters API — getFilterByMarker, recursive nodes by type (page/product/discount/...)
 ---
-# Create a Content Filter Renderer (Filters API)
+# Create Content Filter Render (Filters API)
 
-Loads a content filter by marker (`Filters.getFilterByMarker`) and renders its tree of nodes. A content filter is a customizable structure in the admin panel that combines heterogeneous entities: pages, products, attributes, discounts, bonuses, payment methods. It is convenient for promo panels, navigation trees, and "collections".
+Loads the content filter by marker (`Filters.getFilterByMarker`) and renders its tree of nodes. The content filter is a customizable structure in the admin panel that combines heterogeneous entities: pages, products, attributes, discounts, bonuses, payment methods. It is convenient for promo panels, navigation trees, and "collections".
 
-> ⚠️ This is NOT catalog filters (`IFilterParams[]` in `Products.getProducts`). The content filter is a separate tree from the admin panel. The method is public (app-token), no authorization is needed — it can be used from a Server Component.
+> ⚠️ These are NOT catalog filters (`IFilterParams[]` in `Products.getProducts`). The content filter is a separate tree from the admin panel. The method is public (app-token), no authorization is needed — can be used from Server Component.
 
-> ⚠️ Before using the marker, check its existence via `/inspect-api`. If the filter is not in the admin panel — create an entry in [`MISMATCH-LOG.md`](../../rules/mismatch-log.md).
+> ⚠️ Before using the marker, check its existence via `/inspect-api`. If the filter is not in the admin panel — create an entry in `MISMATCH-LOG.md` (rule `.claude/rules/mismatch-log.md`).
 
 ---
 
-## Step 1: Understand the Structure (Node Types)
+## Step 1: Know the Structure (Node Types)
 
 `getFilterByMarker` returns `IContentFilter`:
 
@@ -79,7 +79,7 @@ function FilterNode({ node }: { node: IContentFilterItem }) {
     (a, b) => (a.position ?? 0) - (b.position ?? 0),
   );
 
-  // Render "leaf" based on type
+  // Render "leaf" by type
   const label = (() => {
     switch (node.type) {
       case 'page':
@@ -141,7 +141,7 @@ export default async function PromoPage({
   params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
-  const filter = await getContentFilter('promo_filter', locale);  // ← marker from admin panel
+  const filter = await getContentFilter('promo_filter', locale);  // ← marker from the admin panel
 
   if (!filter?.items?.length) return <p>The collection is empty</p>;
 
@@ -159,12 +159,12 @@ export default async function PromoPage({
 ## Important Details
 
 ```md
-✅ Created a content filter renderer (Filters API). Key rules:
+✅ Created content filter render (Filters API). Key rules:
 
 1. Filters.getFilterByMarker — public (app-token), load from Server Component
 2. A node is identified by item.type — render differently (page→url, product→marker, discount/bonus→value)
 3. The tree is recursive (children) — always sort by position
-4. localizeInfos.title — the main title of the node; value — unified value (discount/attribute)
+4. localizeInfos.title — main title of the node; value — unified value (discount/attribute)
 5. graceful fallback on IError — return null, do not crash the page
 6. Do not confuse with catalog filters IFilterParams[] (Products.getProducts)
 ```

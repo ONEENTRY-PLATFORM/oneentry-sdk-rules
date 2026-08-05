@@ -9,7 +9,7 @@ paths:
 
 # Linter and Prettier — Rules (eslint.config.mjs + .prettierrc)
 
-ESLint config: `next/core-web-vitals` + `next/typescript`  
+ESLint config: `next/core-web-vitals` + `next/typescript`
 This means: `@typescript-eslint/recommended` + Next.js specific rules.
 
 ## Mandatory Before Writing Code
@@ -40,7 +40,7 @@ What this means in practice:
 - **Trailing commas everywhere** where allowed by syntax (objects, arrays, function parameters, generics, imports).
 - **Indentation of 2 spaces**, not tabs.
 - **`endOfLine: "auto"`** — do not enforce a specific EOL, leave it as in the file.
-- **`prettier-plugin-tailwindcss`** — Tailwind classes must be in the canonical order of the plugin (layout → spacing → typography → colors → state variants). Do not sort manually "as it looks nice" — write in the order expected by the plugin so that Prettier does not rearrange them.
+- **`prettier-plugin-tailwindcss`** — Tailwind classes must be in the canonical order of the plugin (layout → spacing → typography → colors → state variants). Do not sort manually "as it looks nice" — write in the order expected by the plugin, so Prettier does not rearrange.
 
 ```typescript
 // ❌ INCORRECT — double quotes, no ;, no trailing comma
@@ -62,7 +62,7 @@ const obj = {
 
 ### TypeScript
 
-- `@typescript-eslint/no-explicit-any` — `any` is prohibited (see `rules/typescript.md`)
+- `@typescript-eslint/no-explicit-any` — `any` is prohibited (see `.claude/rules/typescript.md`)
 - `@typescript-eslint/no-unused-vars` — unused variables and imports are prohibited
 
 ### React Hooks
@@ -102,4 +102,4 @@ import Link from 'next/link'
 ### Server/Client Components
 
 - Do not import server modules into `'use client'` files
-- `'use server'` Server Actions cannot be called directly for auth methods with fingerprint (see `rules/auth-provider.md`)
+- `'use server'` Server Actions cannot be called directly for auth methods with fingerprint (see `.claude/rules/auth-provider.md`)

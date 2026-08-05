@@ -12,11 +12,11 @@ Break down the argument into `Module` and `method`. Define the file:
 | `Forms` | `app/actions/forms.ts` | public (getApi) |
 | `FormData` | `app/actions/forms-data.ts` | public (getApi) — only `postFormsData`/`getFormsDataByMarker`; `updateFormsDataByid`/`updateFormsDataStatusByid`/`deleteFormsDataByid` — user-auth (Client Component after reDefine) |
 | `AuthProvider` (getAuthProviders, getAuthProviderByMarker) | `app/actions/auth.ts` | public (getApi) |
-| `AuthProvider` (auth, signUp, generateCode, checkCode, logout) | Client Component directly | getApi() on the client (see `rules/server-actions.md`) |
+| `AuthProvider` (auth, signUp, generateCode, checkCode, logout) | Client Component directly | getApi() on the client (see `.claude/rules/server-actions.md`) |
 | `Pages`, `Products`, `Menus`, `Blocks` | `app/actions/<module>.ts` | public (getApi) |
 | `Orders`, `Users`, `Payments`, `Events`, `Subscriptions` | Client Component | user-auth (getApi after reDefine) |
 
-> ⚠️ Token-generating calls `auth()`/`oauth()` in Server Action are only allowed with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155): on the client `getApi().AuthProvider.getDeviceMetadata()` → on the server per-request instance `defineOneEntry(url, { token, deviceMetadata })` — see `/create-google-oauth` and `rules/auth-provider.md`.
+> ⚠️ Token-generating calls `auth()`/`oauth()` in Server Action are only allowed with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155): on the client `getApi().AuthProvider.getDeviceMetadata()` → on the server per-request instance `defineOneEntry(url, { token, deviceMetadata })` — see `/create-google-oauth` and `.claude/rules/auth-provider.md`.
 
 ## Step 2: Read the existing file
 
@@ -80,8 +80,8 @@ export function ProfileData() {
       if (!refreshToken) return;
       // ⚠️ hasActiveSession() is mandatory before reDefine.
       // After login, the SDK is already authorized — reDefine without checking will recreate the working instance,
-      // and the new one before the first request will make an unnecessary proactive /refresh, wasting
-      // just issued token (no more spurious 401, SDK ≥ 1.0.152; see rules/tokens.md).
+      // and the new one will make an unnecessary proactive /refresh before the first request, wasting
+      // just issued token (no more spurious 401; SDK ≥ 1.0.152; see .claude/rules/tokens.md).
       if (!hasActiveSession()) {
         await reDefine(refreshToken, 'en_US');
       }
@@ -122,4 +122,4 @@ export function MyComponent() {
 For user-auth methods, remind:
 
 ⚠️ `reDefine(refreshToken, locale)` must be called before accessing user-auth methods.
-Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without them, double execution in StrictMode leads to an extra pair of requests (`reDefine` + proactive `/refresh`) and setState races (the token pattern `reDefine` + `getUser` does not burn out — both requests share one proactive refresh, SDK ≥ 1.0.152; see `rules/tokens.md`). `saveFunction` automatically updates the token in localStorage with each rotation.
+Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without them, double execution in StrictMode results in an extra pair of requests (`reDefine` + proactive `/refresh`) and setState races (the token pattern `reDefine`+`getUser` does not burn out — both requests share one proactive refresh, SDK ≥ 1.0.152; see `.claude/rules/tokens.md`). `saveFunction` automatically updates the token in localStorage with each rotation.
