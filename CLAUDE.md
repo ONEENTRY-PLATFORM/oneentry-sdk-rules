@@ -68,27 +68,27 @@ This file is a navigator. It is intentionally thin: details are in the rules and
 
 ### Skills
 
-Keyword from the prompt found → **first skill, then code**. Multiple triggers → multiple skills, each with its own checklist.
+The keyword from the prompt is found → **first the skill, then the code**. Multiple triggers → multiple skills, each with its own checklist.
 
 | Skill | Triggers in the prompt | What it creates |
 | --- | --- | --- |
-| `/setup-nextjs` | create next.js project | Next.js project from scratch |
-| `/setup-oneentry` | connect SDK, configure oneentry | `lib/oneentry.ts`, `next.config.ts`, environment variables |
+| `/setup-nextjs` | create a next.js project | Next.js project from scratch |
+| `/setup-oneentry` | connect SDK, set up oneentry | `lib/oneentry.ts`, `next.config.ts`, environment variables |
 | `/inspect-api` | markers, response structure, what pages/forms/products are available | report with real markers and attribute types |
 | `/create-auth` | login, registration, authorization, personal account, auth | login, registration, logout, AuthContext |
 | `/create-google-oauth` | google login, oauth, login via google/facebook | redirect, callback, code exchange |
 | `/create-profile` | profile, user personal data | profile page |
 | `/create-orders-list` | orders, order history | list of orders with cancellation and pagination |
-| `/create-checkout` | checkout, checkout process | delivery form, timeInterval, payment |
+| `/create-checkout` | checkout, order processing | delivery form, timeInterval, payment |
 | `/create-product-list` | product list, catalog | catalog with filtering and pagination |
-| `/create-product-card` | product card (in list) | product card |
+| `/create-product-card` | product card (in the list) | product card |
 | `/create-product-page` | product page (detailed) | product page |
 | `/create-page` | page from CMS | page on Pages API |
 | `/create-menu` | menu, navigation | navigation menu |
 | `/create-form` | feedback form, form from CMS | dynamic form from Forms API |
 | `/create-captcha` | captcha, recaptcha | reCAPTCHA v3 in the form |
-| `/create-cart-manager` | cart | cart on server-side cart API |
-| `/create-favorites` | favorites, wishlist | favorites on server-side wishlist API |
+| `/create-cart-manager` | cart | cart on the server-side cart API |
+| `/create-favorites` | favorites, wishlist | favorites on the server-side wishlist API |
 | `/create-filter-panel` | filters, filter panel | filter panel by attributes |
 | `/create-content-filter` | content filter, filter tree | content filter tree |
 | `/create-search` | search, search bar | search for products/pages |
@@ -101,27 +101,27 @@ Keyword from the prompt found → **first skill, then code**. Multiple triggers 
 | `/setup-vitest` | unit tests, vitest, cover adapters with tests | Vitest + OneEntry response fixtures |
 | `/create-seo` | seo, metadata, sitemap, robots, microdata, JSON-LD | `generateMetadata`, `sitemap.ts`, `robots.ts`, `JsonLd` |
 | `/setup-pwa` | pwa, manifest, service worker, offline | `manifest.ts`, `sw.js`, offline fallback |
-| `/admin-fill-content` | fill admin panel with a script, upload content programmatically | content entry via internal admin API |
-| `/admin-upload-images` | upload images to CMS with a script, preview/LQIP not created | image upload with preview |
+| `/admin-fill-content` | fill the admin panel with a script, upload content programmatically | content recording via internal admin API |
+| `/admin-upload-images` | upload images to CMS with a script, preview/LQIP is not created | image upload with preview |
 | `/admin-grant-permissions` | 403 Permission data not found, group rights | granting route to a user group |
 
 ### Rules — reference, on demand
 
 | Rule | When needed |
 | --- | --- |
-| `sdk-modules.md` | need method signature of SDK or list of module methods |
+| `sdk-modules.md` | need SDK method signature or list of module methods |
 | `glossary.md` | unclear term: marker, pageUrl, attributeSets, fingerprint, guestId, bonus, … |
-| `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, full summary of call contexts |
+| `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, complete summary of call contexts |
 | `error-handling.md` | centralized `ApiError`/`handleApiError`, "Resource is closed" |
 | `troubleshooting.md` | specific error 400/401/403/404/500 or build/environment issue |
 | `common-mistakes.md` | before reviewing your code — what AI usually invents |
 | `common-patterns.md` | pagination, filtering, SSR/SSG strategies, `user.state`, RTK Query, parallel requests |
-| `scenarios.md` | typical scenarios for e-commerce, authorization, CMS pages as a whole |
-| `scenarios-advanced.md` | FormData, IntegrationCollections, catalog with filters, category navigation |
+| `scenarios.md` | typical e-commerce scenarios, authorization, CMS pages as a whole |
+| `scenarios-advanced.md` | FormData, IntegrationCollections, catalog with filters, navigation by categories |
 | `pages-blocks.md` | Pages/Blocks API, multilingual content, products in blocks |
 | `mismatch-log.md` | entity not in admin panel — record discrepancy or conscious deviation from rules (section D) |
 
-### Rules — auto-connectable by project files
+### Rules — auto-connected by project files
 
 | Rule | File "fingerprints" |
 | --- | --- |
@@ -131,7 +131,13 @@ Keyword from the prompt found → **first skill, then code**. Multiple triggers 
 | `attribute-values.md`, `attribute-sets.md` | `app/**/*.tsx`, `components/**/*.tsx` |
 | `auth-provider.md` | auth components and actions |
 | `forms.md`, `orders.md`, `product-statuses.md` | corresponding features |
-| `performance*.md` | see "Performance" section |
+| `performance.md` | `app/**/page.tsx`, `app/**/layout.tsx`, `app/api/**/*.ts`, `components/**/*.tsx` |
+| `performance-popups.md` | `components/**/*Popup*.tsx`, `components/**/*Modal*.tsx`, `components/**/*Drawer*.tsx` |
+| `performance-rtk.md` | `**/RTKApi.ts`, `store/**/*.ts`, `app/store/**/*.ts` |
+| `performance-gsap.md` | `**/animations/**/*.tsx`, `**/*Animation*.tsx`, `**/RegisterGSAP*.tsx` |
+| `performance-images.md` | `next.config.{ts,js,mjs}`, `**/*Image*.tsx`, `components/**/*.tsx` |
+| `performance-streaming.md` | `app/**/loading.tsx`, `app/**/page.tsx`, `app/**/layout.tsx` |
+| `performance-bundle.md` | `next.config.{ts,js,mjs}`, `package.json`, `app/**/page.tsx` |
 | `playwright-e2e.md` | `e2e/**`, `playwright.config.ts` |
 | `unit-testing.md` | `**/*.test.ts(x)`, `vitest.config.ts` |
 | `security.md` | `next.config.ts`, `middleware.ts`, components with `dangerouslySetInnerHTML` |
@@ -395,7 +401,7 @@ Centralized `ApiError`/`handleApiError`, normalization of `message`, code table 
 
 ## API Response Structure
 
-**Entity interfaces** can be found in `node_modules/oneentry/dist/`. Key fields of any entity: `id`, `localizeInfos`, `attributeValues`, `pageUrl`.
+**Entity Interfaces** can be found in `node_modules/oneentry/dist/`. Key fields of any entity: `id`, `localizeInfos`, `attributeValues`, `pageUrl`.
 
 ```typescript
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
@@ -408,7 +414,7 @@ import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
 | `string` | `attrs.marker?.value` — string or `null` |
 | `integer`, `real`, `float` | `attrs.marker?.value` — **number** or `null` (v1.0.157, not `0`) |
 | `text`, `textWithHeader` | `(Array.isArray(v) ? v[0] : v)?.htmlValue` (`v = attrs.marker?.value`) |
-| `image`, `file` | 1 file → object (`value.downloadLink`), 2+ → array — v1.0.157, same in all modules |
+| `image`, `file` | 1 file → object (`value.downloadLink`), 2+ → array — v1.0.157, the same in all modules |
 | `groupOfImages` | `attrs.marker?.value?.[0]?.downloadLink` — **ARRAY** |
 | `date`, `dateTime`, `time` | `attrs.marker?.value?.fullDate` |
 | `radioButton` | `attrs.marker?.value` — string-id |
@@ -432,47 +438,11 @@ const imgAttr = Object.values(attrs).find((a: any) => a?.type === 'image')
 
 Examples for each type, `plainValue`/`mdValue`, `extended` — `attribute-values.md`.
 
-### Filtering by attributeValues
+### Nearby, but in the rules — not here
 
-| Operator | Description | Example |
-| --- | --- | --- |
-| `in` / `nin` | in list / not in list | `"red,blue,green"` |
-| `eq` / `neq` | equal / not equal | `100` |
-| `mth` / `lth` | greater / less | `50` |
-| `exs` / `nexs` | exists / does not exist | — |
-
-Special values: `today` (date/dateTime), `now` (time/dateTime).
-
-```typescript
-const filters = [
-  { attributeMarker: "price", conditionMarker: "mth", conditionValue: 100 },
-  { attributeMarker: "price", conditionMarker: "lth", conditionValue: 500 },
-]
-const products = await getApi().Products.getProducts(filters)
-```
-
-### localizeInfos
-
-Contains data for the request language. Direct access to fields, **without nesting by language**:
-
-```typescript
-page.localizeInfos?.title        // title
-page.localizeInfos?.menuTitle    // menu title
-page.localizeInfos?.htmlContent  // HTML content (check first)
-// plainContent is in the API response, but not in the ILocalizeInfo type — in strict TS you need a cast:
-(page.localizeInfos as any)?.plainContent
-```
-
-### Page Blocks (`getBlocksByPageUrl` → `IPositionBlock[]`)
-
-With SDK ≥ 1.0.153, blocks already contain products — additional requests to `Products` are not needed:
-
-```typescript
-const products = block.products ?? []                // product_block → IProductsEntity[]
-const similar  = block.similarProducts?.items ?? []   // similar_products_block → IProductsResponse
-```
-
-Fields are not available when `traficLimit: true` — access only through `?? []`. For details — `pages-blocks.md`.
+- **Filtering by `attributeValues`** — `IFilterParams` and operators `eq/neq`, `mth/lth`, `in/nin`, `exs/nexs`: `common-patterns.md`. Special values `conditionValue`: `today` (date/dateTime), `now` (time/dateTime).
+- **`localizeInfos`** — flat access to `title` / `htmlContent` / `plainContent`, without nesting by language: `localization.md`.
+- **Page Blocks** — with SDK ≥ 1.0.153, products come directly in the block (`block.products`, `block.similarProducts?.items`), when `traficLimit: true` there are no fields: `pages-blocks.md`.
 
 ## Working with Real Project Data
 
@@ -519,22 +489,12 @@ For each new entity (Product, Page, Block, Menu):
 
 ## Performance — SSR caching, lazy, parallelism
 
-The complete rules are in the `performance*.md` family. The universal entry point `performance.md` is loaded on any matching file; the other six auto-load only if there are corresponding "fingerprint" files in the project, so projects without RTK Query / GSAP / popups do not receive unnecessary context.
-
-| Rule | When it applies | rulePaths (auto-load fingerprint) |
-| --- | --- | --- |
-| `performance.md` | Any Next.js + OneEntry project | `app/**/page.tsx`, `app/**/layout.tsx`, `app/api/**/*.ts`, `components/**/*.tsx` |
-| `performance-popups.md` | There is a system of curtains / popups | `components/**/*Popup*.tsx`, `components/**/*Modal*.tsx`, `components/**/*Drawer*.tsx` |
-| `performance-rtk.md` | RTK Query is used | `**/RTKApi.ts`, `store/**/*.ts`, `app/store/**/*.ts` |
-| `performance-gsap.md` | There are GSAP animations | `**/animations/**/*.tsx`, `**/*Animation*.tsx`, `**/RegisterGSAP*.tsx` |
-| `performance-images.md` | `next/image` with OneEntry CDN | `next.config.{ts,js,mjs}`, `**/*Image*.tsx`, `components/**/*.tsx` |
-| `performance-streaming.md` | Streaming through `loading.tsx` / `<Suspense>` | `app/**/loading.tsx`, `app/**/page.tsx`, `app/**/layout.tsx` |
-| `performance-bundle.md` | Bundle size audit, code-splitting | `next.config.{ts,js,mjs}`, `package.json`, `app/**/page.tsx` |
+The complete rules are in the `performance*.md` family: a universal entry point `performance.md` plus six narrow ones (popups, rtk, gsap, images, streaming, bundle). Which one is connected when is in the "Context Map" section.
 
 ### The minimum that always applies
 
 - Content pages — `export const dynamic = 'force-static'; export const revalidate = 300;`. Never `force-dynamic` without justification.
-- Each `useSearchParams()` in the page tree — in `<Suspense>`, otherwise ISR is silently disabled.
+- Each `useSearchParams()` in the page tree — in `<Suspense>`, otherwise ISR silently turns off.
 - Server fetcher = `unstable_cache(impl, [keyParts], { revalidate, tags })` wrapped in React `cache()`. This is composition, not an alternative.
 - In one server component, independent fetches — `Promise.all`. No for-await waterfalls.
 - SDK `oneentry` in `'use client'` files — only for client flows (auth/cart/user through `getApi()` after `reDefine()`); load SSR data on the server and pass it as props.
