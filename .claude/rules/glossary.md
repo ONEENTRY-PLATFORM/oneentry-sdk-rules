@@ -8,10 +8,10 @@ A quick reference for key concepts. If you're unsure about a term — check here
 
 ### marker
 
-A string identifier for an entity in OneEntry (pages, menus, forms, attributes, authorization providers).
+A string identifier for an entity in OneEntry (page, menu, form, attribute, authorization provider).
 
 - **DO NOT guess markers** — always obtain them via `/inspect-api` or the API
-- `pageUrl` for pages — this is also a marker, not a Next.js route URL
+- `pageUrl` for pages is also a marker, not a Next.js route URL
 - Examples: `'home'`, `'main-menu'`, `'contact_us'`, `'email'`
 
 > How to find a marker: `/inspect-api` | Rule: do not guess — CLAUDE.md, section "Main rule: check types and markers BEFORE coding"
@@ -27,7 +27,7 @@ Prefer `marker`/`pageUrl` where possible — they are stable during data migrati
 
 ### pageUrl
 
-The marker for a page for the `Pages` API. NOT the Next.js route.
+The marker for a page for the `Pages` API. NOT the Next.js route path.
 
 ```typescript
 // ❌ INCORRECT — this is a Next.js route, not a pageUrl
@@ -67,7 +67,7 @@ A set of attributes (template) assigned to the entity. Do not confuse with `attr
 Language code for API requests.
 
 - `locale` — a string from Next.js params (`'en_US'`, `'ru_RU'`)
-- `langCode` — the same, a parameter for SDK methods
+- `langCode` — the same, a parameter of SDK methods
 - **DO NOT hardcode** `'en_US'` in components — take it from `params`
 
 ```typescript
@@ -93,7 +93,7 @@ const products = await getApi().Products.getProducts()
 
 ### reDefine()
 
-Recreate the SDK instance with a different `refreshToken` and/or `langCode`. Used during authentication.
+Recreate the SDK instance with a different `refreshToken` and/or `langCode`. Used during authorization.
 
 ```typescript
 // ✅ ALWAYS check hasActiveSession() before calling
@@ -116,8 +116,8 @@ Check if the current SDK instance has an active `accessToken`.
 
 ### saveFunction
 
-Callback in the SDK config that is called **automatically** on each rotation of the `refreshToken`.
-No need to manage the token manually — just save it on the first login.
+A callback in the SDK config that is called **automatically** on each rotation of `refreshToken`.
+You do not need to manage the token manually — just save it on the first login.
 
 > Details: `.claude/rules/tokens.md`
 
@@ -125,7 +125,7 @@ No need to manage the token manually — just save it on the first login.
 
 ### isError()
 
-Type guard for checking the SDK response for an error. Create it in `lib/oneentry.ts`.
+Type guard to check the SDK response for an error. Create in `src/lib/oneentry.ts`.
 
 ```typescript
 const result = await getApi().Products.getProducts()
@@ -142,12 +142,12 @@ if (isError(result)) {
 
 ### fingerprint
 
-Data about the user's device (header `x-device-metadata`) that the SDK sends in POST requests and during token refresh.
+Data about the user's device (header `x-device-metadata`) that the SDK sends in POST requests and when refreshing the token.
 On the server, `deviceInfo.browser` will be `"Node.js/..."` — therefore:
 
 **`auth()`, `signUp()`, `generateCode()`, `checkCode()` — only from Client Component**
 
-**Override fingerprint (SDK ≥ 1.0.155):** set explicitly — `config.deviceMetadata`, or `setDeviceMetadata(str)` / `getDeviceMetadata()` (methods on each module, state shared across the instance; chainable; `''` — reset). NOT on the root object `defineOneEntry` — call via the module: `getApi().AuthProvider.getDeviceMetadata()`.
+**Override fingerprint (SDK ≥ 1.0.155):** set explicitly — `config.deviceMetadata`, or `setDeviceMetadata(str)` / `getDeviceMetadata()` (methods on each module, state shared across the instance; chainable; `''` — reset). NOT on the root object `defineOneEntry` — call through the module: `getApi().AuthProvider.getDeviceMetadata()`.
 
 Refresh tokens are tied to this header. The server-side OAuth code exchange must stamp the **browser** fingerprint (get it in the browser via `getDeviceMetadata()` and pass it to the server) — otherwise, the token will not refresh from the browser. The pattern is a per-request instance: `defineOneEntry(url, { token, deviceMetadata })`.
 
@@ -157,7 +157,7 @@ Refresh tokens are tied to this header. The server-side OAuth code exchange must
 
 ### image / file vs groupOfImages
 
-The types `image` and `file` are expanded into an **OBJECT** when there is one file (single-element array → object); with two or more — it remains an **ARRAY**. From v1.0.157 this works in **all** modules (blocks, pages, users, orders, and others — previously only products/menus/forms/attribute-sets), so the form depends **only on the number of files**, not on the entity type or response path. Capture both variants:
+The types `image` and `file` are expanded into an **OBJECT** when there is one file (single-element array → object); when there are two or more — it remains an **ARRAY**. Starting from v1.0.157, this works in **all** modules (blocks, pages, users, orders, and others — previously only products/menus/forms/attribute-sets), so the form depends **only on the number of files**, not on the entity type and not on the response path. Capture both variants:
 
 ```typescript
 const raw = attrs.pic?.value
@@ -165,7 +165,7 @@ const img = Array.isArray(raw) ? raw[0] : raw
 const url = img?.downloadLink
 ```
 
-`groupOfImages` — always an **ARRAY**: `attrs.marker?.value?.[0]?.downloadLink`
+`groupOfImages` — always **ARRAY**: `attrs.marker?.value?.[0]?.downloadLink`
 
 > ⚠️ The number of files is determined by the project content — run `/inspect-api` or `console.log(attrs.marker?.value)` before use and write code resilient to both forms.
 > Details: `.claude/rules/attribute-values.md`
@@ -205,18 +205,18 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 | Concept | Example | Where to use |
 | --- | --- | --- |
 | `pageUrl` (marker) | `'about'` | Argument `getPageByUrl()` |
-| Next.js route | `'/[locale]/about'` | Folders in `app/` |
+| Next.js route | `'/[locale]/about'` | Folders in `src/app/` |
 | `href` for Link | `'/about'` | `<Link href>` |
 
 ---
 
 ### guestId / guest mode
 
-Identifier for an anonymous visitor. The SDK sends it in the header `x-guest-id` on unauthenticated requests — this enables guest cart, wishlist, activity tracking, and contextual recommendations.
+Identifier for an anonymous visitor. The SDK sends it in the header `x-guest-id` on requests without authorization — this enables guest cart, wishlist, activity tracking, and contextual recommendations.
 
-- **Browser** — generated and stored automatically (`localStorage` key `oneentry_guest_id`). No setup needed.
-- **Server** — NOT generated by itself; pass explicitly: `config.guestId` or `getApi().Users.setGuestId(id)` (method exists on each module, state shared across the instance; chainable; `''` — reset).
-- If `accessToken` is present, the header `x-guest-id` **is NOT sent**.
+- **Browser** — generated and stored automatically (`localStorage` key `oneentry_guest_id`). No setup is needed.
+- **Server** — NOT generated by itself; pass explicitly: `config.guestId` or `getApi().Users.setGuestId(id)` (method available on each module, state shared across the instance; chainable; `''` — reset).
+- When `accessToken` is present, the header `x-guest-id` **is not sent**.
 
 > Details: `.claude/rules/sdk-init.md` (section "Guest Mode").
 
@@ -224,7 +224,7 @@ Identifier for an anonymous visitor. The SDK sends it in the header `x-guest-id`
 
 ### cart / wishlist (server-side)
 
-The cart and wishlist that are stored **on the OneEntry server** and synchronized between devices — for authenticated users or guests (by `guestId`).
+The cart and wishlist that are stored **on the OneEntry server** and synchronized across devices — for authorized users or guests (by `guestId`).
 
 ```typescript
 await getApi().Users.addCartItem({ productId: 123, qty: 2 })
@@ -232,7 +232,7 @@ const cart = await getApi().Users.getCart()  // { items: [{ productId, qty }], t
 ```
 
 - Stores only `productId` + `qty` (cart) / `productId` (wishlist) — load full product data via `Products.getProductsByIds`.
-- Do not confuse with client-side Redux cart — this is an alternative/addition with cross-device synchronization.
+- Do not confuse with the client-side Redux cart — this is an alternative/addition with cross-device synchronization.
 
 > Skills: `/create-cart-manager`, `/create-favorites`.
 
@@ -242,7 +242,7 @@ const cart = await getApi().Users.getCart()  // { items: [{ productId, qty }], t
 
 The user's internal bonus "currency" (accruals/deductions). Separate from coupons and discounts.
 
-- `Discounts.getBonusBalance()` → `{ balance }` (⚠️ requires authentication).
+- `Discounts.getBonusBalance()` → `{ balance }` (⚠️ requires authorization).
 - `Discounts.getBonusHistory(...)` → transaction history (`IBonusTransactionEntity[]`).
 - Deduction of bonuses in an order — field `bonusAmount` in `previewOrder` / `createOrder`; in the response — `bonusApplied`, `totalDue`.
 
@@ -252,6 +252,6 @@ The user's internal bonus "currency" (accruals/deductions). Separate from coupon
 
 ### content filter (Filters)
 
-A customizable tree of nodes in the admin panel (`Filters.getFilterByMarker(marker)`), combining heterogeneous entities — pages, products, attributes, discounts, bonuses, payment methods. Nodes are nested via `children`, the node type is in `item.type`.
+A customizable tree of nodes in the admin panel (`Filters.getFilterByMarker(marker)`), combining heterogeneous entities — pages, products, attributes, discounts, bonuses, payment methods. Nodes are nested through `children`, the node type is in `item.type`.
 
 > Do not confuse with catalog filters (`IFilterParams[]` in `Products.getProducts`) — these are different things. Skill: `/create-content-filter`.

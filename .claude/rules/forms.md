@@ -1,15 +1,13 @@
-<!-- META
-type: rules
-fileName: forms.md
-rulePaths: ["app/actions/**/*.ts","components/**/*.tsx"]
+---
 paths:
   - "app/actions/**/*.ts"
+  - "src/app/actions/**/*.ts"
   - "components/**/*.tsx"
--->
-
+  - "src/components/**/*.tsx"
+---
 # Forms & FormsData — OneEntry Rules
 
-## getFormByMarker → response structure
+## getFormByMarker → Response Structure
 
 ```ts
 const form = await getApi().Forms.getFormByMarker('contact_us', locale)
@@ -41,20 +39,20 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 }
 ```
 
-**Key fields:**
+**Key Fields:**
 
-- `attributes: IFormAttribute[]` — form fields for rendering. With SDK ≥ 1.0.157 **already sorted by `position`** (previously the API returned them mixed, and sorting had to be done manually); custom sorting is not needed, but it doesn't hurt
-- `localizeInfos: IFormLocalizeInfo` — form localization: `title`, as well as `titleForSite`, `successMessage`, `unsuccessMessage`, `urlAddress`, `database`, `script`
-- `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`
-- `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`
-- `validators[name].errorMessage` — custom error text for the validator (set in the admin panel)
-- `additionalFields: Record<marker, IFormAttributeAdditionalField>` — SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others
-- `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — form type (the typo `sing_in_up` — from the API, that's how it is). Based on this, choose behavior: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings
-- `moduleFormConfigs[].exceptionIds?: string[]` — list of excluded identifiers in the module config (for example, entities for which the form does not apply)
+- `attributes: IFormAttribute[]` — form fields for rendering. With SDK ≥ 1.0.157 **already sorted by `position`** (previously the API returned them mixed and sorting had to be done manually); custom sorting is not needed, but it doesn't hurt.
+- `localizeInfos: IFormLocalizeInfo` — form localization: `title`, as well as `titleForSite`, `successMessage`, `unsuccessMessage`, `urlAddress`, `database`, `script`.
+- `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`.
+- `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`.
+- `validators[name].errorMessage` — custom error text for the validator (set in the admin panel).
+- `additionalFields: Record<marker, IFormAttributeAdditionalField>` — SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others.
+- `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — form type (the typo `sing_in_up` — from the API, it is as it is). Based on this, choose behavior: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings.
+- `moduleFormConfigs[].exceptionIds?: string[]` — list of excluded identifiers in the module config (for example, entities for which the form does not apply).
 
-> ⚠️ **`attributes` of an empty form.** The API returns `attributes: {}` (an empty object), not `[]`. **With v1.0.158 the SDK normalizes this in `_normalizeAttr`**, so `attributes` — is always `IFormAttribute[]`, and `form.attributes.map(...)` is safe on any form.
+> ⚠️ **`attributes` of an empty form.** The API returns `attributes: {}` (an empty object), not `[]`. **With v1.0.158, the SDK normalizes this in `_normalizeAttr`**, so `attributes` — is always `IFormAttribute[]`, and `form.attributes.map(...)` is safe on any form.
 >
-> On SDK ≤ 1.0.157 the object comes as is, and direct `.map`/`.filter`/`.sort` fails with `not a function`. If the project can work on an old SDK — normalize:
+> On SDK ≤ 1.0.157, the object comes as is, and direct `.map`/`.filter`/`.sort` fails with `not a function`. If the project may work on an old SDK — normalize:
 >
 > ```ts
 > const attrs: IFormAttribute[] = Array.isArray(form.attributes)
@@ -64,7 +62,7 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 >
 > Regardless of the version: an empty form — is a valid state of the project at the filling stage, the UI must degrade (empty field list), not crash.
 
-**Types for form fields — import from `oneentry/dist/forms/formsInterfaces`:**
+**Field Types for Forms — import from `oneentry/dist/forms/formsInterfaces`:**
 
 ```ts
 import type {
@@ -80,14 +78,14 @@ import type {
 **Using `localizeInfos` of the form:**
 
 ```tsx
-// Success/error message from the form settings in the admin panel
+// Success/error message from form settings in the admin panel
 if (result.success) {
   setMessage(form.localizeInfos?.successMessage || 'Submitted')
 } else {
   setMessage(form.localizeInfos?.unsuccessMessage || 'Submission failed')
 }
 
-// Form title for the site (differs from the internal title)
+// Form title for the site (differs from internal title)
 const heading = form.localizeInfos?.titleForSite || form.localizeInfos?.title
 ```
 
@@ -107,9 +105,9 @@ const hint = field.additionalFields?.hint?.value || ''
 {hint && <span className="hint">{hint}</span>}
 ```
 
-**Mapping validator errors:**
+**Mapping Validator Errors:**
 
-In case of an error `postFormsData` `IError.message` — is an array of strings with field markers or messages. To display custom errors, build a map from the form:
+When an error occurs in `postFormsData`, `IError.message` — is an array of strings with field markers or messages. To display custom errors, build a map from the form:
 
 ```ts
 import type { IFormAttribute } from 'oneentry/dist/forms/formsInterfaces'
@@ -118,7 +116,7 @@ import type { IFormAttribute } from 'oneentry/dist/forms/formsInterfaces'
 function buildValidatorErrors(attributes: IFormAttribute[]): Record<string, string> {
   const map: Record<string, string> = {}
   for (const attr of attributes) {
-    // Find the first validator with errorMessage
+    // Look for the first validator with errorMessage
     const errorMessage = Object.values(attr.validators || {})
       .map((v: any) => v?.errorMessage)
       .find(Boolean)
@@ -145,7 +143,7 @@ const formModuleConfigId = formModuleConfig?.id ?? 0
 const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? ''
 ```
 
-**Special types of form fields:**
+**Special Field Types for Forms:**
 
 - `spam` — captcha (reCAPTCHA v3 Enterprise). DO NOT render as `<input>`, use `<FormReCaptcha>`.
   siteKey — in `spam.settings.captcha.key` (NOT in `validators`), value of the spam field — object
@@ -154,7 +152,7 @@ const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? '
 
 ---
 
-## postFormsData — three mandatory identifiers
+## postFormsData — Three Required Identifiers
 
 ```ts
 await getApi().FormData.postFormsData({
@@ -167,7 +165,7 @@ await getApi().FormData.postFormsData({
 })
 ```
 
-**All three identifiers are mandatory.** Get them from `getFormByMarker`:
+**All three identifiers are required.** Get them from `getFormByMarker`:
 
 ```ts
 const formModuleConfigId = form.moduleFormConfigs?.[0]?.id ?? 0
@@ -176,7 +174,7 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 
 ---
 
-## formData — values by field types
+## formData — Values by Field Types
 
 Each element of formData: `{ marker, type, value }`. `type` is taken from `attributes[].type`.
 
@@ -188,7 +186,7 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
 { marker: 'price', type: 'float', value: 2.256 }
 ```
 
-> **Sending vs reading (v1.0.157).** You can send a number as a string — the body type has been expanded to `string | number | null` (`IBodyTypeStringNumberFloat.value`). However, **when reading** the response (`getFormsDataByMarker`, fields of the sent form), the number always comes as `number` — numerical normalization is now applied to both form attributes and form-data fields that were previously skipped. An unfilled numeric field — is `null`, not `0` and not `''`: comparisons like `value === '5'` and `if (!value)` should be reconsidered.
+> **Sending vs Reading (v1.0.157).** You can send a number as a string — the body type has been extended to `string | number | null` (`IBodyTypeStringNumberFloat.value`). However, **when reading** the response (`getFormsDataByMarker`, fields of the sent form), the number always comes as `number` — numerical normalization is now applied to both form attributes and form-data fields that were previously skipped. An unfilled numeric field — is `null`, not `0` and not `''`: comparisons like `value === '5'` and `if (!value)` should be reviewed.
 >
 > File fields in form-data follow the same rule as entity attributes: one file → object, multiple → array (`IBodyTypeFile.value: IFileValue | IFileValue[]`).
 
@@ -210,7 +208,7 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
 
 **⚠️ UI — NOT a regular `<input type="text">`**
 
-For `date` / `dateTime` / `time` fields, **always** render the corresponding native picker or library calendar. A regular text input — is prohibited: the user will enter a string, it will not pass validation and will not be assembled into the correct `{ fullDate, formattedValue, formatString }`.
+For fields `date` / `dateTime` / `time` **always** render the corresponding native picker or library calendar. A regular text input — is prohibited: the user will enter a string, it will not pass validation and will not be assembled into the correct `{ fullDate, formattedValue, formatString }`.
 
 | `attribute.type` | Native input | Alternative |
 | --- | --- | --- |
@@ -223,7 +221,7 @@ For `date` / `dateTime` / `time` fields, **always** render the corresponding nat
 - If a specific format is needed (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`) — take it from the attribute and use it when building `formattedValue`.
 - If the format is not specified — apply the default value for the type (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`).
 
-**Assembling value from native input:**
+**Building value from native input:**
 
 ```ts
 // date
@@ -244,7 +242,7 @@ const d = new Date(); d.setUTCHours(h, m, 0, 0)
 const value = { fullDate: d.toISOString(), formattedValue: input, formatString: 'HH:mm' }
 ```
 
-**Dynamic rendering of a field in the form (pattern):**
+**Dynamic Field Rendering in Form (Pattern):**
 
 ```tsx
 if (attr.type === 'date') {
@@ -319,7 +317,7 @@ if (attr.type === 'time') {
 // value — array of arrays [startISO, endISO]
 ```
 
-**Reading** available slots (SDK ≥ 1.0.156) — `expandTimeIntervals` by field schedules:
+**Reading** available slots (SDK ≥ 1.0.156) — `expandTimeIntervals` by the field schedules:
 
 ```ts
 import { expandTimeIntervals } from 'oneentry';
@@ -328,13 +326,13 @@ const field = form.attributes.find((a) => a.marker === 'delivery_slot');
 const slots = (field?.localizeInfos.intervals ?? []).flatMap((schedule) =>
   expandTimeIntervals(schedule, { from: '2025-02-01', to: '2025-02-28' }),
 );
-// slots → [[startISO, endISO], ...] (UTC). The ready field timeIntervals is no longer in the SDK.
+// slots → [[startISO, endISO], ...] (UTC). The ready field timeIntervals is no longer available in the SDK.
 ```
 
 ### image, groupOfImages — File object
 
 ```ts
-// Needs a File object (not a URL string!)
+// A File object is needed (not a URL string!)
 const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png')
 { marker: 'photo', type: 'image', value: [file] }
 { marker: 'gallery', type: 'groupOfImages', value: [file1, file2] }
@@ -364,14 +362,14 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 }
 ```
 
-> **Reading saved file field (v1.0.157):** in the response, one file comes as **an object**, not an array of one element; the array remains when there are two or more. The body type has been expanded: `IBodyTypeFile.value: IFileValue | IFileValue[]`. You can still send it as an array. Read it safely: `const files = v ? [v].flat() : []`.
+> **Reading saved file field (v1.0.157):** in the response, one file comes as **an object**, not an array with one element; the array remains when there are two or more. The body type has been extended: `IBodyTypeFile.value: IFileValue | IFileValue[]`. You can still send it as an array. Read it reliably: `const files = v ? [v].flat() : []`.
 
 ---
 
-## Full flow: get form → send data
+## Full Flow: Get Form → Send Data
 
 ```ts
-// app/actions/forms.ts
+// src/app/actions/forms.ts
 'use server'
 
 // ⚠️ message from validators — an array of strings, always normalize
@@ -385,7 +383,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
   const formModuleConfig = form.moduleFormConfigs?.[0]
 
-  // With v1.0.158 attributes are always an array; the branch is only needed for SDK ≤ 1.0.157
+  // With v1.0.158 attributes are always an array; branch needed only for SDK ≤ 1.0.157
   const attrs: IFormAttribute[] = Array.isArray(form.attributes)
     ? form.attributes
     : Object.values(form.attributes ?? {})

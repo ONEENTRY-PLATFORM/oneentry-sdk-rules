@@ -2,13 +2,13 @@
 name: create-menu
 description: Create navigation menu from OneEntry Menus API
 ---
-# Create navigation menu from OneEntry Menus API
+# Create a Navigation Menu from OneEntry Menus API
 
 Argument: `marker` (menu marker in OneEntry, for example `main_web`)
 
 ---
 
-## Step 1: Define the menu marker
+## Step 1: Define the Menu Marker
 
 If the argument is not provided — get a list of available menus:
 
@@ -18,18 +18,18 @@ Run `/inspect-api menus` — the skill uses the SDK and will return a list of `i
 
 ---
 
-## Step 2: Clarify details with the user
+## Step 2: Clarify Details with the User
 
 Before writing the code, find out:
 
 1. **Where to place the menu?** (Header, Footer, Sidebar, separate component?)
 2. **Is hierarchy needed?** (Dropdown submenus or only top level?)
-3. **Are URL prefixes needed?** For example, some menu items may lead to `/shop/offer`, while in OneEntry their `pageUrl` is simply `"offer"`. If yes — ask for a list of such pages and the required prefixes.
+3. **Are URL prefixes needed?** For example, some menu items may lead to `/shop/offer`, although in OneEntry their `pageUrl` is simply `"offer"`. If yes — ask for a list of such pages and the required prefixes.
 4. **Are there any "special" items?** For example, the `category` item leads to `/shop`, but its child elements lead to `/shop/category/{slug}`.
 
 ---
 
-## Step 3: Read the menu type in the SDK
+## Step 3: Read the Menu Type in SDK
 
 ```bash
 grep -r "IMenusEntity\|IMenusPages" node_modules/oneentry/dist --include="*.d.ts" -A 10
@@ -39,21 +39,21 @@ Key fields of `IMenusPages`:
 - `id` — identifier of the item (`number | null` — an item without an associated page may be null)
 - `parentId` — a relic, do not rely on it (nesting is only through `children`)
 - `pageUrl` — page marker (`string | null` — also nullable)
-- `localizeInfos.title` — title of the item (`localizeInfos` may be an empty object `{}`)
-- `localizeInfos.menuTitle` — title in the menu (alternative)
+- `localizeInfos.title` — name of the item (`localizeInfos` may be an empty object `{}`)
+- `localizeInfos.menuTitle` — name in the menu (alternative)
 - `children` — child items: an array of `IMenusPages`, a single object, or absent
 - `position` — sort order
 
-**⚠️ IMPORTANT:** The API returns a tree — child items are in `item.children` and are NOT duplicated in a flat `pages` (only the top level is there). The filter `pages.filter(p => p.parentId === item.id)` will return an empty array — take only `item.children`, normalizing via `Array.isArray` (`parentId` is a relic, do not build logic on it). `children` is recursive — nesting can be deeper than 2 levels; the templates below intentionally cover 2 levels.
+**⚠️ IMPORTANT:** The API returns a tree — child items are in `item.children` and are NOT duplicated in the flat `pages` (only the top level is there). The filter `pages.filter(p => p.parentId === item.id)` will return an empty array — take only `item.children`, normalizing through `Array.isArray` (`parentId` is a relic, do not build logic on it). `children` is recursive — nesting can be deeper than 2 levels; the templates below intentionally cover 2 levels.
 
 ---
 
-## Step 4: Create the menu component
+## Step 4: Create the Menu Component
 
-### Basic template (Server Component, only top level)
+### Basic Template (Server Component, only top level)
 
 ```tsx
-// components/NavMenu.tsx
+// src/components/NavMenu.tsx
 import Link from 'next/link';
 import { getApi, isError } from '@/lib/oneentry';
 
@@ -83,10 +83,10 @@ export async function NavMenu({ locale }: { locale: string }) {
 }
 ```
 
-### With hierarchy (dropdown submenus)
+### With Hierarchy (Dropdown Submenus)
 
 ```tsx
-// components/NavMenu.tsx
+// src/components/NavMenu.tsx
 import Link from 'next/link';
 import { getApi, isError } from '@/lib/oneentry';
 
@@ -140,12 +140,12 @@ export async function NavMenu({ locale }: { locale: string }) {
 }
 ```
 
-### With URL prefixes (if menu items require non-standard paths)
+### With URL Prefixes (if menu items require non-standard paths)
 
 Use this option if some `pageUrl` from the menu should open at a different path in the application.
 
 ```tsx
-// components/NavMenu.tsx
+// src/components/NavMenu.tsx
 import Link from 'next/link';
 import { getApi, isError } from '@/lib/oneentry';
 
@@ -156,7 +156,7 @@ function getChildren(item: any): any[] {
 }
 
 // Defined based on the application structure:
-// key — pageUrl from OneEntry, value — real path in the application
+// key — pageUrl from OneEntry, value — actual path in the application
 const URL_OVERRIDES: Record<string, string> = {
   // Example: 'offer' → 'shop/offer', 'category' → 'shop'
   // CLARIFY with the user!
@@ -225,10 +225,10 @@ export async function NavMenu({ locale }: { locale: string }) {
 
 ---
 
-## Step 5: Add usage in layout
+## Step 5: Add Usage in Layout
 
 ```tsx
-// app/[locale]/layout.tsx
+// src/app/[locale]/layout.tsx
 import { NavMenu } from '@/components/NavMenu';
 
 export default async function LocaleLayout({
@@ -251,7 +251,7 @@ export default async function LocaleLayout({
 
 ---
 
-## Step 6: Remind key rules
+## Step 6: Remind Key Rules
 
 After creating the file, output:
 
@@ -259,21 +259,21 @@ After creating the file, output:
 
 ```md
 1. The API returns a tree — child items in item.children (NOT through parentId filter on pages, it will return empty)
-2. pages and children — array OR single object: always normalize via Array.isArray()
-3. Use localizeInfos?.title || localizeInfos?.menuTitle for the item title
+2. pages and children — array OR single object: always normalize through Array.isArray()
+3. Use localizeInfos?.title || localizeInfos?.menuTitle for the item name
 4. pageUrl = marker ("about"), not the route path ("/[locale]/about")
-5. params in Next.js 15+ — is a Promise, always await in layout/page
-6. DO NOT guess markers — get them via /inspect-api menus
+5. params in Next.js 15+ — this is a Promise, always await in layout/page
+6. DO NOT guess markers — get them through /inspect-api menus
 ```
 
 ---
 
-## Step 7: Playwright E2E tests
+## Step 7: Playwright E2E Tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
 > To set up Playwright — first `/setup-playwright`.
 
-### 7.1 Add `data-testid` to the component
+### 7.1 Add `data-testid` to the Component
 
 For selector stability — add `data-testid` when generating `NavMenu.tsx`:
 
@@ -312,11 +312,11 @@ For selector stability — add `data-testid` when generating `NavMenu.tsx`:
 </nav>
 ```
 
-### 7.2 Gather test parameters and fill in `.env.local`
+### 7.2 Collect Test Parameters and Fill `.env.local`
 
-**Algorithm (perform step by step, do not ask in one list):**
+**Algorithm (execute step by step, do not ask in one list):**
 
-1. **Menu marker** — use the marker passed as an argument to `/create-menu <marker>`. If it is not there — take it from `/inspect-api menus` (Step 1). If there are multiple menus and the user did not clarify — ask: "The project found the menu: `{list}`. Which one to test?".
+1. **Menu marker** — use the marker passed as an argument to `/create-menu <marker>`. If it is not there — take it from `/inspect-api menus` (Step 1). If there are multiple menus and the user did not specify — ask: "The project found the menu: `{list}`. Which one to test?".
 2. **Menu items** — get it through `/inspect-api menus` (already called in Step 1). From the response:
    - `firstPageUrl` — `pageUrl` of the first top-level item (for click test)
    - `parentWithChildren` — top-level item that has children (for hierarchy test). If not — skip the hierarchy test with `test.skip` with the reason "there are no nested items in the menu".
@@ -325,7 +325,7 @@ For selector stability — add `data-testid` when generating `NavMenu.tsx`:
 4. **Page where the menu is rendered** — ask: "On which pages is the menu displayed? (usually — in layout, meaning everywhere)".
    - If silent → test on `/${locale}` (the root of the locale). Inform: "Testing on the root page of the locale `/{locale}`".
 
-**Example of filling in `.env.local` (do it yourself, do not ask the user to copy):**
+**Example of filling `.env.local` (do it yourself, do not ask the user to copy):**
 
 ```bash
 # e2e menu
@@ -338,7 +338,7 @@ E2E_MENU_CHILD_URL=electronics
 
 ### 7.3 Create `e2e/menu.spec.ts`
 
-> ⚠️ Tests check the real structure of the menu from the OneEntry Menus API. Item markers are taken from `/inspect-api menus`.
+> ⚠️ Tests check the real structure of the menu from OneEntry Menus API. Item markers are taken from `/inspect-api menus`.
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -371,7 +371,7 @@ test.describe('Nav menu', () => {
     expect(href).toContain(`/${LOCALE}/`);
 
     await link.click();
-    // URL should match href (either contains pageUrl if there were URL prefixes)
+    // URL should match href (or contains pageUrl if there were URL prefixes)
     await expect(page).toHaveURL(new RegExp(`/${LOCALE}/`));
     expect(page.url()).not.toMatch(new RegExp(`/${LOCALE}$`));
   });
@@ -404,7 +404,7 @@ test.describe('Nav menu', () => {
 });
 ```
 
-### 7.4 Report to the user about the decisions made
+### 7.4 Report to the User About Decisions Made
 
 Before completing the task — explicitly inform:
 

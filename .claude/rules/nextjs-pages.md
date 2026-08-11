@@ -1,12 +1,10 @@
-<!-- META
-type: rules
-fileName: nextjs-pages.md
-rulePaths: ["app/**/page.tsx","app/**/layout.tsx"]
+---
 paths:
   - "app/**/page.tsx"
+  - "src/app/**/page.tsx"
   - "app/**/layout.tsx"
--->
-
+  - "src/app/**/layout.tsx"
+---
 # Next.js Pages — OneEntry Rules
 
 ## ⚠️ params and searchParams are Promises (Next.js 15+)
@@ -25,20 +23,20 @@ export default async function Page({
   params: Promise<{ locale: string }>;
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const { locale } = await params;     // ← required!
-  const sp = await searchParams;       // ← required!
+  const { locale } = await params;     // ← mandatory!
+  const sp = await searchParams;       // ← mandatory!
 }
 ```
 
 ## pageUrl = marker, NOT route path
 
 ```typescript
-// ❌ INCORRECT — passing the full route path
+// ❌ INCORRECT — you pass the full route path
 getApi().Pages.getPageByUrl('shop/category/about', locale)
 
 // ✅ CORRECT — only the marker from the pageUrl field in OneEntry
 getApi().Pages.getPageByUrl('about', locale)
-// URL in the application: /shop/category/about
+// URL in the app: /shop/category/about
 // pageUrl in OneEntry: "about"
 ```
 

@@ -10,7 +10,7 @@ This file is the core of the context: only what is always needed. Reference mate
 
 OneEntry is a headless CMS for e-commerce and content projects. The `oneentry` SDK provides access to catalogs and categories, orders and payments, authentication and profiles, multilingual content, forms, menus, and pages.
 
-The SDK is isomorphic: it works both on the server and on the client. Public methods are read-only; programmatic content writing goes through the internal admin API (`admin-api.md`).
+The SDK is isomorphic: it works on both the server and the client. Public methods are read-only; programmatic content writing goes through the internal admin API (`admin-api.md`).
 
 ## Start of Each Session — Mandatory Checklist
 
@@ -24,10 +24,10 @@ The SDK is isomorphic: it works both on the server and on the client. Public met
 
 ### Two Mandatory Questions (once per session)
 
-Ask them at the beginning of your work and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
+Ask them at the beginning of the work and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
 
-1. **"Do we need to save tokens?"** — **save**: do not run linter/build, do not write comments; **full**: JSDoc + lint + build after writing. Save as `feedback_token_mode.md`
-2. **"Do we need to write Playwright E2E tests?"** — **yes**: run `/setup-playwright`, write a test in `e2e/` for each new component, add `data-testid`; **no**: do not create `e2e/`. Save as `feedback_playwright.md`
+1. **“Is it necessary to save tokens?”** — **save**: do not run linter/build, do not write comments; **full**: JSDoc + lint + build after writing. Save as `feedback_token_mode.md`
+2. **“Is it necessary to write E2E tests with Playwright?”** — **yes**: run `/setup-playwright`, write a test in `e2e/` for each new component, add `data-testid`; **no**: do not create `e2e/`. Save as `feedback_playwright.md`
 
 ```markdown
 ---
@@ -46,18 +46,18 @@ The file already exists — **do not ask**.
 ### Mandatory Code Requirements
 
 - **No `any`** — types from `node_modules/oneentry/dist/**/*.d.ts` (see `typescript.md`). Exception — fields that the SDK itself declares as `any` (`ILocalizeInfo`, `IError`)
-- **Linter** — the code must pass without errors and without post-factum auto-formatting (`next/core-web-vitals` + `next/typescript`)
+- **Linter** — code must pass without errors and without auto-formatting afterwards (`next/core-web-vitals` + `next/typescript`)
 - **Imports** — only used ones
 - **`<img>`** → `next/image`, **`<a>`** → `next/link`
 - **Temporary files** (inspection, debugging scripts) — **only** in `.claude/temp/`, this folder survives sessions
-- **Structure of `components/`** — never flat: organize into groups (`layout/`, `product/`, `catalog/`, `cart/`, `favorites/`, `search/`, `user/`, `ui/` — primitives without business logic). If it doesn’t fit — create a new group
+- **Structure of `src/components/`** — never flat: organize into groups (`layout/`, `product/`, `catalog/`, `cart/`, `favorites/`, `search/`, `user/`, `ui/` — primitives without business logic). If it doesn’t fit — create a new group
 
 ### Architectural Decisions of the Project
 
-- **Tokens**: `localStorage`, key `'refresh-token'`; rotation is automatically handled by `saveFunction` (`tokens.md`)
-- **`lib/oneentry.ts`**: the only file with `getApi`, `reDefine`, `hasActiveSession`, `syncTokens`, `isError`, `getLang`, `getImageUrl` — do not duplicate `isError` in other files
-- **User Authentication**: user-auth methods (Orders, Users, Payments, Events, Subscriptions) are called from Client Component via `getApi()` after `reDefine(refreshToken, langCode)` — the SDK itself performs proactive refresh and token rotation
-- **AuthProvider.auth/signUp/generateCode**: only from Client Component (fingerprint); server call — only with passing `deviceMetadata` of the browser (SDK ≥ 1.0.155)
+- **Tokens**: `localStorage`, key `'refresh-token'`; rotation is handled by `saveFunction` automatically (`tokens.md`)
+- **`src/lib/oneentry.ts`**: the only file with `getApi`, `reDefine`, `hasActiveSession`, `syncTokens`, `isError`, `getLang`, `getImageUrl` — do not duplicate `isError` in other files
+- **User Authentication**: user-auth methods (Orders, Users, Payments, Events, Subscriptions) are called from the Client Component via `getApi()` after `reDefine(refreshToken, langCode)` — the SDK itself performs proactive refresh and token rotation
+- **AuthProvider.auth/signUp/generateCode**: only from Client Component (fingerprint); server call — only with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155)
 - **`next.config.ts`**: `remotePatterns` with `*.oneentry.cloud` for `next/image`
 
 ## Context Map — what to load and when
@@ -68,16 +68,16 @@ This file is a navigator. It is intentionally thin: details are in the rules and
 
 ### Skills
 
-The keyword from the prompt is found → **first the skill, then the code**. Multiple triggers → multiple skills, each with its own checklist.
+Keyword from the prompt found → **first skill, then code**. Multiple triggers → multiple skills, each with its own checklist.
 
 | Skill | Triggers in the prompt | What it creates |
 | --- | --- | --- |
-| `/setup-nextjs` | create a next.js project | Next.js project from scratch |
-| `/setup-oneentry` | connect SDK, set up oneentry | `lib/oneentry.ts`, `next.config.ts`, environment variables |
+| `/setup-nextjs` | create next.js project | Next.js project from scratch |
+| `/setup-oneentry` | connect SDK, configure oneentry | `src/lib/oneentry.ts`, `next.config.ts`, environment variables |
 | `/inspect-api` | markers, response structure, what pages/forms/products are available | report with real markers and attribute types |
 | `/create-auth` | login, registration, authorization, personal account, auth | login, registration, logout, AuthContext |
 | `/create-google-oauth` | google login, oauth, login via google/facebook | redirect, callback, code exchange |
-| `/create-profile` | profile, user personal data | profile page |
+| `/create-profile` | profile, user's personal data | profile page |
 | `/create-orders-list` | orders, order history | list of orders with cancellation and pagination |
 | `/create-checkout` | checkout, order processing | delivery form, timeInterval, payment |
 | `/create-product-list` | product list, catalog | catalog with filtering and pagination |
@@ -87,13 +87,13 @@ The keyword from the prompt is found → **first the skill, then the code**. Mul
 | `/create-menu` | menu, navigation | navigation menu |
 | `/create-form` | feedback form, form from CMS | dynamic form from Forms API |
 | `/create-captcha` | captcha, recaptcha | reCAPTCHA v3 in the form |
-| `/create-cart-manager` | cart | cart on the server-side cart API |
-| `/create-favorites` | favorites, wishlist | favorites on the server-side wishlist API |
+| `/create-cart-manager` | cart | cart on server-side cart API |
+| `/create-favorites` | favorites, wishlist | favorites on server-side wishlist API |
 | `/create-filter-panel` | filters, filter panel | filter panel by attributes |
 | `/create-content-filter` | content filter, filter tree | content filter tree |
-| `/create-search` | search, search bar | search for products/pages |
+| `/create-search` | search, search bar | search by products / pages |
 | `/create-reviews` | reviews, reviews | reviews with hierarchy |
-| `/create-subscription-events` | product subscription, notifications about price/availability | subscription to product events |
+| `/create-subscription-events` | product subscription, price/availability notifications | subscription to product events |
 | `/create-subscription` | paid subscriptions, rates | subscriptions + Stripe |
 | `/create-locale-switcher` | language switcher, locale switcher | language switcher |
 | `/create-server-action` | server action, server action | Server Action for public SDK methods |
@@ -101,52 +101,52 @@ The keyword from the prompt is found → **first the skill, then the code**. Mul
 | `/setup-vitest` | unit tests, vitest, cover adapters with tests | Vitest + OneEntry response fixtures |
 | `/create-seo` | seo, metadata, sitemap, robots, microdata, JSON-LD | `generateMetadata`, `sitemap.ts`, `robots.ts`, `JsonLd` |
 | `/setup-pwa` | pwa, manifest, service worker, offline | `manifest.ts`, `sw.js`, offline fallback |
-| `/admin-fill-content` | fill the admin panel with a script, upload content programmatically | content recording via internal admin API |
-| `/admin-upload-images` | upload images to CMS with a script, preview/LQIP is not created | image upload with preview |
+| `/admin-fill-content` | fill admin with a script, upload content programmatically | content entry via internal admin API |
+| `/admin-upload-images` | upload images to CMS with a script, preview/LQIP not created | image upload with preview |
 | `/admin-grant-permissions` | 403 Permission data not found, group rights | granting route to a user group |
 
 ### Rules — reference, on demand
 
 | Rule | When needed |
 | --- | --- |
-| `sdk-modules.md` | need SDK method signature or list of module methods |
+| `sdk-modules.md` | need method signature of SDK or list of module methods |
 | `glossary.md` | unclear term: marker, pageUrl, attributeSets, fingerprint, guestId, bonus, … |
-| `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, complete summary of call contexts |
+| `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, full summary of call contexts |
 | `error-handling.md` | centralized `ApiError`/`handleApiError`, "Resource is closed" |
 | `troubleshooting.md` | specific error 400/401/403/404/500 or build/environment issue |
 | `common-mistakes.md` | before reviewing your code — what AI usually invents |
 | `common-patterns.md` | pagination, filtering, SSR/SSG strategies, `user.state`, RTK Query, parallel requests |
-| `scenarios.md` | typical e-commerce scenarios, authorization, CMS pages as a whole |
+| `scenarios.md` | typical scenarios for e-commerce, authorization, CMS pages as a whole |
 | `scenarios-advanced.md` | FormData, IntegrationCollections, catalog with filters, navigation by categories |
 | `pages-blocks.md` | Pages/Blocks API, multilingual content, products in blocks |
-| `mismatch-log.md` | entity not in admin panel — record discrepancy or conscious deviation from rules (section D) |
+| `mismatch-log.md` | entity not in admin — record discrepancy or conscious deviation from rules (section D) |
 
-### Rules — auto-connected by project files
+### Rules — auto-connectable by project files
 
-| Rule | File "fingerprints" |
+| Rule | "Fingerprint" files |
 | --- | --- |
 | `linting.md`, `typescript.md` | `**/*.ts`, `**/*.tsx` |
-| `nextjs-pages.md`, `localization.md` | `app/**/page.tsx`, `app/**/layout.tsx` |
-| `server-actions.md`, `tokens.md` | `app/actions/**/*.ts` |
-| `attribute-values.md`, `attribute-sets.md` | `app/**/*.tsx`, `components/**/*.tsx` |
+| `nextjs-pages.md`, `localization.md` | `src/app/**/page.tsx`, `src/app/**/layout.tsx` |
+| `server-actions.md`, `tokens.md` | `src/app/actions/**/*.ts` |
+| `attribute-values.md`, `attribute-sets.md` | `src/app/**/*.tsx`, `src/components/**/*.tsx` |
 | `auth-provider.md` | auth components and actions |
 | `forms.md`, `orders.md`, `product-statuses.md` | corresponding features |
-| `performance.md` | `app/**/page.tsx`, `app/**/layout.tsx`, `app/api/**/*.ts`, `components/**/*.tsx` |
-| `performance-popups.md` | `components/**/*Popup*.tsx`, `components/**/*Modal*.tsx`, `components/**/*Drawer*.tsx` |
-| `performance-rtk.md` | `**/RTKApi.ts`, `store/**/*.ts`, `app/store/**/*.ts` |
+| `performance.md` | `src/app/**/page.tsx`, `src/app/**/layout.tsx`, `src/app/api/**/*.ts`, `src/components/**/*.tsx` |
+| `performance-popups.md` | `src/components/**/*Popup*.tsx`, `src/components/**/*Modal*.tsx`, `src/components/**/*Drawer*.tsx` |
+| `performance-rtk.md` | `**/RTKApi.ts`, `src/store/**/*.ts`, `src/app/store/**/*.ts` |
 | `performance-gsap.md` | `**/animations/**/*.tsx`, `**/*Animation*.tsx`, `**/RegisterGSAP*.tsx` |
-| `performance-images.md` | `next.config.{ts,js,mjs}`, `**/*Image*.tsx`, `components/**/*.tsx` |
-| `performance-streaming.md` | `app/**/loading.tsx`, `app/**/page.tsx`, `app/**/layout.tsx` |
-| `performance-bundle.md` | `next.config.{ts,js,mjs}`, `package.json`, `app/**/page.tsx` |
+| `performance-images.md` | `next.config.{ts,js,mjs}`, `**/*Image*.tsx`, `src/components/**/*.tsx` |
+| `performance-streaming.md` | `src/app/**/loading.tsx`, `src/app/**/page.tsx`, `src/app/**/layout.tsx` |
+| `performance-bundle.md` | `next.config.{ts,js,mjs}`, `package.json`, `src/app/**/page.tsx` |
 | `playwright-e2e.md` | `e2e/**`, `playwright.config.ts` |
 | `unit-testing.md` | `**/*.test.ts(x)`, `vitest.config.ts` |
-| `security.md` | `next.config.ts`, `middleware.ts`, components with `dangerouslySetInnerHTML` |
-| `seo-metadata.md` | `app/sitemap.ts`, `app/robots.ts`, `generateMetadata` in pages |
-| `isr-config.md` | `lib/isr.ts`, pages with `revalidate` |
-| `observability.md` | `lib/**`, `app/api/**` |
-| `pwa.md` | `app/manifest.ts`, `public/sw.js` |
+| `security.md` | `next.config.ts`, `src/middleware.ts`, components with `dangerouslySetInnerHTML` |
+| `seo-metadata.md` | `src/app/sitemap.ts`, `src/app/robots.ts`, `generateMetadata` in pages |
+| `isr-config.md` | `src/lib/isr.ts`, pages with `revalidate` |
+| `observability.md` | `src/lib/**`, `src/app/api/**` |
+| `pwa.md` | `src/app/manifest.ts`, `public/sw.js` |
 | `jsdoc.md` | projects with strict JSDoc standard |
-| `admin-api.md`, `admin-ui.md` | scripts for writing to the admin panel (`scripts/**`) |
+| `admin-api.md`, `admin-ui.md` | scripts for writing to admin (`scripts/**`) |
 
 ## Main Rule: Check Types and Markers BEFORE Code
 
@@ -165,12 +165,12 @@ Import types: `import type { IPagesEntity } from 'oneentry/dist/pages/pagesInter
 
 ### 2. Markers — from API via `/inspect-api`, not from memory
 
-Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). If no `.env.local` — ask for URL and token.
+Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). If there is no `.env.local` — ask for the URL and token.
 
 **🚨 Existing code is NOT the source of truth:**
 
 ```typescript
-// ❌ If you see it in code — DO NOT repeat without verification:
+// ❌ If you see it in the code — DO NOT repeat without verification:
 const inStock = product.statusIdentifier === 'in_stock'
 const stockQty = attrs.units_product?.value
 // Confirm these markers through `/inspect-api` before use.
@@ -204,7 +204,7 @@ In Next.js 15+ `params` — is `Promise<{locale: string}>`, need to `await param
 | **integer / float / real** | `attrs.marker?.value` — number or `null` (not `0`!) |
 | **spam** (reCAPTCHA) | Render `<FormReCaptcha>`, NOT `<input>` |
 
-The file `value` form depends only on **the number of files**, not on the module (Products/Pages/Blocks/Orders — the same). Stable access: `const v = attrs.marker?.value; const f = Array.isArray(v) ? v[0] : v;`. If you don't know the type — `console.log(attrs.marker)`. Full table: `attribute-values.md`.
+The file `value` depends only on the **number of files**, not on the module (Products/Pages/Blocks/Orders — the same). Stable access: `const v = attrs.marker?.value; const f = Array.isArray(v) ? v[0] : v;`. If you don't know the type — `console.log(attrs.marker)`. Full table: `attribute-values.md`.
 
 ### 8. "Add to Cart" button — by default, without question
 
@@ -212,7 +212,7 @@ For card / catalog / product page `AddToCartButton` is added automatically. If t
 
 ### 9. `isError` + singleton SDK + exact types
 
-Check each API call through type guard `isError`. One instance of SDK in `lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** a new `defineOneEntry()`.
+Check every API call through type guard `isError`. One instance of SDK in `src/lib/oneentry.ts`, use via `getApi()`. For configuration changes (`refreshToken`, `langCode`) — `reDefine()`, **not** a new `defineOneEntry()`.
 
 ### 10. Server Action — thin proxy
 
@@ -222,12 +222,12 @@ Do not create intermediate types and do not map API responses to custom objects.
 
 “Do X + add Y + create Z” — this is **not** a single pass. Real case: skipping the flag `isCheckCode: true` in the auth flow due to “general pass”.
 
-**Step 1. Decomposition in TodoWrite:** for each subtask define the required skill (see “Context Map”) and relevant rules.
+**Step 1. Decomposition in TodoWrite:** for each subtask, define the required skill (see “Context Map”) and relevant rules.
 
 **Step 2. Execution mode:**
 
 - **Sequentially** (default) — one subtask → its rules → checklist → next.
-- **In parallel** — only for completely independent tasks without common dependencies (different pages/components without shared AuthContext/`lib/oneentry.ts`). Through Agent tool, each with full context.
+- **In parallel** — only for completely independent tasks without common dependencies (different pages/components without shared AuthContext/`src/lib/oneentry.ts`). Through Agent tool, each with full context.
 
 **Step 3. Checklist after each subtask:** have all rules been applied, have all API fields been processed, have all flags (`isCheckCode`, `systemCodeTlsSec`, …) been considered.
 
@@ -235,10 +235,10 @@ Do not create intermediate types and do not map API responses to custom objects.
 
 ## When to Stop and Ask the User
 
-- **Don’t know the marker** → `/inspect-api`; no Bash — ask.
+- **Don't know the marker** → `/inspect-api`; no Bash — ask.
 - **403 Forbidden** → check: is `AuthProvider.auth/signUp/generateCode` called via Server Action? Move to Client Component (fingerprint). Or check group permissions in the admin panel.
-- **No layout** → “Is there an example of layout/design?”
-- **Don’t understand the data source** → “Where should the data for [component] come from?”
+- **No layout** → “Is there a layout/design example?”
+- **Don't understand the data source** → “Where should the data for [component] come from?”
 - **Multiple solution options** → “X or Y, which do you prefer?”
 
 ## API Permissions for the "Guests" Group
@@ -255,12 +255,12 @@ Error `403 “Permission data not found. Provide the permission for requested ur
 
 - **Pages — from CMS** (`getPageByUrl` + `getBlocksByPageUrl`), not hardcoded. The main one is usually `'home'`. Skill: `/create-page`.
 - **Exactly copy the user's layout** (Tailwind/JSX) — change only hardcoded data to API data.
-- **Linter:** write code according to the project's linter config. Do not fix someone else's linting/formatting — that’s the user's job.
+- **Linter:** write code according to the project's linter config. Do not fix someone else's linting/formatting — this is the user's job.
 - **Pagination, loading states, markers instead of IDs** — recommended by default.
 
 ## SDK Initialization
 
-> **Quick initialization of a new project:** skill **`/setup-oneentry`** — will create `lib/oneentry.ts`, configure `next.config.ts`, and show the required environment variables.
+> **Quick initialization of a new project:** skill **`/setup-oneentry`** — will create `src/lib/oneentry.ts`, configure `next.config.ts`, and show the required environment variables.
 
 **`.env.local`** (if the file does not exist — create it and ask the user for the project URL and App Token, Settings → App Token in the admin panel):
 
@@ -271,7 +271,7 @@ NEXT_PUBLIC_ONEENTRY_TOKEN=your-app-token
 
 `NEXT_PUBLIC_` — variables are available on both the server and the client, so the SDK works in both contexts.
 
-### Singleton `lib/oneentry.ts` — canonical pattern
+### Singleton `src/lib/oneentry.ts` — canonical pattern
 
 ```typescript
 import { defineOneEntry } from 'oneentry';
@@ -322,7 +322,7 @@ export async function reDefine(
     token: APP_TOKEN,
     auth: {
       refreshToken,
-      saveFunction, // ← SDK calls on rotation, token is saved automatically
+      saveFunction, // ← SDK calls this on rotation, token is saved automatically
     },
   });
 }
@@ -330,7 +330,7 @@ export async function reDefine(
 
 **IMPORTANT:** in `next.config.ts` add `remotePatterns` for `*.oneentry.cloud`, otherwise `next/image` will throw an error.
 
-Token handling rules — `tokens.md` (auto-loaded in `app/actions/**/*.ts`). Full list of exports from `lib/oneentry.ts`, guest mode, `deviceMetadata`, `traficLimit` — `sdk-init.md`.
+Token handling rules — `tokens.md` (auto-loaded in `src/app/actions/**/*.ts`). Full list of exports from `src/lib/oneentry.ts`, guest mode, `deviceMetadata`, `traficLimit` — `sdk-init.md`.
 
 ### SDK Call Contexts (Next.js)
 
@@ -345,7 +345,7 @@ Choosing a context = rendering strategy:
 
 > Rules: `server-actions.md`, `auth-provider.md`, `nextjs-pages.md`
 
-### ⚠️ params and searchParams in Next.js 15+/16 — are Promises
+### ⚠️ params and searchParams in Next.js 15+/16 — this is a Promise
 
 ```tsx
 // ✅ Always await params
@@ -354,7 +354,7 @@ export default async function Page({ params }: { params: Promise<{ locale: strin
 }
 ```
 
-For details — `nextjs-pages.md` and `localization.md`.
+Details — `nextjs-pages.md` and `localization.md`.
 
 ## Error Handling
 

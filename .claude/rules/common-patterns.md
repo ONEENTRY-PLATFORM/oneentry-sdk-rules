@@ -1,4 +1,4 @@
-# Common SDK Usage Patterns
+# General SDK Usage Patterns
 
 ## Working with Markers
 
@@ -62,7 +62,7 @@ export const revalidate = 3600 // 1 hour
 export const dynamic = 'force-dynamic'
 ```
 
-> Full rules for caching/streaming/parallelism: `.claude/rules/performance.md` + performance-* rule family.
+> Complete rules for caching/streaming/parallelism: `.claude/rules/performance.md` + performance-* rule family.
 
 ## user.state — Storage for Arbitrary User Data
 
@@ -72,11 +72,11 @@ export const dynamic = 'force-dynamic'
 
 1. **Always spread** `{ ...user.state, newField }` — do not overwrite other fields.
 2. **`formIdentifier`** is taken from `user.formIdentifier` — do not hardcode.
-3. **Call from client** via `getApi()` after `reDefine()` — the token is managed by `saveFunction`.
+3. **Call from the client** via `getApi()` after `reDefine()` — the token is managed by `saveFunction`.
 4. **Before each write — fresh `getUser()`.** The cached object between read and write may be outdated (another code may have changed `cart`/`favorites`).
 
 ```typescript
-// lib/userState.ts
+// src/lib/userState.ts
 import { getApi, isError } from '@/lib/oneentry';
 import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
@@ -100,7 +100,7 @@ export async function updateUserState(data: { cart?: Record<number, number>; fav
 }
 ```
 
-**Typical State Structure:**
+**Typical state structure:**
 
 ```typescript
 user.state = {
@@ -112,9 +112,9 @@ user.state = {
 
 **Synchronization after login:** `getUserState()` from the client after `reDefine()`. For local storage without server synchronization — `/create-cart-manager` and `/create-favorites`.
 
-### Versioning for Single Initialization of Redux from Server State
+### Versioning for One-Time Redux Initialization from Server State
 
-Without the `version` flag, the effect will overwrite Redux on each re-render, destroying the user's local changes. The pattern (shown for one field — similarly for others):
+Without the `version` flag, the effect will overwrite Redux on each re-render, destroying local user changes. The pattern (shown for one field — similarly for others):
 
 ```typescript
 const [cartVersion, setCartVersion] = useState(0)
@@ -133,7 +133,7 @@ useEffect(() => {
   if (!isAuth) return
   if (cartVersion === 0 && favoritesVersion === 0) return
   updateUserState({ cart: productsInCart, favorites: favoritesIds })
-  // DO NOT pass user as a parameter — updateUserState fetches fresh data itself
+  // DO NOT pass user as a parameter — updateUserState itself gets fresh data
 }, [isAuth, productsInCart, favoritesIds])
 ```
 
@@ -146,10 +146,10 @@ Use when the same data is needed by multiple Client Components (automatic dedupl
 | Server Component, one-time request | Direct `getApi()` |
 | One Client Component, one-time request | Direct `getApi()` |
 | Multiple Client Components read the same data | RTK Query (deduplication) |
-| Polling (updating user state in real-time) | RTK Query with `pollingInterval` |
+| Polling (updating user state in real time) | RTK Query with `pollingInterval` |
 
 ```typescript
-// app/api/RTKApi.ts — skeleton
+// src/app/api/RTKApi.ts — skeleton
 import { createApi, fakeBaseQuery } from '@reduxjs/toolkit/query/react'
 
 export const oneEntryApi = createApi({
@@ -183,7 +183,7 @@ const { data: freshUser } = useGetMeQuery(undefined, {
 })
 ```
 
-> Full rules (skip patterns, `keepUnusedDataFor` by resource type, `pollingInterval ≥ 30 s`, when **not** to use RTK Query, optimistic updates): `.claude/rules/performance-rtk.md`.
+> Complete rules (skip patterns, `keepUnusedDataFor` by resource type, `pollingInterval ≥ 30 s`, when **not** to use RTK Query, optimistic updates): `.claude/rules/performance-rtk.md`.
 
 ## Parallel Requests
 

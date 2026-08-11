@@ -2,17 +2,17 @@
 name: create-subscription-events
 description: Create product event subscription
 ---
-# Create a product event subscription
+# Create a subscription for product events
 
-Creates a subscription for changes in price and stock status of a product via the OneEntry Events API. The user receives a notification when the product is back in stock or the price changes.
+Creates a subscription for changes in price and availability status of a product via the OneEntry Events API. The user receives a notification when the product is back in stock or the price changes.
 
 > ⚠️ Requires an authorized user. The Events API works only after login — call `reDefine(refreshToken)` before using it, then use `getApi()` directly from the Client Component.
 
 ---
 
-## Step 1: Get event markers
+## Step 1: Find event markers
 
-First, obtain real markers programmatically via the public `Events.getAllEvents()` (≥1.0.150, no auth needed — just URL + App Token). Run a temp script following the pattern `/inspect-api` (in `.claude/temp/`), NOT through `getApi()` (runtime wrapper of Client Component, available only after login):
+First, obtain real markers programmatically via the public `Events.getAllEvents()` (≥1.0.150, no auth needed — just URL + App Token). Run a temp script using the pattern `/inspect-api` (in `.claude/temp/`), NOT through `getApi()` (runtime wrapper of Client Component, available only after login):
 
 ```ts
 // .claude/temp/list-events.mjs
@@ -25,9 +25,9 @@ const events = await api.Events.getAllEvents();          // IContentApiEvent[] {
 
 Standard markers from a real project (fallback if the script is unavailable):
 
-- `catalog_event` — general catalog events (changes to the card, movements between categories)
-- `status_out_of_stock` — product out of stock / back in stock
-- `product_price` — price changed
+- `catalog_event` — general catalog events (card changes, moves between categories)
+- `status_out_of_stock` — product is out of stock / available
+- `product_price` — price has changed
 
 Contact the user/admin (OneEntry Admin → Events) only if `getAllEvents()` returned an error or an empty list — then create an entry in `MISMATCH-LOG.md` (rule `.claude/rules/mismatch-log.md`, C.6 Events).
 
@@ -35,7 +35,7 @@ Contact the user/admin (OneEntry Admin → Events) only if `getAllEvents()` retu
 
 ## Step 2: Create a hook for subscription
 
-File: `lib/hooks/useEvents.ts` — exactly this path, do not rename the hook and do not place it in `app/`. Client utilities in these rules reside in `lib/` (`lib/profile.ts`, `lib/orders.ts`, `lib/checkout.ts`), while `app/api/` in App Router is the zone for route handlers.
+File: `src/lib/hooks/useEvents.ts` — exactly this path, do not rename the hook or place it in `src/app/`. Client utilities in these rules live in `src/lib/` (`src/lib/profile.ts`, `src/lib/orders.ts`, `src/lib/checkout.ts`), while `src/app/api/` in App Router is the zone for route handlers.
 
 ```typescript
 'use client';
@@ -94,7 +94,7 @@ export async function getUserSubscriptions(offset = 0, limit = 30) {
 ## Step 3: Subscription button on the product card
 
 ```tsx
-// components/product/SubscribeButton.tsx
+// src/components/product/SubscribeButton.tsx
 'use client';
 
 import { useCallback, useContext, useState } from 'react';
@@ -179,7 +179,7 @@ const handleRemoveFromFavorites = async (productId: number) => {
 
 ## Step 5: Fetching subscriptions (optional)
 
-If you need to show the list of subscriptions on the profile page — use `getApi()` from the Client Component:
+If you need to show a list of subscriptions on the profile page — use `getApi()` from the Client Component:
 
 ```typescript
 // Call from Client Component after reDefine()
@@ -201,7 +201,7 @@ async function getUserEventSubscriptions() {
 
 1. Events require authorization — call only after login
 2. Call through getApi() from Client Component AFTER reDefine(refreshToken)
-3. subscribeByMarker/unsubscribeByMarker return Promise<boolean | IError>. With SDK ≥ 1.0.157 IError actually reaches the calling code — check the result strictly `=== true` (the error object is truthy, so `if (result)` will skip the refusal). With default isShell:true the error IS RETURNED, not thrown — try/catch will not catch it. Before 1.0.157 any refusal was reported as true, and the only reliable check was re-reading getAllSubscriptions (isProductSubscribed) — in older SDK versions, leave this workaround
+3. subscribeByMarker/unsubscribeByMarker return Promise<boolean | IError>. With SDK ≥ 1.0.157 IError actually reaches the calling code — check the result strictly `=== true` (the error object is truthy, so `if (result)` will skip the refusal). With default isShell:true the error IS RETURNED, not thrown — try/catch will not catch it. Before 1.0.157 any refusal was reported as true, and the only reliable check was rereading getAllSubscriptions (isProductSubscribed) — on older SDK versions, leave this workaround
 4. Event markers ('status_out_of_stock', 'product_price') — clarify in OneEntry Admin
 5. You can subscribe to multiple markers for one product — they are independent
 6. getAllSubscriptions — for displaying the user's subscription list in the profile
@@ -244,8 +244,8 @@ useEffect(() => {
 ### 6.1 Add `data-testid` to the component
 
 ```tsx
-// components/product/SubscribeButton.tsx
-// Not authorized — hidden (returns null), still adding testid for tests when rendered
+// src/components/product/SubscribeButton.tsx
+// For unauthorized users — hidden (returns null), still add testid when rendered for tests
 if (!isAuth) return null;
 
 return (
@@ -266,20 +266,20 @@ return (
 );
 ```
 
-### 6.2 Gather test parameters and fill `.env.local`
+### 6.2 Gather test parameters and fill in `.env.local`
 
 **Algorithm (execute step by step, do not ask in one list):**
 
 1. **Test product ID** — choose it yourself via `/inspect-api`:
-   - Get products: `getApi().Products.getProducts([], LANG, { limit: 1 })` (the first argument — an array of filters, `limit` — in the query object as the third; `LANG` — active locale, e.g. `'en_US'`). Take `items[0].id`.
+   - Get products: `getApi().Products.getProducts([], LANG, { limit: 1 })` (the first argument is an array of filters, `limit` is in the query object third; `LANG` is the active locale, e.g. `'en_US'`). Take `items[0].id`.
    - Report: "For the subscription test, I am using product `id={productId}` («{title}») — the first from the catalog".
-2. **Product page path** — ask: "What is the path to the product page with the subscription button? (e.g. `/product/[id]`, `/en_US/shop/product/[id]`)". Silent → find through Glob (`app/**/product/**/page.tsx`, `app/**/shop/**/product/**`). Substitute `{id}` as a template. Report the solution.
+2. **Product page path** — ask: "What is the path of the product page with the subscription button? (for example `/product/[id]`, `/en_US/shop/product/[id]`)". Silent → find via Glob (`src/app/**/product/**/page.tsx`, `src/app/**/shop/**/product/**`). Substitute `{id}` as a template. Report the solution.
 3. **Event markers** — take from `Events.getAllEvents()` (see Step 1) or leave defaults `status_out_of_stock`/`product_price`:
    - If `getAllEvents()` returned a list — report: "Using markers `{stockMarker}` and `{priceMarker}` from the project".
    - Otherwise — leave defaults and report: "Using standard markers `status_out_of_stock`/`product_price` — if there are others in the project, redefine `EVENT_MARKERS` in `useEvents.ts`".
-4. **Login page path** — ask if not mentioned. Silent → find through Glob. Report.
-5. **Test credentials** (subscriptions require auth — without creds tests are meaningless):
-   - Ask: "The Events API requires authorization. Please provide the email/password of the test OneEntry user. I will skip — all subscription tests will be `test.skip`, leaving only the check that the button is hidden for anonymous users".
+4. **Login page path** — ask if not mentioned. Silent → find via Glob. Report.
+5. **Test credentials** (subscriptions require auth — without credentials tests are meaningless):
+   - Ask: "Events API requires authorization. Provide email/password of the test user OneEntry. I will skip — all subscription tests will be `test.skip`, leaving only the check that the button is hidden for anonymous users".
    - If provided → add `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` to `.env.local` via Edit/Write.
    - If silent → leave empty.
 
@@ -295,7 +295,7 @@ E2E_TEST_PASSWORD=
 
 ### 6.3 Create `e2e/subscription.spec.ts`
 
-> ⚠️ Tests work with the real OneEntry project. Subscription is created in the database — after the test, it will remain. The "unsubscribe" test is called in `afterEach` to avoid leaving garbage, but if the test fails in the middle, manual cleanup may be required through the admin panel.
+> ⚠️ Tests work with the real OneEntry project. The subscription is created in the database — after the test, it will remain. The "unsubscribe" test is called in `afterEach` to avoid leaving garbage, but if the test fails, manual cleanup may be required via the admin panel.
 
 ```typescript
 import { test, expect, Page } from '@playwright/test';
@@ -345,7 +345,7 @@ test.describe('Product event subscription', () => {
     test('subscription button is visible and in "not subscribed" state', async ({ page }) => {
       const btn = page.getByTestId('subscribe-button');
       await expect(btn).toBeVisible();
-      // It can be either "inactive" (never subscribed) or "active" (if subscribed before)
+      // It can be either "inactive" (never subscribed) or "active" (if was before)
       const inactive = await page.getByTestId('subscribe-state-inactive').isVisible().catch(() => false);
       const active = await page.getByTestId('subscribe-state-active').isVisible().catch(() => false);
       expect(inactive || active).toBe(true);
@@ -354,7 +354,7 @@ test.describe('Product event subscription', () => {
     test('clicking the button subscribes (changes state to active)', async ({ page }) => {
       const btn = page.getByTestId('subscribe-button');
 
-      // If already subscribed — unsubscribe first
+      // If already subscribed — first unsubscribe
       if (await page.getByTestId('subscribe-state-active').isVisible().catch(() => false)) {
         await btn.click();
         await expect(page.getByTestId('subscribe-state-inactive')).toBeVisible({ timeout: 10_000 });
@@ -365,7 +365,7 @@ test.describe('Product event subscription', () => {
       await expect(page.getByTestId('subscribe-state-active')).toBeVisible({ timeout: 10_000 });
       await expect(btn).toHaveAttribute('data-subscribed', 'true');
 
-      // Unsubscribe to clean up — to avoid leaving garbage in the database
+      // Unsubscribe to clean up
       await btn.click();
       await expect(page.getByTestId('subscribe-state-inactive')).toBeVisible({ timeout: 10_000 });
     });
@@ -390,7 +390,7 @@ test.describe('Product event subscription', () => {
 
       // Click and immediately check loading
       await btn.click();
-      // loading may pass quickly — check either data-loading or the final result
+      // loading may pass quickly — check either data-loading or final result
       const sawLoading = await page.getByTestId('subscribe-loading').isVisible({ timeout: 1_000 }).catch(() => false);
       // If we didn't see loading — ok, the main thing is that the state changed
       await expect(btn).not.toHaveAttribute('data-loading', 'true', { timeout: 10_000 });
@@ -418,12 +418,12 @@ Before completing the task — explicitly report:
 
 Decisions made automatically:
 - Test product: id={PRODUCT_ID} («{title}») — first from getProducts
-- Product page path: {PATH_TEMPLATE} — {user-specified / found via Glob in app/**/product/**}
+- Product page path: {PATH_TEMPLATE} — {user-specified / found via Glob in src/app/**/product/**}
 - Login path: {LOGIN_PATH} — {user-specified / found via Glob}
 - Event markers: {taken from getAllEvents() / default status_out_of_stock + product_price}
-- Test credentials: {provided by user / left empty — block "Authorized user" will be test.skip. Reason: Events API requires auth}
+- Test credentials: {provided by user / left empty — the "Authorized user" block will be test.skip. Reason: Events API requires auth}
 
-⚠️ Tests automatically clean up the subscription at the end of each test, but if a test fails in the middle, the subscription may remain in the database. If necessary, delete it via the admin panel or getUserSubscriptions + unsubscribeByMarker.
+⚠️ Tests automatically remove the subscription after each test, but if a test fails in the middle, the subscription may remain in the database. If necessary, delete it via the admin panel or getUserSubscriptions + unsubscribeByMarker.
 
 Run: npm run test:e2e -- subscription.spec.ts
 ```

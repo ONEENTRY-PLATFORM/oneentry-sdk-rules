@@ -1,22 +1,27 @@
-<!-- META
-type: rules
-fileName: performance-popups.md
-rulePaths: ["components/**/*Popup*.tsx", "components/**/*Modal*.tsx", "components/**/*Drawer*.tsx", "app/**/layout.tsx"]
--->
-
+---
+paths:
+  - "components/**/*Popup*.tsx"
+  - "src/components/**/*Popup*.tsx"
+  - "components/**/*Modal*.tsx"
+  - "src/components/**/*Modal*.tsx"
+  - "components/**/*Drawer*.tsx"
+  - "src/components/**/*Drawer*.tsx"
+  - "app/**/layout.tsx"
+  - "src/app/**/layout.tsx"
+---
 # Performance: Popups and Drawers — OneEntry Rules
 
-Rules for OneEntry-based applications with a layer of drawers/modals (cart, profile, favorites, booking, authentication forms). Accompanied by `.claude/rules/performance.md` — which covers SSR / lazy loading / parallelism in general, while this document specifically addresses how to keep popup chunks **out** of the initial bundle.
+Rules for OneEntry-based applications with a layer of drawers/modals (cart, profile, favorites, booking, authorization forms). Accompanied by `.claude/rules/performance.md` — which covers SSR / lazy / parallelism universally, this document specifically addresses how to keep popup chunks **out** of the initial bundle.
 
 Applicable to projects with a popup system based on context (usually `OpenDrawerContext` with the value `{ open, component, setOpen, setComponent }`).
 
 ## ⚠️ Never render all popups directly in `RootLayout`
 
-`dynamic(() => import('./CartPopup'))` creates a code-split point — but the chunk loads as soon as the parent renders the component, **even if the popup returns `<></>` when `!isOpen`**. With 5–7 popups in the layout, that's 5–7 chunks (~150–300 KB JS) on the first render — code that the user will never invoke.
+`dynamic(() => import('./CartPopup'))` creates a code-split point — but the chunk loads as soon as the parent renders the component, **even if the popup returns `<></>` when `!isOpen`**. With 5–7 popups in the layout, this results in 5–7 chunks (~150–300 KB JS) on the first render — code that the user will never invoke.
 
 ```tsx
-// ❌ INCORRECT — each popup chunk is included in the initial bundle
-// app/layout.tsx
+// ❌ INCORRECT — each popup chunk ends up in the initial bundle
+// src/app/layout.tsx
 const CartPopup = dynamic(() => import('@/components/cart/CartPopup'));
 const FavoritesPopup = dynamic(() => import('@/components/profile/FavoritesPopup'));
 const ProfilePopup = dynamic(() => import('@/components/profile/ProfilePopup'));
@@ -41,7 +46,7 @@ export default function RootLayout({ children }) {
 }
 
 // ✅ CORRECT — one PopupRoot subscribes to the context and mounts only the active popup
-// app/layout.tsx
+// src/app/layout.tsx
 import PopupRoot from '@/components/layout/PopupRoot';
 
 export default function RootLayout({ children }) {
@@ -62,7 +67,7 @@ export default function RootLayout({ children }) {
 
 Two files. The registry is the single source of truth for popup loaders: both `PopupRoot` (which mounts) and `prefetchPopup` (which preloads on hover) use the same map.
 
-### `components/layout/popupRegistry.ts`
+### `src/components/layout/popupRegistry.ts`
 
 ```typescript
 type PopupLoader = () => Promise<unknown>;
@@ -104,7 +109,7 @@ export const prefetchPopup = (name: string): void => {
 };
 ```
 
-### `components/layout/PopupRoot.tsx`
+### `src/components/layout/PopupRoot.tsx`
 
 ```tsx
 'use client';
@@ -143,17 +148,17 @@ const PopupRoot = (): JSX.Element | null => {
 export default PopupRoot;
 ```
 
-## ⚠️ Preload popup chunks on hover/focus of the trigger
+## ⚠️ Preload popup chunks on hover/focus triggers
 
 The button that opens the popup should preload the chunk on `onPointerEnter` and `onFocus`. ~50–200 ms between hovering and clicking is usually enough for the chunk to load — and the popup will open instantly.
 
 ```tsx
-// ❌ INCORRECT — chunk starts loading only after click; visible delay of 100–500 ms
+// ❌ INCORRECT — the chunk starts loading only after the click; visible delay of 100–500 ms
 <button onClick={() => { setComponent('CartPopup'); setOpen(true); }}>
   Cart
 </button>
 
-// ✅ CORRECT — preloads chunk before click; idempotent, safe on touch devices
+// ✅ CORRECT — preloads the chunk before the click; idempotent, safe on touch devices
 import { prefetchPopup } from '@/components/layout/popupRegistry';
 
 <button
@@ -167,7 +172,7 @@ import { prefetchPopup } from '@/components/layout/popupRegistry';
 
 `onPointerEnter` covers mouse hover. `onFocus` covers keyboard navigation. Touch devices simply skip preloading (no hover event) and get the original "load on click" behavior — without regression.
 
-For forms hosted in Modal, pass the form name — `prefetchPopup` resolves it to the Modal chunk:
+For forms hosted in Modal, pass the form name — `prefetchPopup` resolves it to the Modal chunk itself:
 
 ```tsx
 <button
@@ -213,7 +218,7 @@ const CartPopup = (): JSX.Element => {
 If a popup loads content via RTK Query / SWR, the request **must** be skipped while the popup is closed — otherwise, it will trigger on initial mounting, which defeats the purpose of lazy loading the chunk.
 
 ```tsx
-// ❌ INCORRECT — `useGetProductsByIdsQuery` triggers on mounting PopupRoot
+// ❌ INCORRECT — `useGetProductsByIdsQuery` triggers on PopupRoot mount
 const CartPopup = () => {
   const cartIds = useAppSelector(selectCartIds);
   const { data } = useGetProductsByIdsQuery({ ids: cartIds });
@@ -249,9 +254,9 @@ const CartPopup = () => {
 ## Anti-patterns
 
 - **Rendering JSX of the popup directly in layout/page** — bypasses `PopupRoot`, breaking lazy chunk splitting.
-- **`dynamic({ ssr: true })` for popups** — popups are never visible during SSR (user interaction is required). Use `ssr: false` or simply `dynamic(loader)` (Next.js disables SSR for client components by default).
-- **Multiple instances of `OpenDrawerProvider`** — context loses state between them. Mount once at the root of the layout.
-- **Calling `prefetchPopup` inside `useEffect`** — loses the purpose. Bind to user intent events (`onPointerEnter`, `onFocus`).
-- **Calling `prefetchPopup` in a tight render loop** — it is idempotent, but still performs Set-lookup on each call; bind once or use event handlers.
+- **`dynamic({ ssr: true })` for popups** — popups are never visible during SSR (user interaction is required). Use `ssr: false` or just `dynamic(loader)` (Next.js disables SSR for client components by default).
+- **Multiple instances of `OpenDrawerProvider`** — context loses state between them. Mount it once at the root of the layout.
+- **Calling `prefetchPopup` inside `useEffect`** — loses the purpose. Bind to user intention events (`onPointerEnter`, `onFocus`).
+- **Calling `prefetchPopup` in a tight render loop** — it is idempotent, but still performs Set-lookup on each call; bind it once or use event handlers.
 
-> Related rules: `.claude/rules/performance.md` (splitting heavy libraries into chunks, lazy mounting patterns), `.claude/rules/auth-provider.md` (authentication forms hosted in Modal).
+> Related rules: `.claude/rules/performance.md` (chunking heavy libraries, lazy mounting patterns), `.claude/rules/auth-provider.md` (authorization forms hosted in Modal).

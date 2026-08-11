@@ -1,22 +1,27 @@
-<!-- META
-type: rules
-fileName: performance-streaming.md
-rulePaths: ["app/**/loading.tsx", "app/**/page.tsx", "app/**/layout.tsx", "app/**/error.tsx"]
--->
-
+---
+paths:
+  - "app/**/loading.tsx"
+  - "src/app/**/loading.tsx"
+  - "app/**/page.tsx"
+  - "src/app/**/page.tsx"
+  - "app/**/layout.tsx"
+  - "src/app/**/layout.tsx"
+  - "app/**/error.tsx"
+  - "src/app/**/error.tsx"
+---
 # Performance: Streaming and Suspense — OneEntry Rules
 
-Rules for streaming page rendering on the App Router. Complements `.claude/rules/performance.md` (which discusses wrapping `useSearchParams` in `<Suspense>`) — this is specifically about `loading.tsx`, granular Suspense boundaries within a page, and Partial Pre-Rendering (PPR).
+Rules for streaming rendering of pages on the App Router. Complements `.claude/rules/performance.md` (which discusses wrapping `useSearchParams` in `<Suspense>`) — this section is specifically about `loading.tsx`, granular Suspense boundaries within a page, and Partial Pre-Rendering (PPR).
 
 Applicable to routes with heterogeneous latency: fast header + slow product listing, cached hero + uncached personalized recommendations, etc.
 
 ## Add `loading.tsx` to every route segment with CMS loading
 
-The `loading.tsx` file next to `page.tsx` automatically wraps the page in `<Suspense>`. The user sees a skeleton **immediately** after clicking on `<Link>`, without waiting for the resolution of OneEntry requests.
+The `loading.tsx` file next to `page.tsx` automatically wraps the page in `<Suspense>`. The user sees the skeleton **immediately** after clicking on `<Link>`, without waiting for the resolution of OneEntry requests.
 
 ```tsx
-// ❌ INCORRECT — white screen for 800 ms while OneEntry delivers the page
-// app/[locale]/shop/page.tsx
+// ❌ INCORRECT — white screen for 800 ms while OneEntry serves the page
+// src/app/[locale]/shop/page.tsx
 export default async function ShopPage() {
   const { products } = await getProductsByPageUrl('shop');
   return <ProductGrid products={products} />;
@@ -24,7 +29,7 @@ export default async function ShopPage() {
 // (no loading.tsx — navigation looks stuck)
 
 // ✅ CORRECT — skeleton with stable layout immediately after click
-// app/[locale]/shop/loading.tsx
+// src/app/[locale]/shop/loading.tsx
 export default function ShopLoading() {
   return (
     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -36,7 +41,7 @@ export default function ShopLoading() {
 }
 ```
 
-The skeleton should match the final layout in size — otherwise, when switching to the real content, CLS will occur. Use the same grid classes (`grid grid-cols-…`) as in `page.tsx`.
+The skeleton must match the final layout in size — otherwise, when switching to the real content, CLS will occur. Use the same grid classes (`grid grid-cols-…`) as in `page.tsx`.
 
 ## ⚠️ Stream slow blocks of the page through local `<Suspense>`
 
@@ -85,7 +90,7 @@ Rule of thumb: if the latency of one block on the route is **2+ times** higher t
 
 ## Do not use `<Suspense>` deeply in the tree unnecessarily
 
-Each Suspense boundary is a separate HTML chunk in the streaming response. Ten boundaries within one card mean ten `<template>` instructions in the DOM + ten separate code splits on hydration. The benefit of streaming only exists with a real difference in latency.
+Each Suspense boundary is a separate HTML chunk in the streaming response. Ten boundaries inside one card mean ten `<template>` instructions in the DOM + ten separate code splits on hydration. The benefit of streaming exists only when there is a real difference in latency.
 
 ```tsx
 // ❌ INCORRECT — granularity for the sake of granularity
@@ -132,7 +137,7 @@ const nextConfig: NextConfig = {
   },
 };
 
-// app/[locale]/shop/[handle]/page.tsx
+// src/app/[locale]/shop/[handle]/page.tsx
 export const experimental_ppr = true;
 export const revalidate = 60;
 
@@ -155,7 +160,7 @@ export default async function ProductPage({ params }) {
 
 ## ⚠️ Do not stream critical metadata
 
-`generateMetadata` executes before streaming — `<title>`, `<meta description>`, OpenGraph must be ready before the first byte of HTML is delivered. Therefore, **never** wrap the source for metadata in `<Suspense>`.
+`generateMetadata` executes before streaming — `<title>`, `<meta description>`, OpenGraph must be ready before the first byte of HTML is served. Therefore, **never** wrap the source for metadata in `<Suspense>`.
 
 ```tsx
 // ❌ INCORRECT — trying to "defer" fetch for metadata — Next.js still waits
@@ -172,7 +177,7 @@ export async function generateMetadata({ params }) {
 }
 ```
 
-OneEntry fetcher (`getProductByHandle`, etc.) should be wrapped in React `cache()` — then `generateMetadata` and `page.tsx` are automatically deduplicated.
+OneEntry-fetcher (`getProductByHandle` etc.) must be wrapped in React `cache()` — then `generateMetadata` and `page.tsx` are automatically deduplicated.
 
 ## Checklist before commit
 
@@ -180,7 +185,7 @@ OneEntry fetcher (`getProductByHandle`, etc.) should be wrapped in React `cache(
 - [ ] The skeleton in `loading.tsx` matches the final layout in size (no CLS)
 - [ ] If there is a block on the page with latency 2+ times higher than the others — it is moved to a separate async component outside `<Suspense>`
 - [ ] Suspense boundaries are placed where there is a separate `await` — not by visual elements
-- [ ] OneEntry fetcher for metadata is wrapped in React `cache()` (deduplication `generateMetadata` ↔ `page`)
+- [ ] OneEntry-fetcher for metadata is wrapped in React `cache()` (deduplication of `generateMetadata` ↔ `page`)
 - [ ] When PPR is enabled — `experimental.ppr: 'incremental'` + `export const experimental_ppr = true` on specific routes, not globally
 
 > Related rules: `.claude/rules/performance.md` (Suspense wrapper for `useSearchParams`, `unstable_cache` + `cache()` composition), `.claude/rules/nextjs-pages.md` (structure of `page.tsx` with `params` as Promise).

@@ -4,19 +4,19 @@ description: Create a server action
 ---
 # Creating a Server Action
 
-## Step 1: Define the module and target file
+## Step 1: Identify the module and target file
 
-Break down the argument into `Module` and `method`. Define the file:
+Break down the argument into `Module` and `method`. Identify the file:
 | Module | File | Type |
 | --- | --- | --- |
-| `Forms` | `app/actions/forms.ts` | public (getApi) |
-| `FormData` | `app/actions/forms-data.ts` | public (getApi) — only `postFormsData`/`getFormsDataByMarker`; `updateFormsDataByid`/`updateFormsDataStatusByid`/`deleteFormsDataByid` — user-auth (Client Component after reDefine) |
-| `AuthProvider` (getAuthProviders, getAuthProviderByMarker) | `app/actions/auth.ts` | public (getApi) |
+| `Forms` | `src/app/actions/forms.ts` | public (getApi) |
+| `FormData` | `src/app/actions/forms-data.ts` | public (getApi) — only `postFormsData`/`getFormsDataByMarker`; `updateFormsDataByid`/`updateFormsDataStatusByid`/`deleteFormsDataByid` — user-auth (Client Component after reDefine) |
+| `AuthProvider` (getAuthProviders, getAuthProviderByMarker) | `src/app/actions/auth.ts` | public (getApi) |
 | `AuthProvider` (auth, signUp, generateCode, checkCode, logout) | Client Component directly | getApi() on the client (see `.claude/rules/server-actions.md`) |
-| `Pages`, `Products`, `Menus`, `Blocks` | `app/actions/<module>.ts` | public (getApi) |
+| `Pages`, `Products`, `Menus`, `Blocks` | `src/app/actions/<module>.ts` | public (getApi) |
 | `Orders`, `Users`, `Payments`, `Events`, `Subscriptions` | Client Component | user-auth (getApi after reDefine) |
 
-> ⚠️ Token-generating calls `auth()`/`oauth()` in Server Action are only allowed with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155): on the client `getApi().AuthProvider.getDeviceMetadata()` → on the server per-request instance `defineOneEntry(url, { token, deviceMetadata })` — see `/create-google-oauth` and `.claude/rules/auth-provider.md`.
+> ⚠️ Token-issuing calls `auth()`/`oauth()` in Server Action are only allowed with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155): on the client `getApi().AuthProvider.getDeviceMetadata()` → on the server per-request instance `defineOneEntry(url, { token, deviceMetadata })` — see `/create-google-oauth` and `.claude/rules/auth-provider.md`.
 
 ## Step 2: Read the existing file
 
@@ -59,7 +59,7 @@ These methods are called **directly from the Client Component** via `getApi()` a
 **Mandatory auth-init pattern in the component:**
 
 ```tsx
-// components/ProfileData.tsx
+// src/components/ProfileData.tsx
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -68,7 +68,7 @@ import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
 
 export function ProfileData() {
   // useRef guard — protection against double execution in React StrictMode (dev).
-  // Eliminates an extra pair of requests (reDefine + proactive /refresh) and setState races.
+  // Eliminates unnecessary pairs of requests (reDefine + proactive /refresh) and setState races.
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -80,8 +80,8 @@ export function ProfileData() {
       if (!refreshToken) return;
       // ⚠️ hasActiveSession() is mandatory before reDefine.
       // After login, the SDK is already authorized — reDefine without checking will recreate the working instance,
-      // and the new one will make an unnecessary proactive /refresh before the first request, wasting
-      // just issued token (no more spurious 401; SDK ≥ 1.0.152; see .claude/rules/tokens.md).
+      // and the new one before the first request will make an unnecessary proactive /refresh, wasting
+      // just issued token (spurious 401 is no longer present, SDK ≥ 1.0.152; see .claude/rules/tokens.md).
       if (!hasActiveSession()) {
         await reDefine(refreshToken, 'en_US');
       }
@@ -99,7 +99,7 @@ export function ProfileData() {
 After creating the file, show an example of usage from the Client Component:
 
 ```typescript
-// components/MyComponent.tsx
+// src/components/MyComponent.tsx
 'use client';
 
 import { getFormByMarker } from '@/app/actions/forms';
@@ -122,4 +122,4 @@ export function MyComponent() {
 For user-auth methods, remind:
 
 ⚠️ `reDefine(refreshToken, locale)` must be called before accessing user-auth methods.
-Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without them, double execution in StrictMode results in an extra pair of requests (`reDefine` + proactive `/refresh`) and setState races (the token pattern `reDefine`+`getUser` does not burn out — both requests share one proactive refresh, SDK ≥ 1.0.152; see `.claude/rules/tokens.md`). `saveFunction` automatically updates the token in localStorage with each rotation.
+Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without them, double execution in StrictMode leads to an unnecessary pair of requests (`reDefine` + proactive `/refresh`) and setState races (the token pattern `reDefine`+`getUser` does not burn out — both requests share one proactive refresh, SDK ≥ 1.0.152; see `.claude/rules/tokens.md`). `saveFunction` automatically updates the token in localStorage with each rotation.

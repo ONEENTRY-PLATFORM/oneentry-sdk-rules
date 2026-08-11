@@ -1,18 +1,14 @@
-<!-- META
-type: rules
-fileName: linting.md
-rulePaths: ["**/*.ts","**/*.tsx"]
+---
 paths:
   - "**/*.ts"
   - "**/*.tsx"
--->
-
-# Linter and Prettier — Rules (eslint.config.mjs + .prettierrc)
+---
+# Linter and Prettier — rules (eslint.config.mjs + .prettierrc)
 
 ESLint config: `next/core-web-vitals` + `next/typescript`
 This means: `@typescript-eslint/recommended` + Next.js specific rules.
 
-## Mandatory Before Writing Code
+## Mandatory before writing code
 
 Read `eslint.config.mjs` and `.prettierrc` to know the active rules. The code must pass ESLint and Prettier **without errors, warnings, and without the need for auto-formatting** — consider both linter rules and formatting rules at the writing stage, not after.
 
@@ -40,10 +36,10 @@ What this means in practice:
 - **Trailing commas everywhere** where allowed by syntax (objects, arrays, function parameters, generics, imports).
 - **Indentation of 2 spaces**, not tabs.
 - **`endOfLine: "auto"`** — do not enforce a specific EOL, leave it as in the file.
-- **`prettier-plugin-tailwindcss`** — Tailwind classes must be in the canonical order of the plugin (layout → spacing → typography → colors → state variants). Do not sort manually "as it looks nice" — write in the order expected by the plugin, so Prettier does not rearrange.
+- **`prettier-plugin-tailwindcss`** — Tailwind classes should be in the canonical order of the plugin (layout → spacing → typography → colors → state variants). Do not sort manually "as it looks nice" — write in the order expected by the plugin so that Prettier does not rearrange them.
 
 ```typescript
-// ❌ INCORRECT — double quotes, no ;, no trailing comma
+// ❌ INCORRECT — double quotes, no ; , no trailing comma
 import { useState } from "react"
 const obj = {
   a: 1,
@@ -58,12 +54,12 @@ const obj = {
 };
 ```
 
-## Key Rules
+## Key rules
 
 ### TypeScript
 
-- `@typescript-eslint/no-explicit-any` — `any` is prohibited (see `.claude/rules/typescript.md`)
-- `@typescript-eslint/no-unused-vars` — unused variables and imports are prohibited
+- `@typescript-eslint/no-explicit-any` — `any` is forbidden (see `.claude/rules/typescript.md`)
+- `@typescript-eslint/no-unused-vars` — unused variables and imports are forbidden
 
 ### React Hooks
 
@@ -82,10 +78,10 @@ useEffect(() => {
 }, [formIdentifier])
 ```
 
-### Next.js — Images and Links
+### Next.js — images and links
 
-- `@next/next/no-img-element` — `<img>` is prohibited, use `next/image`
-- `@next/next/no-html-link-for-pages` — `<a href="/">` is prohibited, use `next/link`
+- `@next/next/no-img-element` — `<img>` is forbidden, use `next/image`
+- `@next/next/no-html-link-for-pages` — `<a href="/">` is forbidden, use `next/link`
 
 ```typescript
 // ❌ INCORRECT

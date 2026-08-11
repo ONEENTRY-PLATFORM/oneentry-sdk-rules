@@ -1,16 +1,21 @@
-<!-- META
-type: rules
-fileName: performance-bundle.md
-rulePaths: ["next.config.ts", "next.config.js", "next.config.mjs", "package.json", "app/**/page.tsx", "app/**/layout.tsx"]
--->
-
+---
+paths:
+  - "next.config.ts"
+  - "next.config.js"
+  - "next.config.mjs"
+  - "package.json"
+  - "app/**/page.tsx"
+  - "src/app/**/page.tsx"
+  - "app/**/layout.tsx"
+  - "src/app/**/layout.tsx"
+---
 # Performance: Bundle and Chunks — OneEntry Rules
 
-Rules about bundle size, code-splitting, and chunk auditing for Next.js + OneEntry. Complements `.claude/rules/performance.md` (which covers `dynamic()` for lightboxes/toasts) — this is specifically about the `next.config` config, `optimizePackageImports`, and analysis tools.
+Rules about bundle size, code-splitting, and chunk auditing for Next.js + OneEntry. Complements `.claude/rules/performance.md` (which discusses `dynamic()` for lightboxes/toasts) — this is specifically about the `next.config` config, `optimizePackageImports`, and analysis tools.
 
 ## Install and regularly run `@next/bundle-analyzer`
 
-Without chunk visualization, any "bundle optimizations" are guesswork. Install the analyzer right when initializing the project and run it before each release.
+Without chunk visualization, any "bundle optimizations" are random. Install the analyzer right when initializing the project and run it before each release.
 
 ```typescript
 // next.config.ts
@@ -36,9 +41,9 @@ export default withBundleAnalyzer(nextConfig);
 }
 ```
 
-> ⚠️ **Turbopack (Next 16):** `@next/bundle-analyzer` is a webpack plugin, the report **is not generated** under Turbopack builds ("not compatible with Turbopack builds, no report will be generated"). Options: `next experimental-analyze` (interactive treemap) or classic report via `next build --webpack`. The `next build` table under Turbopack also **does not print First Load JS** — measure sizes manually: gzip chunks `.next/static/chunks/*.js` + `build-manifest.json` (`rootMainFiles` = shared first-load; `app-build-manifest.json` — webpack artifact, not available under Turbopack).
+> ⚠️ **Turbopack (Next 16):** `@next/bundle-analyzer` — a webpack plugin, under the Turbopack build the report **is not generated** ("not compatible with Turbopack builds, no report will be generated"). Options: `next experimental-analyze` (interactive treemap) or classic report via `next build --webpack`. The `next build` table under Turbopack also **does not print First Load JS** — measure sizes manually: gzip chunks `.next/static/chunks/*.js` + `build-manifest.json` (`rootMainFiles` = shared first-load; `app-build-manifest.json` — webpack artifact, not available under Turbopack).
 
-The goal — first-load JS on the `/` route should be **under 200 KB gzipped**. Each `app/[locale]/page.tsx`, `app/[locale]/shop/page.tsx`, etc. — a separate number in the `next build` report. If anything is higher — open the HTML report of the analyzer and look for the bulkiest modules.
+The goal — first-load JS on the route `/` should be **under 200 KB gzipped**. Each `src/app/[locale]/page.tsx`, `src/app/[locale]/shop/page.tsx`, etc. — a separate number in the `next build` report. If anything is higher — open the HTML report of the analyzer and look for the heaviest modules.
 
 ## `optimizePackageImports` — for packages with barrel imports
 
@@ -66,14 +71,14 @@ How to check if a package is a candidate: open `node_modules/<pkg>/dist/index.{j
 
 ## ⚠️ Never create barrel `index.ts` in your own code
 
-A file `components/index.ts` that re-exports everything breaks tree-shaking even after `optimizePackageImports`: one `import { ProductCard } from '@/components'` pulls in the entire graph of components into one page chunk.
+The file `src/components/index.ts`, which re-exports everything, breaks tree-shaking even after `optimizePackageImports`: one `import { ProductCard } from '@/components'` pulls in the entire graph of components into one page chunk.
 
 ```typescript
-// ❌ INCORRECT — components/index.ts
+// ❌ INCORRECT — src/components/index.ts
 export * from './ProductCard';
 export * from './CartPopup';
 export * from './FavoritesPopup';
-// + another 30 exports
+// + 30 more exports
 
 // consumer
 import { ProductCard } from '@/components';
@@ -84,7 +89,7 @@ import ProductCard from '@/components/ProductCard';
 import CartPopup from '@/components/popups/CartPopup';
 ```
 
-The same applies to `app/api/index.ts`, `lib/index.ts`, `utils/index.ts`. Never create such files — they look tidy but turn every page into a monolithic chunk.
+The same applies to `src/app/api/index.ts`, `src/lib/index.ts`, `utils/index.ts`. Never create such files — they look neat, but turn every page into a monolithic chunk.
 
 ## Threshold for `dynamic()` — 30 KB gzipped or the library is rendered on event
 
@@ -96,13 +101,13 @@ Not every component is worth moving to `dynamic()`. The overhead (a separate HTT
 | Form validator `zod` 12 KB | Static import (used on every form) |
 | Lightbox `yet-another-react-lightbox` 45 KB + CSS | `dynamic({ ssr: false })` |
 | Charts `recharts` 90 KB | `dynamic({ ssr: false })` |
-| Rich-text editor `tiptap` 120 KB | `dynamic({ ssr: false })` + sticky mounting |
+| Rich-text editor `tiptap` 120 KB | `dynamic({ ssr: false })` + sticky-mounting |
 
-Specific patterns (sticky-mount, static CSS import inside lazy module, bypassing Turbopack issues with dynamic `import()` CSS) — see `.claude/rules/performance.md`.
+Specific patterns (sticky-mount, static CSS import inside a lazy module, bypassing Turbopack issues with dynamic `import()` CSS) — see `.claude/rules/performance.md`.
 
 ## `productionBrowserSourceMaps: false` — for production builds
 
-Source maps are convenient in dev, but in production, they double the size of `.next/static/chunks`. Hosting with a properly configured CDN will compress them anyway — but extra build time and space on S3 are unnecessary.
+Source maps are convenient in dev, but in production they double the size of `.next/static/chunks`. Hosting with a properly configured CDN will still compress them — but extra build time and space on S3 are unnecessary.
 
 ```typescript
 // ❌ INCORRECT — source maps are uploaded to public CDN
@@ -116,7 +121,7 @@ const nextConfig: NextConfig = {
 };
 ```
 
-If error monitoring with stack trace decoding is needed (Sentry, Datadog) — set up the loading of source maps into their sourcemap-storage as a separate CI step, not in the public `_next/static`.
+If you need error monitoring with stack trace decoding (Sentry, Datadog) — set up the upload of source maps to their sourcemap-storage as a separate CI step, not in the public `_next/static`.
 
 ## `serverExternalPackages` — for native and CommonJS dependencies
 
@@ -137,25 +142,25 @@ Importing `defineOneEntry` from any `'use client'` file pulls the entire SDK int
 
 ```typescript
 // ❌ INCORRECT — SDK in the client chunk for public data
-// components/AddToCartButton.tsx
+// src/components/AddToCartButton.tsx
 'use client';
 import { defineOneEntry } from 'oneentry';   // +126 KB gzip in every chunk where there is a button
 
 // ✅ CORRECT — SDK on the server, client calls server action
-// components/AddToCartButton.tsx
+// src/components/AddToCartButton.tsx
 'use client';
 import { addToCartAction } from '@/app/actions/cart';
 
-// app/actions/cart.ts
+// src/app/actions/cart.ts
 'use server';
 import { getApi } from '@/lib/oneentry';
 ```
 
 **The most insidious leak channel — global client store.** If the Redux/RTK Query store (`'use client'`, provider in the root layout) imports a module with `defineOneEntry` (for example, in `queryFn`), the SDK ends up in **the first-load of every page**, even those where user data is not needed. One client `import` in the store → API module chain — and the 200 KB budget is breached. Check the import chain from the root provider.
 
-A conscious exception — **user-auth methods** (`Users`, `Orders`, `Payments` after `reDefine()`): they are called from Client Component (fingerprint, localStorage session), and the SDK is indeed needed on the client for them. Then: isolate the SDK import in lazy-loaded chunks of account routes (`dynamic()`), not in the global store of the root layout.
+A conscious exception — **user-auth methods** (`Users`, `Orders`, `Payments` after `reDefine()`): they are called from Client Component (fingerprint, localStorage session), and the SDK is indeed needed on the client for them. In that case: isolate the SDK import in lazy-loaded chunks of account routes (`dynamic()`), not in the common store of the root layout.
 
-Quick check before committing:
+Quick check before commit:
 
 ```bash
 # each match — a conscious decision (user-auth), not a random import
@@ -163,11 +168,11 @@ grep -rln "'use client'" --include="*.tsx" --include="*.ts" \
   | xargs grep -l "from 'oneentry'\|@/lib/oneentry"
 ```
 
-## Checklist before committing
+## Checklist before commit
 
 - [ ] `@next/bundle-analyzer` is connected; primary JS on the main route < 200 KB gzipped
 - [ ] All used barrel packages (`lucide-react`, `date-fns`, `gsap`, …) in `experimental.optimizePackageImports`
-- [ ] No `index.ts` re-exports in own code (`components/`, `lib/`, `utils/`)
+- [ ] No `index.ts` re-exports in own code (`src/components/`, `src/lib/`, `utils/`)
 - [ ] `dynamic()` used only for modules ≥ 30 KB or libraries rendered on event
 - [ ] `productionBrowserSourceMaps: false` in `next.config`
 - [ ] Import `oneentry` / `@/lib/oneentry` in `'use client'` files — only for user-auth methods and not through the root layout store (grep above)

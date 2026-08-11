@@ -2,23 +2,23 @@
 name: create-favorites
 description: Create favorites (wishlist) on the native server wishlist API (Users.getWishlist/addWishlistItem/...) — guest + user, cross-device sync, React Context
 ---
-# Create Favorites (Server Wishlist API)
+# Create Favorites (server wishlist API)
 
-Creates a favorites list on the **native server API** OneEntry (`Users.getWishlist/setWishlist/addWishlistItem/removeWishlistItem`). The wishlist is stored on the server and synchronized between devices — for both authorized users and guests (by `guestId`). No Redux/redux-persist is used.
+Creates a favorites list on the **native server API** OneEntry (`Users.getWishlist/setWishlist/addWishlistItem/removeWishlistItem`). The wishlist is stored on the server and synchronized between devices — for authorized users and for guests (by `guestId`). Without Redux/redux-persist.
 
-> ℹ️ **Server Wishlist vs Redux+localStorage.** The server version is cross-device and survives device changes. By default, we use the server API.
+> ℹ️ **Server wishlist vs Redux+localStorage.** Server-side — cross-device, survives device changes. By default, we use the server API.
 
 > ⚠️ Wishlist methods work for **user OR guest**. In the browser, the guest id is created automatically (`localStorage` key `oneentry_guest_id`) — no setup is needed. We manage favorites from the **Client Component** via `getApi()`. About guest mode — `.claude/rules/sdk-init.md`.
 
-> If you have already done `/create-cart-manager` — the pattern is identical (Context + optimistic updates), the wishlist is simpler (only stores `productId`).
+> If you have already done `/create-cart-manager` — the pattern is identical (Context + optimistic updates), the wishlist is simpler (stores only `productId`).
 
 ---
 
-## Step 1: FavoritesContext — Provider
+## Step 1: FavoritesContext — provider
 
-File: `app/context/FavoritesContext.tsx`
+File: `src/app/context/FavoritesContext.tsx`
 
-Wishlist from the server: `IWishlistResponse = { items: [{ productId, addedAt? }], total }`. Each mutating method returns the updated wishlist — we apply it as the truth.
+Wishlist from the server: `IWishlistResponse = { items: [{ productId, addedAt? }], total }`. Each mutating method returns the updated wishlist — we apply it as truth.
 
 ```tsx
 'use client';
@@ -109,7 +109,7 @@ export function useFavorites() {
 ## Step 2: Wrap the application in the provider
 
 ```tsx
-// app/layout.tsx
+// src/app/layout.tsx
 import { FavoritesProvider } from '@/app/context/FavoritesContext';
 // (can be nested next to CartProvider)
 
@@ -126,7 +126,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ---
 
-## Step 3: Favorite Button
+## Step 3: Favorite button
 
 ```tsx
 'use client';
@@ -151,9 +151,9 @@ export function FavoriteButton({ productId }: { productId: number }) {
 
 ---
 
-## Step 4: Favorites Page (Loading Products)
+## Step 4: Favorites page (loading products)
 
-The wishlist only stores `productId` — full data is loaded via `Products.getProductsByIds`:
+The wishlist stores only `productId` — full data is loaded via `Products.getProductsByIds`:
 
 ```tsx
 'use client';
@@ -189,7 +189,7 @@ export function FavoritesPage() {
 Server Action (if not yet created in `/create-cart-manager`):
 
 ```typescript
-// app/actions/products.ts
+// src/app/actions/products.ts
 'use server';
 import { getApi, isError } from '@/lib/oneentry';
 
@@ -202,7 +202,7 @@ export async function getProductsByIds(ids: number[]) {
 
 ---
 
-## Step 5: Merging Guest Favorites Upon Login (Optional)
+## Step 5: Merging guest favorites upon login (optional)
 
 After authorization, guest and user have different wishlists. If necessary, merge immediately after `reDefine`:
 
@@ -216,29 +216,29 @@ async function mergeGuestWishlistIntoUser(guestIds: number[]) {
 }
 ```
 
-> Read guest `productId` via `getWishlist()` BEFORE `reDefine`, then after `reDefine` — merge and call `reload()` on the context.
+> Read guest `productId` via `getWishlist()` BEFORE `reDefine`, then after `reDefine` — merge and call `reload()` of the context.
 
 ---
 
-## Important Details
+## Important details
 
 ```md
 ✅ Favorites created on the server API. Key rules:
 
-1. The wishlist on the server (Users.*) is cross-device, works for user and guest (guest id is auto in the browser)
+1. Wishlist on the server (Users.*) — cross-device, works for user and guest (guest id auto in browser)
 2. Each mutating method returns the updated wishlist — apply as truth, rollback to prev on IError
 3. Stores only productId — load full products via getProductsByIds
 4. toggle is more convenient for the heart button; add/remove — for explicit actions
-5. After login, guest and user have different wishlists; merge if necessary via setWishlist (Step 5)
-6. On the server (SSR/Server Action), guest id is NOT auto — explicit setGuestId from cookie is needed (see `.claude/rules/sdk-init.md`)
+5. After login, guest and user have different wishlists; if necessary, merge via setWishlist (Step 5)
+6. On the server (SSR/Server Action) guest id is NOT auto — explicit setGuestId from cookie is needed (see `.claude/rules/sdk-init.md`)
 ```
 
 ---
 
-## Step 6: Playwright E2E Tests
+## Step 6: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> For Playwright setup — first `/setup-playwright`.
+> To set up Playwright — first `/setup-playwright`.
 
 > ⚠️ Persistence is now **server-side**: after `reload()`, favorites are saved, as guest id in `localStorage` (`oneentry_guest_id`) is stable and the server stores the wishlist under it. The test reload checks this (not `persist:favorites-slice`).
 
@@ -246,7 +246,7 @@ async function mergeGuestWishlistIntoUser(guestIds: number[]) {
 
 `favorite-button` (+`aria-pressed`), `favorites-root`, `favorites-list`, `favorite-item`, `favorites-empty`.
 
-### 6.2 `.env.local` Parameters
+### 6.2 `.env.local` parameters
 
 ```bash
 # e2e favorites
@@ -254,7 +254,7 @@ E2E_SHOP_PATH=/shop
 E2E_FAVORITES_PATH=/favorites
 ```
 
-(Find paths as before: ask the user → fallback to Glob by `app/**/shop|catalog|favorites|wishlist/**/page.tsx`.)
+(Find paths as before: ask the user → fallback to Glob by `src/app/**/shop|catalog|favorites|wishlist/**/page.tsx`.)
 
 ### 6.3 `e2e/favorites.spec.ts`
 

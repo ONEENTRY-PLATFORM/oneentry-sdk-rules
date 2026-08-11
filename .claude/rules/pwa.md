@@ -1,13 +1,10 @@
-<!-- META
-type: rules
-fileName: pwa.md
-rulePaths: ["app/manifest.ts","public/sw.js","public/offline.html"]
+---
 paths:
   - "app/manifest.ts"
+  - "src/app/manifest.ts"
   - "public/sw.js"
   - "public/offline.html"
--->
-
+---
 # PWA for the showcase on OneEntry
 
 Skill recipe: **`/setup-pwa`**.
@@ -31,13 +28,13 @@ self.addEventListener('fetch', (event) => {
   const { request } = event
   const url = new URL(request.url)
 
-  // ⚠️ Everything going to OneEntry bypasses the SW — otherwise, the buyer will see someone else's cart
+  // ⚠️ Everything going to OneEntry bypasses the SW — otherwise the buyer will see someone else's cart
   if (url.hostname.endsWith('.oneentry.cloud')) return
 
   const isDev = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
 
   // Next static — cache-first, but only in production: in dev, Turbopack changes
-  // the content of the chunk without changing the file name, and the cached chunk breaks the page
+  // the chunk content without changing the file name, and the cached chunk breaks the page
   if (!isDev && url.pathname.startsWith('/_next/static/')) {
     event.respondWith(caches.open(STATIC_CACHE).then(async (cache) => {
       const cached = await cache.match(request)
@@ -67,7 +64,7 @@ self.addEventListener('fetch', (event) => {
 
 ## 2. Manual service worker, not `next-pwa` / `serwist`
 
-Wrappers generate aggressive runtime rules that by default cache API requests — exactly what is prohibited here, and you have to disable this with config on top of the generator. The file above is 60 lines, readable in its entirety, and does exactly what is written.
+Wrappers generate aggressive runtime rules that by default cache API requests — which is exactly what is prohibited here, and you have to disable this with config on top of the generator. The file above is 60 lines, is fully readable, and does exactly what is written.
 
 Registration — from Client Component in layout, **only in production**:
 
@@ -85,7 +82,7 @@ useEffect(() => {
 ## 3. `manifest.ts` is built from the same constants as SEO
 
 ```typescript
-// app/manifest.ts
+// src/app/manifest.ts
 import { SITE_NAME, SITE_DESCRIPTION } from '@/app/data/seoData'
 
 export default function manifest(): MetadataRoute.Manifest {
@@ -113,7 +110,7 @@ No hardcoding: the name and description are taken from the same place as the met
 
 `public/offline.html` — a self-sufficient page without requests to OneEntry and without a JS bundle: logo, "no network", "retry" button. Pre-cached on `install`.
 
-Do not try to show an offline real catalog: user-scoped data, and faking "as if it works" is worse than an honest message.
+Do not try to show an offline real catalog: the data is user-scoped, and faking "as if it works" is worse than an honest message.
 
 ---
 
@@ -122,10 +119,10 @@ Do not try to show an offline real catalog: user-scoped data, and faking "as if 
 Be sure to document in `docs/PWA.md` (or in `MISMATCH-LOG.md`, section "Conscious deviations") what is **not** implemented and why:
 
 - push notifications — a server key and user permission are needed;
-- background sync — offline order needs to be validated with the price on the server;
-- `beforeinstallprompt` — custom installation prompt.
+- background sync — offline orders need to be validated against the price on the server;
+- `beforeinstallprompt` — custom install prompt.
 
-Without such a list, the next agent will see "incomplete PWA" and will come to "fix" what was decided not to do.
+Without such a list, the next agent will see an "incomplete PWA" and come to "fix" what was decided not to do.
 
 ---
 

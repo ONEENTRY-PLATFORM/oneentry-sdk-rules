@@ -2,24 +2,24 @@
 name: create-content-filter
 description: Render a content filter tree from Filters API — getFilterByMarker, recursive nodes by type (page/product/discount/...)
 ---
-# Create Content Filter Render (Filters API)
+# Create a content filter render (Filters API)
 
-Loads the content filter by marker (`Filters.getFilterByMarker`) and renders its tree of nodes. The content filter is a customizable structure in the admin panel that combines heterogeneous entities: pages, products, attributes, discounts, bonuses, payment methods. It is convenient for promo panels, navigation trees, and "collections".
+Loads a content filter by marker (`Filters.getFilterByMarker`) and renders its node tree. A content filter is a customizable structure in the admin panel that combines heterogeneous entities: pages, products, attributes, discounts, bonuses, payment methods. It is convenient for promo panels, navigation trees, and "collections".
 
-> ⚠️ These are NOT catalog filters (`IFilterParams[]` in `Products.getProducts`). The content filter is a separate tree from the admin panel. The method is public (app-token), no authorization is needed — can be used from Server Component.
+> ⚠️ These are NOT catalog filters (`IFilterParams[]` in `Products.getProducts`). The content filter is a separate tree from the admin panel. The method is public (app-token), no authorization is needed — it can be used from a Server Component.
 
 > ⚠️ Before using the marker, check its existence via `/inspect-api`. If the filter is not in the admin panel — create an entry in `MISMATCH-LOG.md` (rule `.claude/rules/mismatch-log.md`).
 
 ---
 
-## Step 1: Know the Structure (Node Types)
+## Step 1: Know the structure (node types)
 
 `getFilterByMarker` returns `IContentFilter`:
 
 ```ts
 interface IContentFilter {
   localizeInfos: { title: string };       // filter title
-  items?: IContentFilterItem[];           // tree of nodes
+  items?: IContentFilterItem[];           // node tree
 }
 
 interface IContentFilterItem {
@@ -36,13 +36,13 @@ interface IContentFilterItem {
 }
 ```
 
-> ⚠️ A node is identified by `type`. `page` → navigate by `url`; `product` → by `marker`; `discount`/`bonus`/`payment-method` → informational nodes (render `localizeInfos.title` + `value`). Always sort children by `position`.
+> ⚠️ A node is identified by `type`. `page` → go to `url`; `product` → by `marker`; `discount`/`bonus`/`payment-method` → informational nodes (render `localizeInfos.title` + `value`). Always sort children by `position`.
 
 ---
 
-## Step 2: Server Action for Loading
+## Step 2: Server Action for loading
 
-File: `app/actions/filters.ts`
+File: `src/app/actions/filters.ts`
 
 ```typescript
 'use server';
@@ -65,9 +65,9 @@ export async function getContentFilter(
 
 ---
 
-## Step 3: Recursive Render of the Tree
+## Step 3: Recursive render of the tree
 
-File: `app/components/ContentFilterTree.tsx`
+File: `src/app/components/ContentFilterTree.tsx`
 
 ```tsx
 import Link from 'next/link';
@@ -128,10 +128,10 @@ export function ContentFilterTree({ items }: { items: IContentFilterItem[] }) {
 
 ---
 
-## Step 4: Usage on the Page
+## Step 4: Usage on the page
 
 ```tsx
-// app/[locale]/promo/page.tsx — Server Component
+// src/app/[locale]/promo/page.tsx — Server Component
 import { getContentFilter } from '@/app/actions/filters';
 import { ContentFilterTree } from '@/app/components/ContentFilterTree';
 
@@ -156,10 +156,10 @@ export default async function PromoPage({
 
 ---
 
-## Important Details
+## Important details
 
 ```md
-✅ Created content filter render (Filters API). Key rules:
+✅ Created a content filter render (Filters API). Key rules:
 
 1. Filters.getFilterByMarker — public (app-token), load from Server Component
 2. A node is identified by item.type — render differently (page→url, product→marker, discount/bonus→value)

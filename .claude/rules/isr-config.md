@@ -1,17 +1,17 @@
-<!-- META
-type: rules
-fileName: isr-config.md
-rulePaths: ["app/**/page.tsx","app/**/layout.tsx","lib/isr.ts","lib/**/cache*.ts"]
+---
 paths:
   - "app/**/page.tsx"
+  - "src/app/**/page.tsx"
   - "app/**/layout.tsx"
+  - "src/app/**/layout.tsx"
   - "lib/isr.ts"
+  - "src/lib/isr.ts"
   - "lib/**/cache*.ts"
--->
-
+  - "src/lib/**/cache*.ts"
+---
 # ISR and Custom TTL — Three Limitations of Next.js
 
-Caching strategies (what to cache and for how long) — in `.claude/rules/performance.md`. Here are the limitations you encounter on the **very first** attempt to move TTL to the config, which are not diagnosed by an error message.
+Caching strategies (what to cache and for how long) — in `.claude/rules/performance.md`. Here are the limitations you encounter on your **very first** attempt to move TTL to the config, which are not diagnosed by an error message.
 
 ---
 
@@ -20,7 +20,7 @@ Caching strategies (what to cache and for how long) — in `.claude/rules/perfor
 Next AST parses the route segment config **at build time**, before executing the code. Import, arithmetic, ternary, `process.env` — all of this fails with `Invalid segment configuration export detected`.
 
 ```typescript
-// ❌ app/product/[id]/page.tsx — will not build
+// ❌ src/app/product/[id]/page.tsx — will not build
 import { REVALIDATE_PRODUCT } from '@/lib/isr'
 export const revalidate = REVALIDATE_PRODUCT
 
@@ -31,13 +31,13 @@ export const revalidate = Number(process.env.ISR_PRODUCT_TTL_SEC) || 120
 export const revalidate = 120
 ```
 
-**Consequence for architecture:** customizable TTLs live not in the route shell, but **inside** `unstable_cache({ revalidate })` in loaders. The literal in `page.tsx` controls how long the HTML page lives; the constant in the loader — how long the OneEntry response is reused. These are two different caches, and confusing them is costly: changing the env variable will not shift the literal in the route.
+**Implication for architecture:** custom TTLs live not in the route shell, but **inside** `unstable_cache({ revalidate })` in loaders. The literal in `page.tsx` controls how long the HTML page lives; the constant in the loader — how long the OneEntry response is reused. These are two different caches, and confusing them is costly: changing the env variable will not affect the literal in the route.
 
 ```typescript
-// lib/isr.ts — consumer ONLY of unstable_cache, not segment config
+// src/lib/isr.ts — consumer ONLY of unstable_cache, not segment config
 export const REVALIDATE_PRODUCT = ttl('ISR_PRODUCT_TTL_SEC', 120)
 
-// lib/oneentry/product.ts
+// src/lib/oneentry/product.ts
 export const getProduct = unstable_cache(
   async (id: number) => { /* … */ },
   ['product'],
@@ -45,7 +45,7 @@ export const getProduct = unstable_cache(
 )
 ```
 
-> At the top of `lib/isr.ts`, keep a comment with a list of literals from routes (`app/page.tsx → 300`, `app/product/[id] → 120`, …) — otherwise, no one will find the second half of the configuration.
+> At the top of `src/lib/isr.ts`, keep a comment with a list of literals from routes (`src/app/page.tsx → 300`, `src/app/product/[id] → 120`, …) — otherwise, no one will find the second half of the configuration.
 
 ---
 
@@ -65,13 +65,13 @@ export function ttl(envKey: string, fallback: number): number {
 }
 ```
 
-The env parser must be resilient: an empty string, `"abc"`, `"-5"`, `"0"` → fallback, not `NaN` in the cache config.
+The env parser must be robust: an empty string, `"abc"`, `"-5"`, `"0"` → fallback, not `NaN` in the cache config.
 
 ---
 
 ## 3. A handle without a consumer — a handle that silently does nothing
 
-Create an env override TTL only where there is a **live import** of the constant. A constant that no one imports looks like a configuration, but twisting it changes nothing — and this is discovered weeks later, in the middle of an incident.
+Create an env override for TTL only where there is a **live import** of the constant. A constant that no one imports looks like a configuration, but changing it does not change anything — and this is discovered weeks later, in the middle of an incident.
 
 Check before committing: `grep -rn 'REVALIDATE_' app lib components` — each exported constant must have at least one consumer, besides the declaration. Loaders with their literal `revalidate: 60` do not need a constant.
 
@@ -84,7 +84,7 @@ Check before committing: `grep -rn 'REVALIDATE_' app lib components` — each ex
 | Main page blocks, showcases | 300 s | content changes rarely, LCP is important |
 | Product card (price, availability) | 60–120 s | stale price → paid order at an incorrect amount. Insurance — `Orders.previewOrder` at checkout (see `.claude/rules/orders.md`) |
 | Catalog lists, discounts | 60 s | often changed, but not critical |
-| Stores, delivery methods, schedule | 3600 s | change once a month |
+| Stores, delivery methods, schedules | 3600 s | change once a month |
 | Cart, wishlist, profile, orders | do not cache | user/guest-scoped, `x-guest-id`/`Authorization` in the header |
 
 ---
@@ -92,7 +92,7 @@ Check before committing: `grep -rn 'REVALIDATE_' app lib components` — each ex
 ## Checklist
 
 1. In `page.tsx` / `layout.tsx` — only the literal `export const revalidate`.
-2. Customizable TTLs — in `unstable_cache({ revalidate })`, not in the route shell.
+2. Custom TTLs — in `unstable_cache({ revalidate })`, not in the route shell.
 3. "Disabled" = `1`, never `0`.
 4. The env parser returns a fallback on an empty/non-numeric/non-positive string.
 5. Each exported `REVALIDATE_*` has an import in the loader.

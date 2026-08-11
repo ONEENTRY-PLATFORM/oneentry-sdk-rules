@@ -1,12 +1,8 @@
-<!-- META
-type: rules
-fileName: playwright-e2e.md
-rulePaths: ["e2e/**/*.spec.ts","playwright.config.ts"]
+---
 paths:
   - "e2e/**/*.spec.ts"
   - "playwright.config.ts"
--->
-
+---
 # Playwright E2E — OneEntry Rules
 
 Rules for writing E2E tests for Next.js + OneEntry projects. Verified on a live project.
@@ -35,15 +31,15 @@ npm install -D dotenv
 
 ---
 
-## Authorized tests with one user — serial
+## Authorized tests by one user — serial
 
 OneEntry uses a one-time refresh token (rotation via `saveFunction`). If two workers simultaneously execute `AuthProvider.auth()` with the same user — one of them will receive a 401 on the subsequent `Users.getUser()`, and the test will fail due to a timeout on `waitForURL('**/profile')`.
 
 ```typescript
 test.describe('Profile', () => {
   test.describe('authorized', () => {
-    test.describe.configure({ mode: 'serial' });  // ← mandatory
-    test.skip(!TEST_EMAIL || !TEST_PASSWORD, 'E2E_TEST_EMAIL/PASSWORD not set');
+    test.describe.configure({ mode: 'serial' });  // ← must be
+    test.skip(!TEST_EMAIL || !TEST_PASSWORD, 'E2E_TEST_EMAIL/PASSWORD are not set');
 
     test.beforeEach(async ({ page }) => {
       // login flow with TEST_EMAIL/TEST_PASSWORD
@@ -56,14 +52,14 @@ test.describe('Profile', () => {
 
 > ⚠️ `mode: 'serial'` only applies **within the file**. If authorized tests are in different spec files (`auth.spec.ts:signin success` + `profile.spec.ts:authenticated`), they will still run in different workers in parallel. **Do not duplicate login tests between files** — leave one file responsible for the authorized flow.
 
-**An alternative for complex cases** — `storageState` via global project setup, but for simple cases, serial is sufficient.
+**Alternative for complex cases** — `storageState` through global project setup, but for simple cases, serial is sufficient.
 
 ---
 
 ## `notFound()` in Server Component with `force-dynamic` — status 200, not 404
 
 ```tsx
-// app/products/[id]/page.tsx
+// src/app/products/[id]/page.tsx
 export const dynamic = 'force-dynamic';
 
 export default async function Page({ params }) {
@@ -91,7 +87,7 @@ test('non-existent id → not-found UI', async ({ page }) => {
 
 ---
 
-## Strict mode violation — scope `getByRole` to the container
+## Strict mode violation — copy `getByRole` to the container
 
 Playwright is strict by default: if `page.getByRole('link', { name: /login/i })` finds 2+ elements (in the navbar + in the placeholder) — it will fail with `strict mode violation`.
 
@@ -170,7 +166,7 @@ const TEST_EMAIL = process.env.E2E_TEST_EMAIL ?? '';
 const PRODUCT_ID = process.env.E2E_PRODUCT_ID ?? '14';  // fallback to known id
 
 test.describe('Profile', () => {
-  test.skip(!TEST_EMAIL, 'E2E_TEST_EMAIL not set');
+  test.skip(!TEST_EMAIL, 'E2E_TEST_EMAIL is not set');
   // tests requiring a real user
 });
 ```
@@ -179,25 +175,25 @@ test.describe('Profile', () => {
 
 ---
 
-## 🚨 Cleanup test data in OneEntry — DO NOT leave garbage in the project
+## 🚨 Cleanup test data in OneEntry — DO NOT leave trash in the project
 
-OneEntry is not a one-time DB; all entities created in tests (users, orders, reviews) remain in the client's real project. E2E tests must clean up after themselves.
+OneEntry is not a disposable database; all entities created in tests (users, orders, reviews) remain in the client's real project. E2E tests must clean up after themselves.
 
-### Users — unactivated cannot be deleted programmatically
+### Users — inactive ones CANNOT be deleted programmatically
 
-After `AuthProvider.signUp()` with a provider that has `isCheckCode: true`, the account is created but **not activated** (`isActive: false`). SDK limitations (verified empirically):
+After `AuthProvider.signUp()` with a provider that has `isCheckCode: true`, the account is created but **inactive** (`isActive: false`). SDK limitations (verified empirically):
 
-- `Users.deleteUser()` goes to `/me/account`, `Users.archiveUser()` goes to `/me` — both require **user authorization**
-- `AuthProvider.auth()` with an unactivated user returns **HTTP 401 `"User is not activated"`** — cannot log in, cannot obtain access token
+- `Users.deleteUser()` goes to `/me/account`, `Users.archiveUser()` to `/me` — both require **user authorization**
+- `AuthProvider.auth()` with an inactive user returns **HTTP 401 `"User is not activated"`** — cannot log in, cannot obtain access token
 - `ISignUpEntity` (response from `signUp()`) **does not contain** `accessToken`/`refreshToken` — only `{ id, identifier, isActive: false, ... }`
 - The SDK Users API does not have `deleteUserById(id)` / admin-endpoint — only `/me`, `/me/account`, `/me/fcm-token`
 - The SDK Admins API — only reading the list of admins, no user deletion
 
-**Conclusion: if a test did `signUp()` under a provider with `isCheckCode: true` — the user remains in the project forever, delete manually through the OneEntry admin panel.**
+**Conclusion: if a test performed `signUp()` under a provider with `isCheckCode: true` — the user remains in the project forever, delete manually via the OneEntry admin panel.**
 
 ### Main rule: use an existing active user, DO NOT create new ones
 
-For all tests that require authorization (profile, orders, favorites on the server, subscriptions), **log in with an existing active user** from `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD`. Do not create new ones through signUp for the test — they remain in the project.
+For all tests requiring authorization (profile, orders, favorites on the server, subscriptions), **log in with an existing active user** from `E2E_TEST_EMAIL` / `E2E_TEST_PASSWORD`. Do not create new ones via signUp for the test — they remain in the project.
 
 ```typescript
 // ✅ Correct — active user from env, no signUp
@@ -211,11 +207,11 @@ test.beforeEach(async ({ page }) => {
 });
 ```
 
-This user is **part of the test infrastructure**, not garbage. They live in the project permanently and are reused.
+This user is **part of the test infrastructure**, not trash. They live in the project permanently and are reused.
 
 ### Rules for signup tests
 
-1. **By default, signup tests SHOULD NOT submit the form** — check only the UI (mode switch, field set, validation). Example of an acceptable test:
+1. **By default, signup tests SHOULD NOT submit the form** — only check the UI (mode switch, field set, validation). Example of an acceptable test:
 
    ```typescript
    test('switching signin → signup shows more fields', async ({ page }) => {
@@ -236,7 +232,7 @@ This user is **part of the test infrastructure**, not garbage. They live in the 
    });
    ```
 
-3. **When `isCheckCode: true`** — run the signup flow **only if there is a mock SMTP / test email service** + the activation code is automatically extracted (for example, via API mail-catcher). Without automatic activation — `test.skip` with an explanation "cannot clean up after activation".
+3. **With `isCheckCode: true`** — run the signup flow **only if there is a mock SMTP / test email service** + the activation code is automatically extracted (for example, via API mail-catcher). Without automatic activation — `test.skip` with the explanation "cannot clean up after activation".
 
 4. **Test emails** — always with a random suffix to avoid overlapping with real users: `e2e-${Date.now()}-${Math.random().toString(36).slice(2,8)}@example.test`
 
@@ -305,20 +301,20 @@ test.describe('Registration (only isCheckCode: false provider)', () => {
 
 - **Orders** (`Orders.createOrder`): do NOT perform the full flow in E2E — leaves a record in the admin panel, no programmatic deletion. Check before `createOrder`: rendering the form, validation, amount calculation, presence of payment-selection.
 - **Reviews** (`FormData.postFormsData` for the review form): moderated in the admin panel. If you send — leave it as a documented trade-off or use a dedicated "e2e-review-form" with auto-reject.
-- **Favorites / cart in user.state**: cleaned up via `Users.updateUser({ state: {} })` — safe.
+- **Favorites / cart in user.state**: cleaned up via `Users.updateUser({ state: {} })` — safely.
 
 ---
 
-## Non-functional specs — things that are not caught by clicks
+## Non-functional specs — what is not caught by clicks
 
 Functional scenarios cover behavior; these three check the infrastructure that breaks quietly.
 
 ### Security headers and absence of CSP violations
 
-Checking only for the presence of the header is not enough. A CSP that quietly cuts off fonts, analytics, or images from a CDN is **worse than absence**: the page looks broken, and everything is green in Network — the violation is only visible in the console.
+Checking only for the presence of the header is not enough. CSP that quietly cuts off fonts, analytics, or images from CDN is **worse than absent**: the page looks broken, and everything is green in Network — the violation is only visible in the console.
 
 ```typescript
-test('security headers are served and nothing is blocked', async ({ page }) => {
+test('security headers are returned and nothing is blocked', async ({ page }) => {
   const violations: string[] = []
   page.on('console', (msg) => {
     if (/Content Security Policy/i.test(msg.text())) violations.push(msg.text())
@@ -336,12 +332,12 @@ test('security headers are served and nothing is blocked', async ({ page }) => {
 })
 ```
 
-Run at least one route of each type: main, product page, form — the directives `connect-src`/`img-src` affect different pages differently. The composition of the policy — `.claude/rules/security.md`.
+Run at least one route of each type: main, product page, form — the directives `connect-src`/`img-src` catch different pages differently. The policy composition — `.claude/rules/security.md`.
 
 ### Offline fallback
 
 ```typescript
-test('offline serves static shell', async ({ page, context }) => {
+test('offline returns static shell', async ({ page, context }) => {
   await page.goto('/')                       // allow SW to install
   await context.setOffline(true)
   await page.reload()
@@ -350,21 +346,21 @@ test('offline serves static shell', async ({ page, context }) => {
 })
 ```
 
-Separately check the main limitation of PWA: after logging in and adding a product to the cart, requests to `*.oneentry.cloud` **must not** be served from SW (see `.claude/rules/pwa.md`).
+Separately check the main PWA limitation: after logging in and adding a product to the cart, requests to `*.oneentry.cloud` **must not** be served from SW (see `.claude/rules/pwa.md`).
 
 ### ISR — page served from cache
 
 ```typescript
 test('revisiting is served from ISR cache', async ({ page }) => {
-  await page.goto('/product/1')                        // warm up
+  await page.goto('/product/1')                        // warm-up
   const res = await page.goto('/product/1')
   expect(['HIT', 'STALE']).toContain(res!.headers()['x-nextjs-cache'])
 })
 ```
 
-The test catches a common regression: an accidental `force-dynamic` or access to `cookies()`/`headers()` in the loader turns the route into dynamic rendering — latency triples, and no one notices. TTL and limitations — `.claude/rules/isr-config.md`.
+The test catches a frequent regression: an accidental `force-dynamic` or access to `cookies()`/`headers()` in the loader turns the route into dynamic rendering — latency triples, and no one notices. TTL and limitations — `.claude/rules/isr-config.md`.
 
-> A level lower (value forms, `isError` branch, cache keys) is covered by unit tests — `.claude/rules/unit-testing.md`. E2E for this is too expensive and triggers too late.
+> A level lower (value forms, branch `isError`, cache keys) is covered by unit tests — `.claude/rules/unit-testing.md`. E2E is too expensive for this and triggers too late.
 
 ---
 
@@ -374,7 +370,7 @@ The test catches a common regression: an accidental `force-dynamic` or access to
 npm run test:e2e              # headless
 npm run test:e2e:ui           # interactive
 npx playwright test foo.spec  # one file
-npx playwright test --workers=1  # sequentially (debugging parallel conflicts)
+npx playwright test --workers=1  # sequentially (debug parallel conflicts)
 npx playwright test --grep "signin"  # by name
 ```
 

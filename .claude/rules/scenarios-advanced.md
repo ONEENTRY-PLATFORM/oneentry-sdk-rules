@@ -1,4 +1,4 @@
-# Advanced OneEntry Scenarios
+# Extended OneEntry Scenarios
 
 ## Order Form from OneEntry Forms API
 
@@ -7,7 +7,7 @@
 **How it works:**
 
 1. `getApi().Orders.getAllOrdersStorage()` returns order storages, each with a `formIdentifier`
-2. `getApi().Forms.getFormByMarker(formIdentifier, locale)` returns the delivery form fields
+2. `getApi().Forms.getFormByMarker(formIdentifier, locale)` returns the fields of the delivery form
 3. The form fields are rendered dynamically by type (`string`, `date`, `timeInterval`, etc.)
 
 **The `timeInterval` field in the order form** is a field with a list of available delivery slots. You get the slots through `expandTimeIntervals(schedule, { from, to })` by `field.localizeInfos.intervals[]` (SDK ≥ 1.0.156; the computed field `timeIntervals` has been removed) — the result is `[[start, end], ...]`, from which the following are determined:
@@ -25,7 +25,7 @@ To implement the full checkout flow, use the skill **`/create-checkout`**.
 
 ## Product Catalog with Filters and Pagination
 
-To create a product catalog with URL filters, infinite scrolling, and Server Actions, use the skill **`/create-product-list`** — it will create `lib/filters.ts`, `app/actions/products.ts`, Server Page, `ShopView`, and `ProductGrid` with the correct architecture.
+To create a product catalog with URL filters, infinite scrolling, and Server Actions, use the skill **`/create-product-list`** — it will create `src/lib/filters.ts`, `src/app/actions/products.ts`, Server Page, `ShopView`, and `ProductGrid` with the correct architecture.
 
 To create a UI filter panel with `FilterContext`, price/color/availability components, and Apply/Reset buttons, use the skill **`/create-filter-panel`** — it complements `/create-product-list`.
 
@@ -42,7 +42,7 @@ For the language switcher, use the skill **`/create-locale-switcher`**.
 **⚠️ Requires Server Action** — called only server-side.
 
 ```typescript
-// app/actions/forms.ts
+// src/app/actions/forms.ts
 'use server';
 import { getApi } from '@/lib/oneentry';
 
@@ -56,7 +56,7 @@ export async function getFormSubmissions(marker: string) {
 }
 ```
 
-**Response Structure:** each element contains `id`, `time`, `formData: [{ marker, value, type }]`.
+**Response Structure:** each item contains `id`, `time`, `formData: [{ marker, value, type }]`.
 
 **Accessing Fields:** `Object.fromEntries(submission.formData.map(f => [f.marker, f.value]))`.
 
@@ -71,13 +71,13 @@ await getApi().FormData.deleteFormsDataByid(id);
 
 **Reviews with Hierarchy** (`isExtended: 1`, `entityIdentifier`, `replayTo`) — skill **`/create-reviews`**.
 
-**⚠️ Reviews in OneEntry are implemented through FormData** — use skill **`/create-reviews`**.
+**⚠️ Reviews in OneEntry are implemented through FormData** — use the skill **`/create-reviews`**.
 
 ## IntegrationCollections — Custom Collections
 
-IntegrationCollections are arbitrary data tables in OneEntry (FAQ, directories, arbitrary content). Full CRUD access is available without authorization.
+IntegrationCollections are arbitrary data tables in OneEntry (FAQs, directories, arbitrary content). Full CRUD access is available without authorization.
 
-**⚠️ Collection Marker:** obtain it through `/inspect-api` or `getICollections()` — do not guess.
+**⚠️ Collection Marker:** obtain it via `/inspect-api` or `getICollections()` — do not guess.
 
 ```typescript
 // Reading rows
@@ -128,7 +128,7 @@ await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', i
 }
 ```
 
-**Marker Check** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT a boolean. ⚠️ Semantics — "marker **is free**": `true` = no collection with that marker exists (can create), `false` = marker is occupied (the same semantics confirmed by a live test at the twin endpoint `ProductStatuses.validateMarker`):
+**Marker Validation** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT a boolean. ⚠️ Semantics — "marker **is free**": `true` = no collection with that marker exists (can create), `false` = marker is occupied (the same semantics confirmed by live testing at the twin endpoint `ProductStatuses.validateMarker`):
 
 ```typescript
 const { valid } = await getApi().IntegrationCollections.validateICollectionMarker('faq');
@@ -141,11 +141,11 @@ const cols = await getApi().IntegrationCollections.getICollections(locale);
 const exists = cols.some((c) => c.identifier === 'faq');
 ```
 
-## Navigation by Categories
+## Category Navigation
 
 **⚠️ IMPORTANT:** `getRootPages()` and `getPages()` do NOT return `catalog_page` (product catalogs).
 Pages have a `type` field (`PageType`): `common_page`, `error_page`, `catalog_page`, `external_page`.
-To get the catalog, use `getPageByUrl()` — it finds pages of any type.
+To obtain a catalog, use `getPageByUrl()` — it finds pages of any type.
 `getChildPagesByParentUrl()` also returns `catalog_page` child pages.
 
 ```typescript

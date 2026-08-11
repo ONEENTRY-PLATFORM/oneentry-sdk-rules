@@ -1,25 +1,21 @@
-<!-- META
-type: rules
-fileName: unit-testing.md
-rulePaths: ["**/*.test.ts","**/*.test.tsx","**/*.spec.ts","vitest.config.ts"]
+---
 paths:
   - "**/*.test.ts"
   - "**/*.test.tsx"
   - "**/*.spec.ts"
   - "vitest.config.ts"
--->
-
+---
 # Unit Tests for OneEntry Adapters
 
 Skill recipe: **`/setup-vitest`**. E2E discipline — a separate rule `.claude/rules/playwright-e2e.md`; here we discuss the lower level.
 
-**Why.** 90% of integration errors with OneEntry are not scenarios, but **data format**: `image` is an object with one file, an array with two; an empty `integer` = `null`, not `0`; `text` comes as an array or object; `form.attributes` of an empty form = `{}`, not `[]`. These regressions are caused by **content editing, not code** — E2E catches them late and at a high cost, while a unit test on a fixture catches them instantly.
+**Why.** 90% of integration errors with OneEntry are not scenarios, but **data forms**: `image` is an object with one file, an array with two; an empty `integer` = `null`, not `0`; `text` comes as an array or object; `form.attributes` of an empty form = `{}`, not `[]`. These regressions are caused by **content editing, not code** — E2E catches them late and at a high cost, while a unit test on a fixture catches them instantly.
 
 ---
 
 ## 1. What to Test: Adapters and Loaders, Not SDK
 
-You test **your** response parsing layer — the function that transforms `attributeValues` into a domain object. The SDK and network are not mocked line by line: fixture responses are substituted.
+You test **your** layer of response parsing — the function that transforms `attributeValues` into a domain object. The SDK and network are not mocked line by line: fixture responses are substituted.
 
 Each adapter must have a test for **all forms of `value`**:
 
@@ -59,7 +55,7 @@ it('returns an empty list on IError, does not throw', async () => {
 
 ## 3. Cache Keys — Test for Canonicalization
 
-`unstable_cache` builds a key from **positional arguments**. Two calls with different filters that yield the same serialization silently share one cache entry — and the user sees someone else's output. A test for canonicalizing the signature takes ten lines and is cheaper than investigating such an incident.
+`unstable_cache` builds a key from **positional arguments**. Two calls with different filters that yield the same serialization silently share one cache entry — and the user sees someone else's output. A test for signature canonicalization takes ten lines and is cheaper than investigating such an incident.
 
 ```typescript
 it('different filters yield different cache keys', () => {
@@ -76,12 +72,12 @@ TTL and limitations of `unstable_cache` — `.claude/rules/isr-config.md`.
 
 ## 4. What NOT to Test: DTO Layer
 
-`.claude/rules/typescript.md` prohibits flat copies of SDK types — and testing such a copy does not legitimize it but reinforces it. Test **domain aggregation**: merging product variants by color/size, calculating the final price with a discount, normalizing schedules. This is the case of "merging two entities" that `typescript.md` recognizes as permissible.
+`.claude/rules/typescript.md` prohibits flat copies of SDK types — and testing such a copy does not legitimize it, but rather solidifies it. Test **domain aggregation**: merging product variants by color/size, calculating the final price with a discount, normalizing schedules. This is the case of "merging two entities" that `typescript.md` recognizes as permissible.
 
 Good candidates for unit tests in the OneEntry project:
 
 - `getImageUrl` / `getImageUrls` — all forms of `value` (`.claude/rules/attribute-values.md`);
-- `sanitizeHtml` — payloads from `.claude/rules/security.md` (`javascript:` with all encodings, `>` in quotes, repeated attributes, `svg`/`template`);
+- `sanitizeHtml` — payloads from `.claude/rules/security.md` (`javascript:` with all encodings, `>` in quotes, duplicate attribute, `svg`/`template`);
 - `readInitialValue` — flat and language-keyed forms (`.claude/rules/attribute-sets.md`);
 - env parser for TTL — empty string, `"abc"`, `"0"`, `"-5"`;
 - adapters for catalog, order, form.
@@ -103,16 +99,16 @@ test: {
   maxWorkers: Math.max(2, Math.ceil(cpus().length / 3)),
   // Projects with a common groupOrder must match in maxWorkers — Vitest
   // rejects the config. Different orders also separate jsdom forks from chromium
-  // Storybook by time, to avoid contention for cores.
+  // Storybook by time, to avoid fighting for cores.
   sequence: { groupOrder: 0 },
 }
 ```
 
-**Check after setup:** the number of compiled files in the report should match `git ls-files '*.test.*' | wc -l`. Discrepancy = silently skipped tests.
+**Check after setup:** the number of compiled files in the report should match `git ls-files '*.test.*' | wc -l`. Discrepancy = quietly skipped tests.
 
 ## 6. ⚠️ Alias `@` Duplicated in `vitest.config.ts`
 
-`tsconfig.paths` is not read by Vitest. Without an explicit `resolve.alias`, the collection fails with `Failed to resolve import` — and only for those tests whose import graph reaches a module with the alias, which seems random.
+`tsconfig.paths` is not read by Vitest. Without an explicit `resolve.alias`, the collection fails with `Failed to resolve import` — and only for those tests whose import graph reaches the module with the alias, which looks random.
 
 ```typescript
 resolve: { alias: { '@': path.resolve(dirname, 'src') } }

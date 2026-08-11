@@ -2,7 +2,7 @@
 name: create-form
 description: Create dynamic form from OneEntry Forms API
 ---
-# Create a dynamic form from OneEntry Forms API
+# Create a Dynamic Form from OneEntry Forms API
 
 Argument: `marker` (form marker in OneEntry)
 
@@ -43,12 +43,12 @@ if (isError(res)) { /* handle error: res.message, res.statusCode */ }
 
 ## Step 3: Create Server Actions
 
-### app/actions/forms.ts
+### src/app/actions/forms.ts
 
 > If the file already exists — read and supplement, do not duplicate.
 
 ```typescript
-// app/actions/forms.ts
+// src/app/actions/forms.ts
 'use server';
 
 import { getApi, isError } from '@/lib/oneentry';
@@ -88,7 +88,7 @@ export async function getFormByMarker(marker: string, locale = 'en_US') {
   };
 }
 
-// Submitting form data
+// Sending form data
 export async function submitForm(
   formIdentifier: string,
   formModuleConfigId: number,
@@ -128,7 +128,7 @@ export async function submitForm(
 - `formData` for submission — `{ marker, type, value }`, only non-empty values (`type` is mandatory: the SDK filters button fields and triggers upload file/image/groupOfImages)
 - Fields `file`/`image`/`groupOfImages` — in `value` only `File[]`, never a string: string value crashes `postFormsData` entirely (TypeError), not just skips the upload
 
-### Field type → HTML table
+### Field types → HTML table
 
 | `field.type`                | Render                                            |
 |-----------------------------|---------------------------------------------------|
@@ -143,14 +143,14 @@ export async function submitForm(
 | `file`, `image`             | `<input type="file">` — uncontrolled, in state `File[]` |
 | `groupOfImages`             | `<input type="file" multiple>` — uncontrolled, in state `File[]` |
 | `spam`                      | `<FormReCaptcha>` — NOT `<input>`!                 |
-| `button`                    | NOT input: skip (the SDK filters button fields during submission) |
+| `button`                    | NOT input: skip (SDK filters it during submission) |
 | `textWithHeader`            | decorative header/text, NOT input                  |
 | `entity`, `timeInterval`    | skip — do not render as text input                 |
 
-#### components/DynamicForm.tsx
+#### src/components/DynamicForm.tsx
 
 ```tsx
-// components/DynamicForm.tsx
+// src/components/DynamicForm.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -331,7 +331,7 @@ function renderField(
   }
 
   if (field.type === 'list') {
-    // listTitles — top-level field IFormAttribute (IListTitle[]: { title, value, position?, extended? }), NOT in localizeInfos
+    // listTitles — top-level field of IFormAttribute (IListTitle[]: { title, value, position?, extended? }), NOT in localizeInfos
     const options = field.listTitles || [];
     return (
       <>
@@ -373,7 +373,7 @@ function renderField(
 
   // file / image / groupOfImages: uncontrolled input WITHOUT passing value, in state we put File[].
   // Array.from is mandatory: raw FileList cannot be serialized across the Server Action boundary,
-  // while an array of File can be serialized, and the SDK will upload files itself (branch Array.isArray in postFormsData)
+  // while an array of File — is serializable, and the SDK will upload files itself (branch Array.isArray in postFormsData)
   if (['file', 'image', 'groupOfImages'].includes(field.type)) {
     return (
       <>
@@ -425,14 +425,14 @@ function renderField(
 }
 ```
 
-### FormReCaptcha component (if captcha is needed)
+### FormReCaptcha Component (if captcha is needed)
 
-> Copy this component to `components/FormReCaptcha.tsx` if the form contains a `spam` field.
-> ⚠️ For complete, verified captcha wrapping (reading config, form `value`, module config,
+> Copy this component to `src/components/FormReCaptcha.tsx` if the form contains a `spam` field.
+> ⚠️ For a complete, verified captcha wrapper (reading config, form `value`, module config,
 > submission, headless caveat) follow `/create-captcha` — here is just the basic component.
 
 ```tsx
-// components/FormReCaptcha.tsx
+// src/components/FormReCaptcha.tsx
 'use client';
 
 import type { Dispatch, JSX } from 'react';
@@ -514,7 +514,7 @@ export function FormReCaptcha({
 4. Forms API requires Server Action — cannot be called from 'use client' directly
 5. Sort fields by field.position before rendering
 6. submitForm via FormData.postFormsData, not via Forms API
-7. Form marker — obtain via /inspect-api forms, DO NOT guess
+7. The form marker — obtain via /inspect-api forms, DO NOT guess
 ```
 
 ---
@@ -530,7 +530,7 @@ For selector stability — add `data-testid` when generating `DynamicForm.tsx`:
 
 ```tsx
 <form data-testid="dynamic-form" onSubmit={handleSubmit}>
-  {/* Inside map over fields — in renderField() wrap each field in a container with testid: */}
+  {/* Inside map by fields — in renderField() wrap each field in a container with testid: */}
   <div data-testid={`form-field-${field.marker}`}>
     {/* input / textarea / select — add data-testid to the element itself: */}
     <input data-testid={`form-input-${field.marker}`} ... />
@@ -549,11 +549,11 @@ For selector stability — add `data-testid` when generating `DynamicForm.tsx`:
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (execute step by step, do not ask in one list):**
+**Algorithm (perform step by step, do not ask in one list):**
 
 1. **Form marker** — use the marker that the user provided as an argument `/create-form <marker>`. If it is not there — take it from the results of `/inspect-api forms` (Step 1) and inform: "Using marker `{identifier}` from `/inspect-api forms`. If another is needed — say so".
 2. **Page path with the form** — ask: "On which URL in the application is the form rendered? (for example `/contact`, `/feedback`)".
-   - If the user is silent → find it yourself via Grep for `<DynamicForm` / `marker="{marker}"` in `app/**`. Inform: "Found the form at `{path}` — using it. If incorrect, say so".
+   - If the user is silent → find it yourself via Grep for `<DynamicForm` / `marker="{marker}"` in `src/app/**`. Inform: "Found the form at `{path}` — using it. If incorrect, say so".
 3. **Test values for fields** — read `form.attributes` from `/inspect-api forms` (already called in Step 1). For each field, generate a valid value yourself:
    - `string` / `text` → `'E2E Test value'`
    - `integer` / `number` → `'42'`
@@ -561,12 +561,12 @@ For selector stability — add `data-testid` when generating `DynamicForm.tsx`:
    - `date` → today's date in `YYYY-MM-DD` format
    - `list` / `radioButton` → first value from `listTitles`
    - `file` → skip the file upload test (`test.skip` with explanation: "file fields require a real file — skipping")
-4. **Presence of the `spam` field** — check by `form.attributes`. If `spam` exists → add `E2E_SKIP_CAPTCHA=1` to `.env.local` and in the test `test.skip` block "successful submission" with explanation: "reCAPTCHA v3 Enterprise cannot be passed in headless browser without special configuration".
+4. **Presence of the `spam` field** — check by `form.attributes`. If there is `spam` → add `E2E_SKIP_CAPTCHA=1` to `.env.local` and in the test `test.skip` block "successful submission" with explanation: "reCAPTCHA v3 Enterprise does not pass in headless browser without special configuration".
 
 **Example of filling in `.env.local` (do it yourself, do not ask the user to copy):**
 
 ```bash
-# e2e form — page path with the form
+# e2e form — path to the page with the form
 E2E_FORM_PATH=/contact
 # If the form has a spam field (reCAPTCHA v3) — skip the successful submission test
 E2E_SKIP_CAPTCHA=1
@@ -610,7 +610,7 @@ async function fillFieldsWithValidValues(page: Page) {
     } else if (marker.toLowerCase().includes('email')) {
       await input.fill('e2e@example.com');
     } else if (type === 'file') {
-      // Skipping file fields — a real file is required
+      // Skip file fields — a real file is required
       continue;
     } else {
       await input.fill(`E2E ${marker}`);
@@ -664,10 +664,10 @@ Decisions made automatically (if applicable):
 - Form marker: {marker} — {provided by user / taken from /inspect-api forms}
 - Path to the form: {FORM_PATH} — {provided by user / found via Grep for <DynamicForm}
 - Test values for fields generated automatically by field.type
-- Spam field (reCAPTCHA): {exists → successful submission test skipped via test.skip, reason: v3 Enterprise cannot be passed in headless / does not exist → test runs fully}
-- File fields: {exists → upload test skipped, reason: a real file is required / does not exist → no skip needed}
+- Spam field (reCAPTCHA): {present → successful submission test skipped via test.skip, reason: v3 Enterprise does not pass in headless / not present → test works fully}
+- File fields: {present → upload test skipped, reason: a real file is required / not present → no skip needed}
 
 Run: npm run test:e2e -- form.spec.ts
 ```
 
-If the form has a `spam` field — the successful submission test is skipped (`test.skip`), the rendering and validation tests work.
+If the form has a `spam` field — the successful submission test is skipped (`test.skip`), while rendering and validation tests work.

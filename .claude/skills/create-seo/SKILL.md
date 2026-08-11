@@ -2,37 +2,37 @@
 name: create-seo
 description: Set up SEO for a OneEntry storefront — generateMetadata, sitemap.ts, robots.ts, JSON-LD, canonical/hreflang
 ---
-# Set Up SEO for OneEntry Data
+# Set up SEO for OneEntry data
 
-Creates `generateMetadata`, `app/sitemap.ts`, `app/robots.ts`, `JsonLd` component, and (optionally) `app/llms.txt/route.ts` — all based on real project data.
+Creates `generateMetadata`, `src/app/sitemap.ts`, `src/app/robots.ts`, `JsonLd` component, and (optionally) `src/app/llms.txt/route.ts` — all based on real project data.
 
 > Rule: `.claude/rules/seo-metadata.md`. Escaping CMS content — `.claude/rules/security.md`.
 
 ---
 
-## Step 1: Gather Real Project Data
+## Step 1: Gather real project data
 
 Do not hardcode anything. Four things are needed:
 
-1. **Base URL of the site** — ask the user (`SITE_URL`); in env it's `NEXT_PUBLIC_SITE_URL`. Without it, canonical and sitemap cannot be generated.
+1. **Base URL of the site** — ask the user (`SITE_URL`); in env it is `NEXT_PUBLIC_SITE_URL`. Without it, canonical and sitemap cannot be created.
 2. **Locales** — `getApi().Locales.getLocales()` → `shortCode` of each. Do not invent `['en','ru']`.
-3. **Markers for image attributes and description** — via `/inspect-api products`. Usually `pic`/`image` and `description`, but check for sure.
-4. **Catalog size** — `Products.getProducts([], locale, { offset: 0, limit: 1 })` → `total`. Needed to set the sitemap `limit` higher than necessary.
+3. **Markers for image attributes and description** — through `/inspect-api products`. Usually `pic`/`image` and `description`, but check it definitely.
+4. **Catalog size** — `Products.getProducts([], locale, { offset: 0, limit: 1 })` → `total`. Needed to set the sitemap `limit` definitely higher.
 
 If something is missing in the admin panel — create an entry in `MISMATCH-LOG.md` (`.claude/rules/mismatch-log.md`).
 
 ---
 
-## Step 2: Clarify with the User
+## Step 2: Clarify with the user
 
-1. **Product variants** — are color/size established as separate entities? If yes, the sitemap is built from the aggregated list; otherwise, duplicate URLs will occur.
+1. **Product variants** — are color/size set as separate entities? If yes, the sitemap is built from the aggregated list; otherwise, there will be duplicate URLs.
 2. **Which sections to block from indexing** beyond the default (`/cart`, `/favorites`, `/account`, `/checkout`, `/api`).
-3. **Should the site be open to AI crawlers** (GPTBot, ClaudeBot, PerplexityBot) — usually yes for a store, it's a traffic channel.
-4. **Is `llms.txt` needed** — a project map for assistants. Honestly warn: this is a proposed standard without confirmed support from major AI crawlers; visibility in AI search is more influenced by steps 5 (access for AI crawlers), 6 (JSON-LD), and server-side content rendering. Do it — only after them.
+3. **Should the site be open to AI crawlers** (GPTBot, ClaudeBot, PerplexityBot) — usually yes for a store, this is a traffic channel.
+4. **Is `llms.txt` needed** — a project map for assistants. Warn honestly: this is a proposed standard without confirmed support from major AI crawlers; visibility in AI search is more influenced by steps 5 (access for AI crawlers), 6 (JSON-LD), and server-side content rendering. Do it — only after them.
 
 ---
 
-## Step 3: `generateMetadata` in Entity Routes
+## Step 3: `generateMetadata` in entity routes
 
 For each route that renders a OneEntry entity (product, CMS page, category):
 
@@ -60,7 +60,7 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 
 ---
 
-## Step 4: `app/sitemap.ts`
+## Step 4: `src/app/sitemap.ts`
 
 ```typescript
 import type { MetadataRoute } from 'next'
@@ -72,7 +72,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: SITE_URL, lastModified: now, changeFrequency: 'daily', priority: 1.0 },
   ]
 
-  // limit is intentionally higher than total from step 1 — default 30 will silently cut the map
+  // limit definitely higher than total from step 1 — default 30 will silently cut the map
   const catalog = await loadProducts({ unique: true, limit: 5000 })
   const productPages: MetadataRoute.Sitemap = catalog.items.map((p) => ({
     url: `${SITE_URL}/product/${p.id}`,
@@ -85,11 +85,11 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 }
 ```
 
-If the catalog is large (>5000), paginate in a loop by `offset`, rather than raising `limit` indefinitely.
+If the catalog is large (>5000), paginate in a loop by `offset`, rather than raising `limit` to infinity.
 
 ---
 
-## Step 5: `app/robots.ts`
+## Step 5: `src/app/robots.ts`
 
 ```typescript
 const PRIVATE_PATHS = ['/cart', '/favorites', '/account', '/checkout/', '/api/']
@@ -108,13 +108,13 @@ export default function robots(): MetadataRoute.Robots {
 
 ---
 
-## Step 6: `JsonLd` Component — with Escaping
+## Step 6: `JsonLd` component — with escaping
 
 ```tsx
-// components/JsonLd.tsx — Server Component
+// src/components/JsonLd.tsx — Server Component
 function serializeJsonLd(data: unknown): string {
   return JSON.stringify(data)
-    .replace(/</g, '\\u003c')       // ← mandatory: </script in product name will close the block
+    .replace(/</g, '\\u003c')       // ← mandatory: </script in the product name will close the block
     .replace(/>/g, '\\u003e')
     .replace(/&/g, '\\u0026')
     .replace(/\u2028/g, '\\u2028')
@@ -147,15 +147,15 @@ return { alternates: { canonical: `${SITE_URL}${path}`, languages } }
 Format — **markdown according to the specification llmstxt.org**, not arbitrary text: `# Title` → blockquote with one sentence → sections `## …` with lists `- [Title](URL): description`. Deviating from the structure deprives the file of meaning.
 
 ```typescript
-// app/llms.txt/route.ts — segment with a dot in the name, serves exactly /llms.txt
+// src/app/llms.txt/route.ts — segment with a dot in the name, serves exactly /llms.txt
 import { getApiSafe, isError } from '@/lib/oneentry'
 
-export const revalidate = 3600   // literal, not import or computation
+export const revalidate = 3600   // literal, not import and not computation
 
 export async function GET() {
   const lines = [`# ${SITE_NAME}`, '', `> ${SITE_DESCRIPTION}`, '']
 
-  const api = getApiSafe()          // not getApi(): OneEntry is unavailable → serve minimum, not 500
+  const api = getApiSafe()          // not getApi(): OneEntry unavailable → serve minimum, not 500
   if (api) {
     const pages = await api.Pages.getRootPages(DEFAULT_LOCALE)
     if (!isError(pages)) {
@@ -173,18 +173,18 @@ export async function GET() {
 }
 ```
 
-What NOT to include: the entire catalog (there's a sitemap for that — sections and key pages are enough), cart/profile/checkout, sections that do not exist on the site.
+What NOT to include: the entire catalog (there is a sitemap for it — sections and key pages are enough), cart/profile/checkout, sections that do not exist on the site.
 
 ---
 
-## Step 9: Remind Key Rules
+## Step 9: Remind key rules
 
 ```md
 1. No SEO route requires force-dynamic — metadata is read by the same ISR loaders
 2. sitemap: explicit limit (default 30 will silently cut the catalog) + aggregation of variants, otherwise duplicate URLs
-3. OG image — via common getImageUrl, NOT value[0] (1 file comes as an object)
+3. OG image — through the common getImageUrl, NOT value[0] (1 file comes as an object)
 4. description — from plainContent/plainValue, not htmlContent (tags in the snippet)
-5. JSON-LD is escaped: </script in product name = markup injection
+5. JSON-LD is escaped: </script in the product name = markup injection
 6. AggregateRating — from top-level rating of the entity, not from attributeValues
 7. hreflang and canonical — from Locales.getLocales(), not hardcoded
 8. Private sections (cart/favorites/account/checkout/api) — in disallow

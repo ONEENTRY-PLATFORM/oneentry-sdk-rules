@@ -2,7 +2,7 @@
 name: create-page
 description: Create Next.js page with content from OneEntry CMS
 ---
-# Create Next.js page with content from OneEntry CMS
+# Create a Next.js page with content from OneEntry CMS
 
 Argument: `pageMarker` (page marker in OneEntry, e.g. `about` or `home`)
 
@@ -21,14 +21,14 @@ If the argument is not provided — ask the user:
 
 If the marker is unknown or the user is unsure:
 
-Run `/inspect-api pages` — the skill uses the SDK and will return a list of `pageUrl` markers.
+Run `/inspect-api pages` — the skill will use the SDK and return a list of `pageUrl` markers.
 
 ---
 
 ## Step 3: Determine the file path for the page
 
 Ask the user (or determine from context):
-- The route of the page in Next.js, e.g.: `app/[locale]/about/page.tsx`
+- The route of the page in Next.js, e.g.: `src/app/[locale]/about/page.tsx`
 - Is there multilingual support (`[locale]` in the path)?
 - Are page blocks needed (`getBlocksByPageUrl`)?
 
@@ -39,7 +39,7 @@ Ask the user (or determine from context):
 ### Basic template (only page content)
 
 ```tsx
-// app/[locale]/about/page.tsx
+// src/app/[locale]/about/page.tsx
 import { getApi, isError } from '@/lib/oneentry';
 import { sanitizeHtml } from '@/lib/sanitize-html';
 import { notFound } from 'next/navigation';
@@ -47,7 +47,7 @@ import { notFound } from 'next/navigation';
 export default async function AboutPage({
   params,
 }: {
-  params: Promise<{ locale: string }> ;
+  params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;  // ⚠️ Next.js 15+: params is a Promise!
 
@@ -71,7 +71,7 @@ export default async function AboutPage({
 ### With page blocks
 
 ```tsx
-// app/[locale]/home/page.tsx
+// src/app/[locale]/home/page.tsx
 import { getApi, isError } from '@/lib/oneentry';
 import { sanitizeHtml } from '@/lib/sanitize-html';
 import { notFound } from 'next/navigation';
@@ -79,7 +79,7 @@ import { notFound } from 'next/navigation';
 export default async function HomePage({
   params,
 }: {
-  params: Promise<{ locale: string }> ;
+  params: Promise<{ locale: string }>;
 }) {
   const { locale } = await params;
 
@@ -106,7 +106,7 @@ export default async function HomePage({
             // Products are already loaded by SDK (>=1.0.153) — no separate requests to Products needed:
             //   product_block          → block.products ?? []               (IProductsEntity[], first 30)
             //   similar_products_block → block.similarProducts?.items ?? []  (IProductsResponse { total, items })
-            // Only through optional chaining: with traficLimit:true fields are absent, on load error SDK returns [].
+            // Only through optional chaining: with traficLimit:true fields are absent, on load error SDK puts [].
             return (
               <section key={block.id}>
                 {/* render block */}
@@ -132,12 +132,12 @@ After creating the file, output:
 
 ```md
 1. pageUrl = marker ("about"), NOT route path ("/[locale]/about")
-2. params in Next.js 15+ — is a Promise, always await
+2. params in Next.js 15+ — this is a Promise, always await
 3. localizeInfos.htmlContent — HTML content (in dangerouslySetInnerHTML only through sanitizeHtml, see .claude/rules/security.md), localizeInfos.title — title
 4. image/file: 1 file → OBJECT, 2+ → array (v1.0.157 — in blocks and pages too; previously it was always an array). Universally: const v = attrs.bg?.value; (Array.isArray(v) ? v[0] : v)?.downloadLink
 5. Sort blocks by position before rendering
 6. Attribute markers of blocks — find out via /inspect-api
-7. product_block / similar_products_block: getBlocksByPageUrl already returns products in block.products / block.similarProducts?.items (SDK ≥1.0.153) — do not make duplicate requests to Products; fields are absent with traficLimit: true (access via `?? []`)
+7. product_block / similar_products_block: getBlocksByPageUrl already returns products in block.products / block.similarProducts?.items (SDK ≥1.0.153) — do not make duplicate requests to Products; fields are absent when traficLimit: true (access via `?? []`)
 ```
 
 ---
@@ -186,12 +186,12 @@ return (
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Page path in Next.js** — taken from the route of the created file (`app/[locale]/about/page.tsx` → `/about` or `/{locale}/about`). Claude knows the path itself — do not ask. Inform: "The test will go to `{path}`".
-2. **`pageUrl` marker** — already known from the skill argument (example: `about`, `home`). Use as is. If locale is required — take the first from `/inspect-api` (usually `en_US`).
+1. **Page path in Next.js** — taken from the route of the created file (`src/app/[locale]/about/page.tsx` → `/about` or `/{locale}/about`). Claude knows the path itself — do not ask. Inform: "The test will go to `{path}`".
+2. **`pageUrl` marker** — already known from the skill argument (example: `about`, `home`). Use as is. If the locale is required — take the first from `/inspect-api` (usually `en_US`).
 3. **Expected content** — check yourself via `/inspect-api pages`:
    - `page.localizeInfos.title` — should not be empty, check length > 0.
-   - If the page has blocks — count them via `getBlocksByPageUrl(pageUrl, locale)` (in a multilingual project, pass the locale — otherwise blocks will return in the SDK's default language). Inform: "Found `{N}` blocks for page `{marker}` — the test will check their rendering".
-4. **Non-existent pageUrl** for a 404 test — generate a random one: `random-${Math.random().toString(36).slice(2,10)}`. This marker is guaranteed not to exist, the test will check `notFound()`.
+   - If the page has blocks — count them via `getBlocksByPageUrl(pageUrl, locale)` (in a multilingual project, pass the locale — otherwise blocks will return in the default SDK language). Inform: "Found `{N}` blocks for page `{marker}` — the test will check their render".
+4. **Non-existent pageUrl** for the 404 test — generate a random one: `random-${Math.random().toString(36).slice(2,10)}`. This marker definitely does not exist, the test will check `notFound()`.
 5. **Fill in `.env.local`** (yourself, via Edit):
 
 ```bash
@@ -204,7 +204,7 @@ If any value could not be determined — leave it empty, the corresponding test 
 
 ### 6.3 Create `e2e/page.spec.ts`
 
-> ⚠️ Tests check the actual rendering of the pageUrl marker. Replace `/about` and `about` with real values (via env).
+> ⚠️ Tests check the real render of the pageUrl marker. Replace `/about` and `about` with real values (via env).
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -213,7 +213,7 @@ const CMS_PATH = process.env.E2E_CMS_PATH || '/about';
 const EXPECT_BLOCKS = Number(process.env.E2E_CMS_EXPECT_BLOCKS ?? '0');
 
 test.describe('CMS page (OneEntry Pages)', () => {
-  test('renders the page with the title from localizeInfos', async ({ page }) => {
+  test('renders page with title from localizeInfos', async ({ page }) => {
     await page.goto(CMS_PATH);
     await expect(page.getByTestId('cms-page')).toBeVisible();
     const title = page.getByTestId('cms-page-title');
@@ -227,8 +227,8 @@ test.describe('CMS page (OneEntry Pages)', () => {
     await expect(page.getByTestId('cms-page-content')).toBeAttached();
   });
 
-  test('renders page blocks (if they exist)', async ({ page }) => {
-    test.skip(EXPECT_BLOCKS === 0, 'The page has no blocks — test skipped');
+  test('renders page blocks (if any)', async ({ page }) => {
+    test.skip(EXPECT_BLOCKS === 0, 'The page has no blocks — test disabled');
 
     await page.goto(CMS_PATH);
     const blocks = page.getByTestId('cms-block');
@@ -257,7 +257,7 @@ Before completing the task — explicitly inform:
 Decisions made automatically:
 - Page path: {CMS_PATH} — from the Next.js route of the created file
 - pageUrl marker: {marker} — from the skill argument
-- Expected number of blocks: {N} — from /inspect-api getBlocksByPageUrl. {If 0 → block test skipped}
+- Expected number of blocks: {N} — from /inspect-api getBlocksByPageUrl. {If 0 → block test disabled}
 - 404 test: random non-existent path, generated at runtime
 
 Run: npm run test:e2e -- page.spec.ts

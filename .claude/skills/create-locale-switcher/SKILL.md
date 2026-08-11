@@ -18,10 +18,10 @@ Creates a component for changing the language based on data from the `Locales AP
 
 ## Step 2: Create Server Action
 
-> If `app/actions/locales.ts` already exists — read and supplement it, do not duplicate.
+> If `src/app/actions/locales.ts` already exists — read and supplement it, do not duplicate.
 
 ```typescript
-// app/actions/locales.ts
+// src/app/actions/locales.ts
 'use server';
 
 import { getApi, isError } from '@/lib/oneentry';
@@ -39,7 +39,7 @@ export async function getLocales(): Promise<LocaleItem[]> {
   return (locales as any[]).map((locale: any) => ({
     code: locale.code,                                      // 'en_US', 'ru_RU'
     title: locale.nativeName || locale.name || locale.code, // 'русский язык' / 'Russian'
-    shortCode: locale.shortCode,                            // 'en', 'ru' — comes from the API ready
+    shortCode: locale.shortCode,                            // 'en', 'ru' — comes from API ready
     image: locale.image,                                    // URL of the flag, can be null
   }));
 }
@@ -52,7 +52,7 @@ export async function getLocales(): Promise<LocaleItem[]> {
 ### Key Principles
 
 - The current locale is taken from the URL (the `[locale]` segment in the route)
-- When changing the language, replace the locale segment in `pathname` and navigate there
+- When changing the language, we replace the locale segment in the `pathname` and navigate there
 - `usePathname()` + `useRouter()` from `next/navigation`
 - Can be done as a Server Component (receives locale as a prop) or Client Component
 - Locales are loaded **once** — either passed as a prop from the server parent or cached
@@ -76,7 +76,7 @@ export async function Header({ locale }: { locale: string }) {
 ```
 
 ```tsx
-// components/LocaleSwitcher.tsx
+// src/components/LocaleSwitcher.tsx
 'use client';
 
 import { usePathname, useRouter } from 'next/navigation';
@@ -110,7 +110,7 @@ export function LocaleSwitcher({ locale, locales }: LocaleSwitcherProps) {
           aria-current={loc.code === locale ? 'true' : undefined}
         >
           {loc.shortCode.toUpperCase()} {/* EN / RU */}
-          {/* or loc.title for the full name */}
+          {/* or loc.title for full name */}
         </button>
       ))}
     </div>
@@ -121,7 +121,7 @@ export function LocaleSwitcher({ locale, locales }: LocaleSwitcherProps) {
 ### Option B: Client component loads locales itself
 
 ```tsx
-// components/LocaleSwitcher.tsx
+// src/components/LocaleSwitcher.tsx
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -190,15 +190,15 @@ import Link from 'next/link';
 
 ## Step 4: Set up routing (if not already set up)
 
-⚠️ **First, check if there is a `[locale]` segment in the project** (Glob `app/**/[locale]/**`). If not, do not silently replace the pattern, but ask the user and act according to the answer:
+⚠️ **First, check if there is a `[locale]` segment in the project** (Glob `src/app/**/[locale]/**`). If there isn't — do not silently replace the pattern, but ask the user and act according to the response:
 
-- **Multilingual site** (default) → translate routes to `[locale]`, as below, and make the switcher use `usePathname()` — the locale is visible in the URL, pages are indexed, link sharing retains the language;
-- **Monolingual project / migration not needed** → switcher without URL: save the choice in cookie `NEXT_LOCALE` + `router.refresh()`, and pass `langCode` to all SDK calls explicitly, reading this cookie. Be sure to warn: the language does not appear in the URL (no SEO and language sharing), this is a conscious compromise.
+- **multilingual site** (by default) → translate routes to `[locale]`, as below, and make the switcher use `usePathname()` — locale is visible in the URL, pages are indexed, link sharing retains the language;
+- **monolingual project / migration not needed** → switcher without URL: save the choice in cookie `NEXT_LOCALE` + `router.refresh()`, and pass `langCode` to all SDK calls explicitly, reading this cookie. Be sure to warn: the language does not get into the URL (no SEO and sharing by language), this is a conscious compromise.
 
 The switcher by default assumes that the application uses the `[locale]` segment in the route:
 
 ```
-app/
+src/app/
   [locale]/
     layout.tsx   ← receives locale from params
     page.tsx
@@ -209,7 +209,7 @@ app/
 In `[locale]/layout.tsx`, the locale is passed to child components:
 
 ```tsx
-// app/[locale]/layout.tsx
+// src/app/[locale]/layout.tsx
 export default async function LocaleLayout({
   children,
   params,
@@ -269,7 +269,7 @@ For selector stability — add `data-testid` when generating `LocaleSwitcher.tsx
 </div>
 ```
 
-If Option C is chosen (links):
+If Option C is selected (links):
 
 ```tsx
 <div data-testid="locale-switcher">
@@ -288,14 +288,14 @@ If Option C is chosen (links):
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (execute step by step, do not ask in one list):**
+**Algorithm (perform step by step, do not ask in one list):**
 
-1. **List of available locales** — get it from the API via `/inspect-api` (option: temporary mjs script in `.claude/temp/` calling `getApi().Locales.getLocales()`). At least 2 locales are needed — otherwise, language switch tests do not make sense (`test.skip` with explanation).
+1. **List of available locales** — get it from the API via `/inspect-api` (option: temporary mjs script in `.claude/temp/` calling `getApi().Locales.getLocales()`). At least 2 locales are needed — otherwise, the language switch tests are meaningless (`test.skip` with explanation).
 2. **Default locale and test locale for switching** — determine yourself: the first from the list = default, the second = test target. Save in `.env.local` as `E2E_DEFAULT_LOCALE` and `E2E_TARGET_LOCALE`. Inform: "Available locales: `{list}`. For the switch test use `{default} → {target}`."
-3. **Path of the page with the switcher** — ask: "On which pages is the switch displayed? (for example, only `/`, or everywhere)."
+3. **Page path with the switcher** — ask: "On which pages is the switcher displayed? (for example, only `/`, or everywhere)".
    - If silent → take `/` (root) + check that `<LocaleSwitcher>` is rendered in layout via Grep. Inform: "Testing on `/`, switcher in layout — available on all pages."
-4. **Localized content for checking language change** — ask: "Is there a noticeable localized element on the page? (page title, menu item)."
-   - If silent → the language change test checks only the URL and `<html lang>` (without checking text). Inform: "Checking language change by URL segment and `<html lang>` attribute. If specific text check is needed — provide a block marker."
+4. **Localized content for checking language change** — ask: "Is there a noticeable localized element on the page? (page title, menu item)".
+   - If silent → the language change test checks only the URL and `<html lang>` (without checking text). Inform: "Checking language change by URL segment and `<html lang>` attribute. If specific text check is needed — indicate the block marker."
 
 **Example of filling in `.env.local` (do it yourself, do not ask the user to copy):**
 
@@ -378,7 +378,9 @@ Decisions made automatically (if applicable):
 - Available locales: {list} — obtained via getApi().Locales.getLocales()
 - Switch test: {DEFAULT_LOCALE} → {TARGET_LOCALE} (first and second from the list)
 - Path for the test: {TEST_PATH} — {user-specified / used `/`}
-- Checking localized content: {disabled, checking only URL and <html lang> / enabled, checking text of block {marker}}. Reason: user did not specify a specific localized element for checking.
+- Checking localized content: {disabled, checking only URL and <html lang> /
+  enabled, checking text of block {marker}}. Reason: the user did not specify a specific
+  localized element for checking.
 - If there is only one locale — all tests test.skip with the reason "at least 2 locales needed".
 
 Run: npm run test:e2e -- locale-switcher.spec.ts

@@ -1,12 +1,13 @@
-<!-- META
-type: rules
-fileName: performance-gsap.md
-rulePaths: ["**/animations/**/*.tsx", "**/animations/**/*.ts", "**/*Animation*.tsx", "**/RegisterGSAP*.tsx"]
--->
-
+---
+paths:
+  - "**/animations/**/*.tsx"
+  - "**/animations/**/*.ts"
+  - "**/*Animation*.tsx"
+  - "**/RegisterGSAP*.tsx"
+---
 # Performance: GSAP — OneEntry Rules
 
-Rules for OneEntry-based applications using GSAP for animations. Covers plugin registration, scoping through `useGSAP`, and excluding the GSAP bundle from routes where it is not needed.
+Rules for OneEntry-based applications using GSAP for animations. Covers plugin registration, scoping via `useGSAP`, and excluding the GSAP bundle from routes where it is not needed.
 
 Applicable to projects that deliver `gsap` + `@gsap/react`.
 
@@ -15,7 +16,7 @@ Applicable to projects that deliver `gsap` + `@gsap/react`.
 `gsap.registerPlugin` is idempotent but must be executed before any timeline that depends on the plugin. Centralize in a single `RegisterGSAP` component mounted at the root of the application.
 
 ```tsx
-// app/animations/RegisterGSAP.tsx
+// src/app/animations/RegisterGSAP.tsx
 'use client';
 import { useGSAP } from '@gsap/react';
 import gsap from 'gsap';
@@ -34,30 +35,30 @@ const RegisterGSAP = () => {
 
 export default RegisterGSAP;
 
-// app/layout.tsx
+// src/app/layout.tsx
 <body>
   <RegisterGSAP />
   …
 </body>
 ```
 
-**What should be in `RegisterGSAP`:** core GSAP, `useGSAP` (React adapter), `ScrollTrigger` — if any page uses scroll-based animations on the first render (product grids, hero section appearances).
+**What should be in `RegisterGSAP`:** GSAP core, `useGSAP` (React adapter), `ScrollTrigger` — if any page uses scroll animations on first render (product grids, hero section appearances).
 
 **What should NOT be there:** plugins used only after specific user actions — see the next rule.
 
 ## ⚠️ Plugins used only after interaction — register lazily
 
-`ScrollToPlugin`, `Draggable`, `Flip`, `MotionPathPlugin`, and similar are useful but heavy. If they trigger only after a click / route change / drag start — register them on the **first** call, not at app startup.
+`ScrollToPlugin`, `Draggable`, `Flip`, `MotionPathPlugin`, and similar are useful but heavy. If they trigger only after a click / route change / drag start — register them on the **first** call, not at application startup.
 
 ```typescript
-// ❌ INCORRECT — plugin is eagerly loaded in every initial bundle
-// app/animations/RegisterGSAP.tsx
+// ❌ INCORRECT — plugin eagerly loaded in every initial bundle
+// src/app/animations/RegisterGSAP.tsx
 import { ScrollToPlugin } from 'gsap/dist/ScrollToPlugin';
 
 gsap.registerPlugin(useGSAP, ScrollTrigger, ScrollToPlugin);
 
-// ✅ CORRECT — plugin chunk is loaded on the first navigation it is needed
-// app/animations/TransitionProvider.tsx
+// ✅ CORRECT — plugin chunk loads on first navigation when needed
+// src/app/animations/TransitionProvider.tsx
 'use client';
 import { gsap } from 'gsap';
 
@@ -82,7 +83,7 @@ const onLeave = (next: () => void) => {
   if (scrollToPluginRegistered) {
     tl.to(window, { scrollTo: { y: 0, autoKill: false }, duration: 0.45, ease: 'power2.inOut' });
   } else {
-    // Correct fallback — the first navigation may occur before the plugin loads
+    // Correct fallback — first navigation may occur before the plugin loads
     window.scrollTo({ top: 0, behavior: 'auto' });
   }
   tl.to(el, { opacity: 0, y: -8, duration: 0.28 }).call(next);
@@ -91,7 +92,7 @@ const onLeave = (next: () => void) => {
 
 ### Decision Matrix: greedy or lazy
 
-| Plugin / Module | Used on the first render of any page? | Where to register |
+| Plugin / module | Used on first render of any page? | Where to register |
 | --- | --- | --- |
 | Core `gsap`, `useGSAP` | Always | `RegisterGSAP` |
 | `ScrollTrigger` | Appearance of cards on scroll, hero reveal | `RegisterGSAP` |
@@ -101,9 +102,9 @@ const onLeave = (next: () => void) => {
 | `MotionPathPlugin` | Only in rare decorative animations | Lazily on first use |
 | `MorphSVGPlugin`, `SplitText` (Club) | Only in specific effects | Lazily on first use |
 
-## Limit `useGSAP` to animation subtree
+## Limit `useGSAP` to the animation subtree
 
-`useGSAP({ scope })` limits selectors and cleanup to the bounds of the ref. Without it, queries traverse the entire document, and timelines leak between mount/unmount cycles.
+`useGSAP({ scope })` limits selectors and cleanup to the boundaries of the ref. Without it, queries traverse the entire document, and timelines leak between mount/unmount cycles.
 
 ```tsx
 // ❌ INCORRECT — global selectors, GSAP traverses the entire DOM
@@ -135,7 +136,7 @@ const ProductCardAnimations = ({ children }: { children: ReactNode }) => {
 // ❌ INCORRECT — silent no-op if ScrollToPlugin is not yet loaded
 gsap.to(window, { scrollTo: { y: 0 }, duration: 0.45 });
 
-// ✅ CORRECT — protection via lazy loading flag (see pattern above)
+// ✅ CORRECT — protection via lazy load flag (see pattern above)
 await ensureScrollToPlugin();
 gsap.to(window, { scrollTo: { y: 0 }, duration: 0.45 });
 
@@ -167,7 +168,7 @@ const nextConfig: NextConfig = {
 
 ## Do not wrap route-critical animations in `IntersectionObserver`
 
-GSAP animations for hero section / header appearance should trigger on the first render. `IntersectionObserver` adds measurable latency (round-trip of the first observation). Use it only for animations **below the fold** (product grids, footer elements).
+GSAP animations for the appearance of the hero section / header should trigger on first render. `IntersectionObserver` adds measurable delay (round-trip of the first observation). Use it only for animations **below the fold** (product grids, footer elements).
 
 ```tsx
 // ❌ INCORRECT — header appearance triggers with a delay of 50–200 ms due to IO
@@ -238,19 +239,19 @@ The wrapping `<div>` keeps the direct child `[data-header-anim="top-nav"]` (or w
 ## Anti-patterns
 
 - **Importing GSAP inside a server component** — `gsap` works only in the browser. Place it in files with `'use client'`.
-- **`useEffect` with GSAP instead of `useGSAP`** — manual cleanup is error-prone. `useGSAP` from `@gsap/react` automatically performs `ctx.revert()`.
-- **Greedy import of all plugins "just in case"** — each plugin weighs ~5–20 KB. Register them lazily if they trigger on interaction.
+- **Using `useEffect` with GSAP instead of `useGSAP`** — manual cleanup is error-prone. `useGSAP` from `@gsap/react` automatically performs `ctx.revert()`.
+- **Greedy import of all plugins "just in case"** — each plugin weighs ~5–20 KB. Register them lazily for those that trigger on interaction.
 - **Reading from the DOM inside a GSAP tween** — read once before the timeline starts; tween from precomputed values.
-- **Using `IntersectionObserver` for animations above the fold** — see the rule "route-critical animations."
-- **Animating root nodes that change tag** — see the rule "stable root DOM."
+- **Using `IntersectionObserver` for animations above the fold** — see the rule "route-critical animations".
+- **Animating root nodes that change tag** — see the rule "stable root DOM".
 
 ## Checklist before commit
 
-- [ ] `RegisterGSAP` is mounted at the root of the application with only core `gsap` + `useGSAP` + `ScrollTrigger`.
+- [ ] `RegisterGSAP` is mounted at the root of the application with only the core `gsap` + `useGSAP` + `ScrollTrigger`.
 - [ ] Plugins that trigger on user actions (`ScrollToPlugin`, `Draggable`, `Flip`, …) are registered lazily on first use, with idempotent protection and promise deduplication.
 - [ ] Each call to `useGSAP` has a ref in `{ scope }`.
 - [ ] No `gsap.to(window, { scrollTo: … })` without `ensureScrollToPlugin()` (or native fallback).
-- [ ] Animations above the fold trigger on mount; `ScrollTrigger` (or `useNearViewport` for cases without animation) is used for content below the fold.
+- [ ] Animations above the fold trigger on mount; for content below the fold, `ScrollTrigger` is used (or `useNearViewport` for cases without animation).
 - [ ] The type of the root DOM node of the animated container is stable during state changes.
 - [ ] `next.config.ts` includes `gsap` (and `@gsap/react`) in `experimental.optimizePackageImports`.
 

@@ -2,11 +2,11 @@
 name: create-product-page
 description: Create product page
 ---
-# Create product page
+# Create a Product Page
 
 ---
 
-## Step 1: Check real attributes via API
+## Step 1: Check Real Attributes via API
 
 ```bash
 /inspect-api products
@@ -24,26 +24,26 @@ What to look for in `items[0].attributeValues`:
 
 ---
 
-## Step 2: Clarify with the user
+## Step 2: Clarify with the User
 
-1. **Page route** — for example `app/[locale]/shop/product/[id]/page.tsx`
+1. **Page route** — for example `src/app/[locale]/shop/product/[id]/page.tsx`
 2. **Are similar products needed?** (`getRelatedProductsById`)
 3. **Is an image gallery or a single image needed?**
 4. **Is there a layout?** — if yes, copy it exactly
 
 > **🛒 The "Add to Cart" button is ALWAYS added by default.**
-> Do not ask the user "do you need a button?". If the user **explicitly** did not say "without a button" — add it.
+> Do not ask the user "is the button needed?". If the user **explicitly** did not say "without a button" — add it.
 > If the cart is not yet implemented — first run `/create-cart-manager`.
-> The "Add to Favorites" button is added **only at the user's request** (→ `/create-favorites`).
+> The "Add to Favorites" button is added **only upon user request** (→ `/create-favorites`).
 
 ---
 
-## Step 3: Create Server Action (if not already present)
+## Step 3: Create Server Action (if not already)
 
-> If `app/actions/products.ts` already exists — read it and supplement it, do not duplicate.
+> If `src/app/actions/products.ts` already exists — read it and supplement, do not duplicate.
 
 ```typescript
-// app/actions/products.ts
+// src/app/actions/products.ts
 'use server';
 
 import { getApi, isError } from '@/lib/oneentry';
@@ -63,7 +63,7 @@ export async function getRelatedProducts(
 ) {
   // Query type — IProductsRelatedQuery (SDK >= 1.0.154). statusMarker — actual marker
   // from /inspect-api product-statuses, do not hardcode 'in_stock'.
-  // ⚠️ Do not confuse with listing methods (getProducts, etc.): there statusMarker is absent in query
+  // ⚠️ Do not confuse with listing methods (getProducts etc.): there statusMarker is absent in query
   // (TS error) and status is filtered through IFilterParams body (see .claude/rules/product-statuses.md);
   // in getRelatedProductsById there are no body filters — statusMarker is passed in query
   // (in 1.0.154 types are aligned with actually supported endpoint parameters).
@@ -81,12 +81,12 @@ export async function getRelatedProducts(
 
 ---
 
-## Step 4: Create product page
+## Step 4: Create Product Page
 
-### Basic template
+### Basic Template
 
 ```tsx
-// app/[locale]/shop/product/[id]/page.tsx
+// src/app/[locale]/shop/product/[id]/page.tsx
 import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { sanitizeHtml } from '@/lib/sanitize-html';
@@ -107,15 +107,15 @@ export default async function ProductPage({
   const attrs = product.attributeValues || {};
 
   // ⚠️ Replace markers with real ones from /inspect-api!
-  // image: 1 file → OBJECT, 2+ → ARRAY (v1.0.157, same in all modules) — capture universally
+  // image: 1 file → OBJECT, 2+ → ARRAY (v1.0.157, the same in all modules) — capture universally
   const rawPic = attrs.pic?.value;
   const imageUrl = (Array.isArray(rawPic) ? rawPic[0] : rawPic)?.downloadLink || '';
   const title = product.localizeInfos?.title || '';
-  // integer/float/real: from v1.0.157 comes as a number or null (not a string and not 0)
+  // integer/float/real: from v1.0.157 come as a number or null (not as a string and not 0)
   const price = attrs.price?.value ?? 0;
   const oldPrice = attrs.sale?.value ?? 0;
 
-  // text: value ARRAY or object with htmlValue/plainValue — same wrapper
+  // text: value ARRAY or object with htmlValue/plainValue — the same wrapper
   const rawDesc = attrs.description?.value;
   const descBlock = Array.isArray(rawDesc) ? rawDesc[0] : rawDesc;
   const description = descBlock?.htmlValue || descBlock?.plainValue || '';
@@ -169,7 +169,7 @@ export default async function ProductPage({
 }
 ```
 
-### With parallel requests (product + similar)
+### With Parallel Requests (product + similar)
 
 ```tsx
 export default async function ProductPage({
@@ -228,7 +228,7 @@ export default async function ProductPage({
 }
 ```
 
-### With image gallery (groupOfImages)
+### With Image Gallery (groupOfImages)
 
 ```tsx
 // groupOfImages — value is an array of several images
@@ -252,16 +252,16 @@ const gallery = attrs.gallery?.value || [];
 
 ---
 
-## Step 5: Remind key rules
+## Step 5: Remind Key Rules
 
 ✅ Page created. Key rules:
 
 ```md
-1. params in Next.js 15+ — this is a Promise, must use await
-2. image/file → 1 file: OBJECT, 2+: ARRAY (v1.0.157, same in all modules) → const i = Array.isArray(v) ? v[0] : v; i?.downloadLink
+1. params in Next.js 15+ — this is a Promise, await is required
+2. image/file → 1 file: OBJECT, 2+: ARRAY (v1.0.157, the same in all modules) → const i = Array.isArray(v) ? v[0] : v; i?.downloadLink
 2. groupOfImages → value is always an ARRAY → attrs.gallery?.value?.[0]?.downloadLink
 3. text → array OR object → (Array.isArray(v) ? v[0] : v)?.htmlValue or ?.plainValue; htmlValue in dangerouslySetInnerHTML — only through sanitizeHtml (.claude/rules/security.md)
-4. Numeric attributes (integer/float/real) — number or null; unfilled no longer comes as 0 → use ?? 0
+4. Numeric attributes (integer/float/real) — number or null; an empty field no longer comes as 0 → use ?? 0
 4. statusIdentifier — check via /inspect-api, do not hardcode 'in_stock'
 5. Promise.all for parallel requests (product + similar + blocks)
 6. notFound() on error — do not render an empty page
@@ -270,12 +270,12 @@ const gallery = attrs.gallery?.value || [];
 
 ---
 
-## Step 6: Playwright E2E tests
+## Step 6: Playwright E2E Tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> To set up Playwright — first `/setup-playwright`.
+> For Playwright setup — first `/setup-playwright`.
 
-### 6.1 Add `data-testid` to the product page
+### 6.1 Add `data-testid` to the Product Page
 
 For selector stability — add `data-testid` when generating `product/[id]/page.tsx`:
 
@@ -344,19 +344,19 @@ return (
 );
 ```
 
-### 6.2 Gather test parameters and fill in `.env.local`
+### 6.2 Gather Test Parameters and Fill `.env.local`
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Product page route** — taken from the path of the created file (`app/[locale]/shop/product/[id]/page.tsx`). Claude knows the pattern itself. Inform: "Tests will go to `/{locale}/shop/product/{id}` — I will substitute real id and locale".
-2. **ID of a real product** — take it directly via `/inspect-api products`: `items[0].id`. Inform: "For the test, I will use product id=`{value}` (`{title}`) — the first from /inspect-api".
+1. **Product page route** — taken from the path of the created file (`src/app/[locale]/shop/product/[id]/page.tsx`). Claude knows the pattern itself. Inform: "Tests will go to `/{locale}/shop/product/{id}` — I will substitute real id and locale".
+2. **ID of a real product** — take it yourself via `/inspect-api products`: `items[0].id`. Inform: "For the test, I use product id=`{value}` (`{title}`) — the first from /inspect-api".
 3. **Locale** — the first from `/inspect-api` (usually `en_US`). If the project is monolocal and the route does not have `[locale]` — adjust `E2E_PRODUCT_PATH_TEMPLATE` (remove the prefix).
-4. **Presence of a gallery** — check via `/inspect-api`: does the product have the `groupOfImages` attribute with a non-empty array. If not — the gallery test will include `test.skip`. Inform: "The product `id={id}` {has a gallery of N images / does not have groupOfImages — gallery test disabled}".
+4. **Gallery availability** — check via `/inspect-api`: whether the product has the `groupOfImages` attribute with a non-empty array. If not — the gallery test will include `test.skip`. Inform: "The product `id={id}` {has a gallery of N images / no groupOfImages — gallery test disabled}".
 5. **ID of a non-existent product** — generate a random one: `99999999 + Math.floor(Math.random() * 1000)`. Guaranteed not to exist, will check `notFound()`.
-6. **Fill in `.env.local`** (yourself, via Edit):
+6. **Fill `.env.local`** (yourself, via Edit):
 
 ```bash
-E2E_PRODUCT_ID=42                                      # id of a real product from /inspect-api
+E2E_PRODUCT_ID=42                                      # id of the real product from /inspect-api
 E2E_PRODUCT_PATH_TEMPLATE=/en_US/shop/product/         # prefix to which id is added
 E2E_PRODUCT_EXPECT_GALLERY=true                        # true if the product has groupOfImages
 ```
@@ -374,8 +374,8 @@ const PRODUCT_ID = process.env.E2E_PRODUCT_ID || '';
 const PATH_TEMPLATE = process.env.E2E_PRODUCT_PATH_TEMPLATE || '/en_US/shop/product/';
 const EXPECT_GALLERY = process.env.E2E_PRODUCT_EXPECT_GALLERY === 'true';
 
-test.describe('Product page', () => {
-  test.skip(!PRODUCT_ID, 'E2E_PRODUCT_ID is not set');
+test.describe('Product Page', () => {
+  test.skip(!PRODUCT_ID, 'E2E_PRODUCT_ID not set');
 
   test('renders title, price, image by real id', async ({ page }) => {
     await page.goto(`${PATH_TEMPLATE}${PRODUCT_ID}`);
@@ -443,7 +443,7 @@ test.describe('Product page', () => {
 });
 ```
 
-### 6.4 Report to the user about the decisions made
+### 6.4 Report to the User on Decisions Made
 
 Before completing the task — explicitly inform:
 
@@ -453,9 +453,9 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_PRODUCT_ID, E2E_PRODUCT_PATH_TEMPLATE, E2E_PRODUCT_EXPECT_GALLERY)
 
 Decisions made automatically:
-- Test product: id={PRODUCT_ID} ({title}) — first from /inspect-api products
+- Test product: id={PRODUCT_ID} ({title}) — the first from /inspect-api products
 - Path template: {PATH_TEMPLATE} — from the route of the created file
-- Locale: {locale} — first available in the project (from /inspect-api)
+- Locale: {locale} — the first available in the project (from /inspect-api)
 - Gallery: {has groupOfImages — test included / no — test.skip}
 - 404 test: random id in the range 99_999_999+, guaranteed not to exist
 

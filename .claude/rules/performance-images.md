@@ -1,18 +1,21 @@
-<!-- META
-type: rules
-fileName: performance-images.md
-rulePaths: ["next.config.ts", "next.config.js", "next.config.mjs", "**/*Image*.tsx", "components/**/*.tsx"]
--->
-
+---
+paths:
+  - "next.config.ts"
+  - "next.config.js"
+  - "next.config.mjs"
+  - "**/*Image*.tsx"
+  - "components/**/*.tsx"
+  - "src/components/**/*.tsx"
+---
 # Performance: Images — OneEntry Rules
 
-Rules for serving images from OneEntry CDN via `next/image`. Complements `.claude/rules/performance.md` (which covers `useNearViewport` for repeating cards) — this section specifically addresses `next.config` configuration, formats, sizes, and blur placeholders.
+Rules for serving images from OneEntry CDN via `next/image`. Complements `.claude/rules/performance.md` (which discusses `useNearViewport` for repeating cards) — this section is specifically about `next.config` configuration, formats, sizes, and blur placeholders.
 
 Applicable to projects that read `downloadLink` / `previewLink` from `attributeValues` OneEntry and serve them in `<Image src={…} />`.
 
-## ⚠️ `remotePatterns` — specific, not `'**'`
+## ⚠️ `remotePatterns` — specifically, not `'**'`
 
-`<Image>` refuses to render external URLs that are not declared in `next.config`. Specify only OneEntry CDN domains — a broad wildcard scheme `hostname: '**'` breaks the built-in protection against SSRF (through `/_next/image?url=…` you can proxy any external host).
+`<Image>` refuses to render external URLs that are not declared in `next.config`. Specify exactly the domains of OneEntry CDN — a broad wildcard scheme `hostname: '**'` breaks the built-in protection against SSRF (through `/_next/image?url=…` you can proxy any external host).
 
 ```typescript
 // ❌ INCORRECT — open to any host
@@ -35,11 +38,11 @@ const nextConfig: NextConfig = {
 };
 ```
 
-`hostname: '*.oneentry.cloud'` covers all OneEntry instances, including dev/stage subdomains. If the front end works with one fixed project — leave a specific subdomain (`example-project.oneentry.cloud`).
+`hostname: '*.oneentry.cloud'` covers all OneEntry instances, including dev/stage subdomains. If the front end works with a single fixed project — leave a specific subdomain (`example-project.oneentry.cloud`).
 
 ## Trim `deviceSizes` to actual design breakpoints
 
-Next.js generates 8 sizes by default (`[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`). This means that each OneEntry image rendered through `<Image>` goes through the optimizer **eight** times. If the design uses 4 breakpoints — the other four sizes are unnecessary work on the `/_next/image` endpoint.
+Next.js by default generates 8 sizes (`[640, 750, 828, 1080, 1200, 1920, 2048, 3840]`). This means that each OneEntry image rendered through `<Image>` goes through the optimizer **eight** times. If the design uses 4 breakpoints — the other four sizes are wasted work on the `/_next/image` endpoint.
 
 ```typescript
 // ✅ CORRECT — follows the actual Tailwind grid (sm/md/lg/xl/2xl)
@@ -56,7 +59,7 @@ const nextConfig: NextConfig = {
 
 `minimumCacheTTL` is important: without it, Next.js uses the `Cache-Control` of the source, and OneEntry CDN provides a short TTL — each image request turns into a repeated optimization.
 
-## `sizes` — do not leave the default `100vw` for non-full-width images
+## `sizes` — do not leave default `100vw` for non-full-width images
 
 `<Image>` uses `sizes` to select a variant from `srcSet`. With the default `100vw`, the browser always takes the largest variant — even for a card that is 340 pixels wide in the grid.
 
@@ -84,8 +87,8 @@ const nextConfig: NextConfig = {
 | Context | `sizes` |
 | --- | --- |
 | Product card grid (4 in a row on desktop) | `(min-width: 1280px) 340px, (min-width: 768px) 33vw, 50vw` |
-| Main image of the product page | `(min-width: 1024px) 50vw, 100vw` |
-| Hero banner full width | `100vw` |
+| Main image on product page | `(min-width: 1024px) 50vw, 100vw` |
+| Full-width hero banner | `100vw` |
 | Icon / avatar / small preview | `64px` |
 
 ## `priority` — only for one LCP candidate, not for the entire first row
@@ -105,7 +108,7 @@ const nextConfig: NextConfig = {
 ))}
 ```
 
-One `priority` per route — usually the hero banner or the main image of the product page.
+One `priority` per route — usually the hero banner or the main image on the product page.
 
 ## Blur placeholder via LQIP from `previewLink`
 
@@ -117,7 +120,7 @@ OneEntry returns `previewLink` and `downloadLink` in the image object (`attribut
 const blur = await generateBlurDataURL(product.image);   // bad pattern
 
 // ✅ CORRECT — base64 LQIP taken directly from previewLink, without request
-// Single image parsing lives in lib/oneentry.ts (getImageUrl/getImageUrls),
+// Single image parsing lives in src/lib/oneentry.ts (getImageUrl/getImageUrls),
 // see .claude/rules/attribute-values.md — do not create a parallel extractImage
 import { extractImage } from '@/utils/attribute-values';
 import { getLqip } from '@/utils/blur';
@@ -140,7 +143,7 @@ const ProductCard = ({ product }: { product: IProductEntity }) => {
 };
 ```
 
-`getLqip` extracts the base64 of the first available preset — **synchronously, without `fetch` and `unstable_cache`** (LQIP comes with the product, nothing to cache):
+`getLqip` extracts the base64 of the first available preset — **synchronously, without `fetch` and `unstable_cache`** (LQIP comes along with the product, nothing to cache):
 
 ```typescript
 // utils/blur.ts
@@ -173,15 +176,15 @@ For other formats — let the optimizer work. And check the `Content-Type` from 
 
 ### Third case: the optimizer itself became a point of failure
 
-`/_next/image` is a proxy, meaning **an additional point of failure between the visitor and the image**. In some deployments under competitive load, a noticeable portion of requests to it fail (`ERR_ABORTED` in the browser, images "flash" empty), while OneEntry CDN already serves reasonably compressed previews.
+`/_next/image` is a proxy, meaning **an additional point of failure between the visitor and the image**. In some deployments under concurrent load, a noticeable portion of requests to it fail (`ERR_ABORTED` in the browser, images "flash" empty), while OneEntry CDN already serves reasonably compressed previews.
 
-This is not a license to set `unoptimized: true` by default — it is a diagnosis that must be **confirmed** before disabling the optimizer:
+This is not a license for `unoptimized: true` by default — it's a diagnosis that needs to be **confirmed** before disabling the optimizer:
 
-1. in DevTools → Network filter `/_next/image` and ensure that the failures are indeed there, not on the CDN;
-2. check the server's stdout — 400s due to DNS64/NAT64 look similar but are treated differently (see `.claude/rules/troubleshooting.md`, "400 on `/_next/image`");
-3. compare sizes: if the CDN serves previews 2–3 times heavier than optimized, it is cheaper to fix the deployment than to serve originals.
+1. in DevTools → Network filter `/_next/image` and ensure that failures are indeed occurring there, not on the CDN;
+2. check the server's stdout — 400s due to DNS64/NAT64 look similar, but are treated differently (see `.claude/rules/troubleshooting.md`, "400 on `/_next/image`");
+3. compare sizes: if the CDN serves previews 2–3 times heavier than optimized ones, it's cheaper to fix the deployment than to serve originals.
 
-If the diagnosis is confirmed — a global `images.unoptimized: true` in `next.config.ts` is permissible. Keep `remotePatterns` **(the component can revert to optimization via `unoptimized={false}`)**, and document the deviation in `MISMATCH-LOG.md`, section "Conscious Deviations" — otherwise, the next agent will come to "fix" it under the same rule (see `.claude/rules/mismatch-log.md`).
+If the diagnosis is confirmed — a global `images.unoptimized: true` in `next.config.ts` is acceptable. Keep `remotePatterns` **(the component can revert to optimization via `unoptimized={false}`)**, and document the deviation in `MISMATCH-LOG.md`, section "Conscious Deviations" — otherwise, the next agent will come to "fix" it according to the same rule (see `.claude/rules/mismatch-log.md`).
 
 ## Checklist before commit
 
@@ -192,7 +195,7 @@ If the diagnosis is confirmed — a global `images.unoptimized: true` in `next.c
 - [ ] Each `<Image>` has a meaningful `sizes`, not the default `100vw`
 - [ ] `priority` is set on **one** image of the route — LCP candidate
 - [ ] For repeating cards, `loading="lazy"` + `useNearViewport` is enabled (see `performance.md`)
-- [ ] Blur placeholder is taken from OneEntry's `previewLink`, base64-encoded on the server with caching
+- [ ] Blur placeholder is taken from `previewLink` OneEntry, base64-encoded on the server with caching
 - [ ] `unoptimized` is set only for SVG and animated GIFs — or globally, but with a confirmed diagnosis and entry in `MISMATCH-LOG.md`
 
 > Related rules: `.claude/rules/performance.md` (`useNearViewport` for repeating images), `.claude/rules/attribute-values.md` (structure of `attributeValues.image` — `downloadLink` / `previewLink`).

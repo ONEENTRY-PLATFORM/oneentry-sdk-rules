@@ -1,29 +1,30 @@
-<!-- META
-type: rules
-fileName: seo-metadata.md
-rulePaths: ["app/**/page.tsx","app/**/layout.tsx","app/sitemap.ts","app/robots.ts","app/manifest.ts"]
+---
 paths:
   - "app/**/page.tsx"
+  - "src/app/**/page.tsx"
   - "app/**/layout.tsx"
+  - "src/app/**/layout.tsx"
   - "app/sitemap.ts"
+  - "src/app/sitemap.ts"
   - "app/robots.ts"
+  - "src/app/robots.ts"
   - "app/manifest.ts"
--->
-
+  - "src/app/manifest.ts"
+---
 # SEO and Metadata from OneEntry Data
 
-Skill recipe: **`/create-seo`** — creates `sitemap.ts`, `robots.ts`, `JsonLd` component, and `generateMetadata` based on real project data.
+Skill recipe: **`/create-seo`** — creates `sitemap.ts`, `robots.ts`, `JsonLd` component, and `generateMetadata` using real project data.
 
-Main principle: **everything is taken from OneEntry, nothing is hardcoded**. Titles are from `localizeInfos`, images are from `attributeValues`, the list of URLs is from `Products`/`Pages`, languages are from `Locales.getLocales()`. Hardcoding here means that when the content changes, the metadata silently diverges from the page content.
+Main principle: **everything is taken from OneEntry, nothing is hardcoded**. Titles come from `localizeInfos`, images from `attributeValues`, the list of URLs from `Products`/`Pages`, languages from `Locales.getLocales()`. Hardcoding here means that when content changes, metadata silently diverges from the page content.
 
-The mechanics of `generateMetadata` (why it can't be streamed and why React `cache()`) — `.claude/rules/performance-streaming.md`. Here — what exactly to put inside.
+The mechanics of `generateMetadata` (why it can't be streamed and why React `cache()`) — `.claude/rules/performance-streaming.md`. Here’s what to put inside.
 
 ---
 
-## 1. `generateMetadata` from entity data
+## 1. `generateMetadata` with entity data
 
 ```tsx
-// app/product/[id]/page.tsx
+// src/app/product/[id]/page.tsx
 export async function generateMetadata({ params }): Promise<Metadata> {
   const { id } = await params                   // params — Promise in Next 15+/16
   const product = await getProduct(Number(id))  // the same cache()-wrapped loader as in page
@@ -44,7 +45,7 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 }
 ```
 
-- `getImageUrl` — a common helper from `lib/oneentry.ts`, not `value[0]` in place: a single file comes as an object (`.claude/rules/attribute-values.md`).
+- `getImageUrl` — a common helper from `src/lib/oneentry.ts`, not `value[0]` in place: a single file comes as an object (`.claude/rules/attribute-values.md`).
 - In `description` — `plainContent`/`plainValue`, not `htmlContent`: tags in the search engine snippet look like garbage.
 - Metadata reads **the same ISR-cached loaders**. `export const dynamic = 'force-dynamic'` is never needed for SEO.
 
@@ -53,7 +54,7 @@ export async function generateMetadata({ params }): Promise<Metadata> {
 ## 2. `sitemap.ts` — from live data, with aggregation of variants
 
 ```typescript
-// app/sitemap.ts
+// src/app/sitemap.ts
 export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   const now = new Date().toISOString()
 
@@ -77,7 +78,7 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
 ⚠️ **Two traps:**
 
 1. **Default `limit`.** SDK methods return the first page (usually 30). A sitemap of 30 products when there are 2000 in the catalog is the most common and unnoticed mistake: there is no error, just half the site is not indexed. Always pass an explicit high `limit` or paginate.
-2. **Product variants.** If color/size are registered as separate entities with the same page URL, duplicates will appear in the map. Build the map from an **aggregated** list (merging variants), not from the raw response.
+2. **Product variants.** If color/size are separate entities with the same page URL, duplicates will appear in the map. Build the map from an **aggregated** list (merging variants), not from the raw response.
 
 ---
 
@@ -107,7 +108,7 @@ Cart, favorites, profile, checkout — always in `disallow`: these are user/gues
 
 Schemas that pay off on the OneEntry showcase:
 
-| Schema | Where | Data source |
+| Schema | Where | Data Source |
 | --- | --- | --- |
 | `Product` + `Offer` | product page | `localizeInfos`, `attributeValues.price/sale`, `statusIdentifier` |
 | `AggregateRating` | product page | **top-level `entity.rating.value`**, not `attrs.rating` |
@@ -116,7 +117,7 @@ Schemas that pay off on the OneEntry showcase:
 | `WebSite` + `SearchAction` | layout | project search URL |
 | `LocalBusiness` | contacts, stores | CMS contacts page |
 
-About `rating`: aggregate rating is **a field of the entity**, not an attribute; why this is so — `.claude/rules/attribute-values.md`, section "Final Rating".
+About `rating`: aggregate rating is **an entity field**, not an attribute; why this is so — `.claude/rules/attribute-values.md`, section "Final Rating".
 
 ### ⚠️ JSON-LD in `<script>` must be escaped
 
@@ -141,7 +142,7 @@ Escaped `<` — regular JSON for any consumer and inert for the parser.
 
 ---
 
-## 5. canonical and hreflang — from the project's locales
+## 5. canonical and hreflang — from project locales
 
 ```tsx
 const locales = await getApi().Locales.getLocales()   // do not hardcode ['en','ru']
@@ -152,7 +153,7 @@ const languages = Object.fromEntries(
 return { alternates: { canonical: `${SITE_URL}${path}`, languages } }
 ```
 
-A hardcoded list of languages diverges from the admin panel when adding a locale — and hreflang starts pointing to 404.
+A hardcoded list of languages diverges from the admin panel when a locale is added — and hreflang starts pointing to 404.
 
 ---
 
@@ -162,7 +163,7 @@ A hardcoded list of languages diverges from the admin panel when adding a locale
 
 > ⚠️ **Sober about the status.** This is a proposed standard, not an accepted one: there is no confirmed support from major AI crawlers (OpenAI, Anthropic, Google), and Google representatives have expressed skepticism about it. In reality, it is read by assistants that have been given a link to the site, and some documentation tools.
 >
-> **Visibility in AI search (AI Overviews, ChatGPT Search, Perplexity) is provided not by it, but by three things from the sections above:** access for AI crawlers in `robots.ts`, JSON-LD markup, and content in server-side HTML, not just after hydration. `llms.txt` is a cheap addition to them (half an hour of work, one ISR route), not a replacement. If time is short — first do the first three.
+> **Visibility in AI search (AI Overviews, ChatGPT Search, Perplexity) is ensured not by it, but by three things from the sections above:** access for AI crawlers in `robots.ts`, JSON-LD markup, and content in server-rendered HTML, not just after hydration. `llms.txt` is a cheap addition to them (half an hour of work, one ISR route), not a replacement. If time is short — prioritize the first three.
 
 ### The format is markdown, not arbitrary text
 
@@ -171,7 +172,7 @@ The specification strictly defines the structure, and deviation from it deprives
 ```markdown
 # Store Name
 
-> One sentence about what this project is. A blockquote must immediately follow H1.
+> One sentence about what this project is. A blockquote immediately after H1 is mandatory.
 
 Arbitrary paragraphs with context: what you sell, delivery regions, languages.
 
@@ -183,7 +184,7 @@ Arbitrary paragraphs with context: what you sell, delivery regions, languages.
 ## Information
 
 - [Delivery and Payment](https://shop.example/delivery): terms, regions, methods
-- [Sitemap](https://shop.example/sitemap.xml): complete list of products
+- [Sitemap](https://shop.example/sitemap.xml): full list of products
 
 ## Optional
 
@@ -195,7 +196,7 @@ The `## Optional` section is what the assistant may skip if there is not enough 
 ### Generation from live data
 
 ```typescript
-// app/llms.txt/route.ts
+// src/app/llms.txt/route.ts
 import { getApiSafe, isError } from '@/lib/oneentry'
 
 export const revalidate = 3600   // literal: segment config cannot be computed (.claude/rules/isr-config.md)
@@ -218,7 +219,7 @@ export async function GET() {
     }
   }
 
-  lines.push('## Information', '', `- [Sitemap](${SITE_URL}/sitemap.xml): complete list of products`, '')
+  lines.push('## Information', '', `- [Sitemap](${SITE_URL}/sitemap.xml): full list of products`, '')
 
   return new Response(lines.join('\n'), {
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
@@ -229,30 +230,30 @@ export async function GET() {
 ### Four content rules
 
 1. **Do not list the entire catalog.** Two thousand products in `llms.txt` is not a map, but a dump; for a complete list, there is `sitemap.xml`, refer to it. In the file — sections and up to several dozen key pages.
-2. **Nothing user-scoped.** Cart, favorites, profile, checkout — do not get included, just like in `robots.ts`: there is nothing to index and nothing to show the assistant.
-3. **Degradation instead of 500.** If OneEntry is unavailable — return a static minimum (title, description, link to sitemap), not an error: a broken `llms.txt` is worse than a short one. Hence `getApiSafe()` instead of `getApi()` (see `.claude/rules/sdk-init.md`).
-4. **Nothing that is not on the site.** The file is read by an assistant that then responds to the customer; an invented section turns into an invented response.
+2. **Nothing user-scoped.** Cart, favorites, profile, checkout — do not get included, as in `robots.ts`: there is nothing to index and nothing to show the assistant.
+3. **Degrade instead of 500.** If OneEntry is unavailable — return a static minimum (title, description, link to sitemap), not an error: a broken `llms.txt` is worse than a short one. Hence `getApiSafe()` instead of `getApi()` (see `.claude/rules/sdk-init.md`).
+4. **Nothing that is not on the site.** The file is read by an assistant that then responds to the customer; a made-up section turns into a made-up answer.
 
 ### Route traps
 
-- The segment name — with a dot: `app/llms.txt/route.ts`. This is a valid Next route that returns exactly `/llms.txt`.
+- Segment name — with a dot: `src/app/llms.txt/route.ts`. This is a valid Next route, returning exactly `/llms.txt`.
 - `Content-Type` — `text/plain; charset=utf-8`. `text/markdown` causes some crawlers to download it as a file instead of reading it.
 - **Do not set `force-dynamic`.** The content changes with the CMS, not with every request; ISR is sufficient here, and dynamics increases latency unnecessarily.
-- Multilingual project: `llms.txt` — one, in the default language, and language versions should be listed as links. Separate `/en/llms.txt` is not provided for in the specification.
-- `llms-full.txt` (full text content) should only be created if the content is genuinely textual — for the showcase, this is usually unnecessary.
+- Multilingual project: `llms.txt` is one, in the default language, and language versions should be listed as links. Separate `/en/llms.txt` is not provided by the specification.
+- `llms-full.txt` (full text content) should only be created if the content is genuinely textual — for showcases, this is usually unnecessary.
 
 ---
 
 ## Checklist
 
 1. `generateMetadata` takes data from `localizeInfos`/`attributeValues`, the fetch is wrapped in React `cache()`.
-2. OG image — through the common `getImageUrl`, not `value[0]`.
+2. OG image — through a common `getImageUrl`, not `value[0]`.
 3. `sitemap.ts` is built with an explicit high `limit` and from an aggregated list without duplicate URLs.
 4. `robots.ts` blocks cart/favorites/account/checkout/api.
 5. JSON-LD is serialized with escaping of `<`, `>`, `&`, U+2028/29.
 6. `AggregateRating` is taken from top-level `rating`, not from attributes.
 7. canonical + hreflang are built from `Locales.getLocales()`.
 8. No SEO route required `force-dynamic`.
-9. If you make `llms.txt` — first create robots for AI crawlers, JSON-LD, and server-side rendered content: they affect visibility in AI search, and `llms.txt` is an addition.
+9. If you create `llms.txt` — first ensure robots for AI crawlers, JSON-LD, and server-rendered content are done: they affect visibility in AI search, while `llms.txt` is an addition.
 
 > Related rules: `.claude/rules/performance-streaming.md` (`generateMetadata` and `cache()`), `.claude/rules/localization.md` (locales and `langCode`), `.claude/rules/security.md` (escaping CMS content), `.claude/rules/isr-config.md` (TTL of loaders that read metadata).

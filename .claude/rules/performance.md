@@ -1,22 +1,27 @@
-<!-- META
-type: rules
-fileName: performance.md
-rulePaths: ["app/**/page.tsx", "app/**/layout.tsx", "app/api/**/*.ts", "components/**/*.tsx"]
--->
-
+---
+paths:
+  - "app/**/page.tsx"
+  - "src/app/**/page.tsx"
+  - "app/**/layout.tsx"
+  - "src/app/**/layout.tsx"
+  - "app/api/**/*.ts"
+  - "src/app/api/**/*.ts"
+  - "components/**/*.tsx"
+  - "src/components/**/*.tsx"
+---
 # Performance — OneEntry Rules
 
-Rules to keep the initial load and SSR latency within budget when delivering content from OneEntry CMS. Covers caching strategy, lazy loading, and parallelism.
+Rules to keep the initial load and SSR latency within budget when serving content from OneEntry CMS. Covers caching strategy, lazy loading, and parallelism.
 
 ## ⚠️ Never use `force-dynamic` for CMS pages
 
 OneEntry content only changes when edited by an administrator — re-fetching it on every request is pointless. Use ISR by default.
 
 ```typescript
-// ❌ INCORRECT — every visitor pays the full round-trip to OneEntry (3–8 seconds on cold start)
+// ❌ INCORRECT — every visitor pays a full round-trip to OneEntry (3–8s from a cold start)
 export const dynamic = 'force-dynamic';
 
-// ✅ CORRECT — the first request renders and caches HTML; others get ~10 ms
+// ✅ CORRECT — the first request renders and caches HTML; others receive ~10 ms
 export const dynamic = 'force-static';
 export const revalidate = 300; // 60 for rapidly changing listings
 ```
@@ -39,14 +44,14 @@ An unwrapped `useSearchParams()` anywhere in the page tree causes **the entire**
 </Suspense>
 ```
 
-This applies to `useSearchParams`, `usePathname`, and everything else that Next.js marks as dynamic. `force-static` + `next build` is the simplest detector.
+Applies to `useSearchParams`, `usePathname`, and everything else that Next.js marks as dynamic. `force-static` + `next build` is the simplest detector.
 
-## Compose `unstable_cache` over server fetchers
+## Compose `unstable_cache` on top of server fetchers
 
 React `cache()` deduplicates within a single render. `unstable_cache` deduplicates between requests and stores in Next.js Data Cache. **Use both.**
 
 ```typescript
-// ❌ INCORRECT — only dedup React within the render; each new request hits OneEntry again
+// ❌ INCORRECT — only React deduplication within the render; each new request hits OneEntry again
 import { cache } from 'react';
 export const getPageByUrl = cache(async (url: string) => {
   const data = await getApi().Pages.getPageByUrl(url);
@@ -54,7 +59,7 @@ export const getPageByUrl = cache(async (url: string) => {
   return { isError: false, page: data };
 });
 
-// ✅ CORRECT — inter-request cache with TTL + tags plus dedup React
+// ✅ CORRECT — inter-request cache with TTL + tags plus React deduplication
 import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
 
@@ -78,7 +83,7 @@ export const getPageByUrl = cache(async (url: string) => fetchImpl(url));
 | Pages, blocks, product listings | `60` | `oneentry-pages` / `oneentry-blocks` / `oneentry-products` |
 | Menus, attribute sets (`static_content`, `preferences`) | `300` | `oneentry-menus` / `oneentry-attributes` |
 | Forms (`getFormByMarker`) | `300` | `oneentry-forms` |
-| Detailed product page / pages | `60` | `oneentry-products` / `oneentry-pages` |
+| Detailed product/page | `60` | `oneentry-products` / `oneentry-pages` |
 
 ### Object arguments → stable cache key
 
@@ -114,11 +119,11 @@ export const getProductsByPageUrl = cache(async (opts) => {
 
 ### Always pair tag `'oneentry'` + thematic
 
-At least two tags — the umbrella tag allows a single `revalidateTag('oneentry')` from the admin editing webhook to reset all CMS data; thematic tags allow targeted hits on a single family of resources.
+At least two tags — the umbrella tag allows a single `revalidateTag('oneentry')` from the admin edit webhook to reset all CMS data; thematic tags allow targeted hits on a single family of resources.
 
 ## ⚠️ Do not `await` data in the root layout — pass Promise
 
-`async` server components return JSX only after each `await`. Child server components (Header, page) cannot start their fetches until the parent layout completes. If the layout `await`s OneEntry data needed by the **client** provider, the entire tree is serialized behind it.
+`async` server components return JSX only after each `await`. Child server components (Header, page) cannot start their fetches until the parent layout completes. If the layout `await`s data from OneEntry needed by the **client** provider, the entire tree serializes behind it.
 
 ```tsx
 // ❌ INCORRECT — layout blocks until Header / page requests start
@@ -145,7 +150,7 @@ export default function RootLayout({ children }) {
 ```
 
 ```tsx
-// DictProvider — client component unfolds Promise through React 19 `use()`
+// DictProvider — client component unfolds Promise via React 19 `use()`
 'use client';
 import { use } from 'react';
 
@@ -168,7 +173,7 @@ export const DictProvider = ({
 
 ## Parallelize requests to OneEntry within a single server component
 
-Independent fetches → `Promise.all`. Sequential `await` only when one request **needs** the response of the previous.
+Independent fetches → `Promise.all`. Sequential `await` — only when one request **needs** the response of the previous.
 
 ```typescript
 // ❌ INCORRECT — waterfall, total = sum(latencies)
@@ -205,7 +210,7 @@ const sections = await Promise.all(
 
 ## ⚠️ Heavy third-party libraries — separate lazy chunk + static CSS import
 
-Libraries that render only after user action (lightboxes, charts, toast containers, video players, rich-text editors) should live in their module, loaded via `dynamic({ ssr: false })`, with mounting based on state.
+Libraries that render only after user action (lightboxes, charts, toast containers, video players, rich-text editors) should live in their own module, loaded via `dynamic({ ssr: false })`, with mounting based on state.
 
 ```tsx
 // ❌ INCORRECT — lightbox library + 4 plugins + 3 CSS files in the initial page chunk
@@ -224,7 +229,7 @@ const Gallery = () => {
 };
 
 // ✅ CORRECT — separate module for heavy library (static eagerly inside)
-// components/RestaurantLightbox.tsx
+// src/components/RestaurantLightbox.tsx
 'use client';
 import 'yet-another-react-lightbox/styles.css';
 import 'yet-another-react-lightbox/plugins/counter.css';
@@ -236,12 +241,12 @@ const RestaurantLightbox = ({ open, onClose, slides }) => (
 );
 export default RestaurantLightbox;
 
-// components/Gallery.tsx — lazy + sticky mounting
+// src/components/Gallery.tsx — lazy + sticky mounting
 const RestaurantLightbox = dynamic(() => import('./RestaurantLightbox'), { ssr: false });
 
 const Gallery = () => {
   const [open, setOpen] = useState(false);
-  const [mounted, setMounted] = useState(false);     // sticky — true after first opening
+  const [mounted, setMounted] = useState(false);     // sticky — true after first open
   return (
     <>
       <button onClick={() => { setMounted(true); setOpen(true); }}>Open</button>
@@ -264,19 +269,19 @@ const LazyToast = dynamic(
 );
 
 // ✅ CORRECT — CSS is imported statically inside the lazy module source
-// components/LazyToastContainer.tsx
+// src/components/LazyToastContainer.tsx
 'use client';
 import 'react-toastify/dist/ReactToastify.css';
 import { ToastContainer } from 'react-toastify';
 export default function LazyToastContainer() { return <ToastContainer … />; }
 
-// components/ResponsiveToastContainer.tsx
+// src/components/ResponsiveToastContainer.tsx
 const LazyToastContainer = dynamic(() => import('./LazyToastContainer'), { ssr: false });
 ```
 
 ## Delay non-critical UI after the first render using `requestIdleCallback`
 
-Toast containers, analytics widgets, chat bubbles — anything the user cannot interact with on the first render. Just `dynamic()` is not enough: the chunk still starts loading immediately after the parent renders. Gate the mounting through `requestIdleCallback`.
+Toast containers, analytics widgets, chat bubbles — anything the user cannot interact with on the first render. Just `dynamic()` is not enough: the chunk still starts loading immediately after the parent renders. Gate the mounting using `requestIdleCallback`.
 
 ```tsx
 const LazyToastContainer = dynamic(() => import('./LazyToastContainer'), { ssr: false });
@@ -303,10 +308,10 @@ const ResponsiveToastContainer = () => {
 
 ## Gate IntersectionObserver for repeating product images
 
-Browser `loading="lazy"` is generous — it starts loading images long before they are visible. On a listing with 20+ product cards, the optimizer endpoint (`/_next/image?url=…`) gets hammered on the initial load. Gate the mounting of `<Image>` based on proximity to the viewport.
+Browser `loading="lazy"` is generous — it starts loading images long before they are visible. On a listing with 20+ product cards, the optimizer endpoint (`/_next/image?url=…`) gets hammered on initial load. Gate the mounting of `<Image>` based on proximity to the viewport.
 
 ```tsx
-// hooks/useNearViewport.ts
+// src/hooks/useNearViewport.ts
 'use client';
 import { type RefObject, useEffect, useState } from 'react';
 
@@ -346,17 +351,17 @@ const ProductImage = ({ src, alt }: { src: string; alt: string }) => {
 ```
 
 Apply to: repeating listing cards (products, articles, restaurants).
-**Do not apply** to: hero sections / content above the fold (use `priority` there), as well as images inside lazy popups.
+**Do not apply** to: hero sections / content above the fold (there use `priority`), as well as images inside lazy popups.
 
 ## `<Link prefetch>` — explicitly, not by default
 
-Next.js prefetches the RSC payload of every `<Link>` in the visible area. On a catalog page with 20+ ProductCard links, this results in 20+ unnecessary requests on the initial load.
+Next.js prefetches the RSC payload of each `<Link>` in the visible area. On a catalog page with 20+ ProductCard links, this results in 20+ unnecessary requests on initial load.
 
 ```tsx
 // ❌ INCORRECT — each card prefetches its product page
 <Link href={`/shop/product/${id}`}> … </Link>
 
-// ✅ CORRECT — repeating listing cards opt out of prefetching
+// ✅ CORRECT — repeating listing cards opt-out of prefetch
 <Link prefetch={false} href={`/shop/product/${id}`}> … </Link>
 ```
 
@@ -364,10 +369,10 @@ Leave `prefetch={true}` (default) only for: 1–2 hero CTAs above the fold, next
 
 ## `next/font` — avoid Cartesian product weight × style
 
-Declaring `weight: ['300', '400', '700']` along with `style: ['normal', 'italic']` creates **six** `@font-face` rules. Browsers will not download unused variants, but with `preload: true`, Next.js injects `<link rel="preload">` for the main weight — and the CSS payload still contains all six.
+Declaring `weight: ['300', '400', '700']` along with `style: ['normal', 'italic']` creates **six** `@font-face` rules. Browsers will not download unused variants, but with `preload: true` Next.js injects `<link rel="preload">` for the main weight — and the CSS payload still contains all six.
 
 ```typescript
-// ❌ INCORRECT — italic 300 / 400 declared but never rendered
+// ❌ INCORRECT — italic 300 / 400 declared, but never rendered
 const lato = Lato({
   weight: ['300', '400', '700'],
   style: ['normal', 'italic'],
@@ -384,7 +389,7 @@ const lato = Lato({
 });
 
 const latoItalic = Lato({
-  weight: ['700'],          // italic is used only on bold weight
+  weight: ['700'],          // italic used only on bold weight
   style: ['italic'],
   preload: false,           // not above the fold — preload not needed
   variable: '--font-lato-italic',
@@ -399,11 +404,11 @@ const latoItalic = Lato({
 ## Checklist before commit
 
 - [ ] `export const dynamic = 'force-static'; export const revalidate = …;` on every CMS page
-- [ ] Every consumer of `useSearchParams` is wrapped in `<Suspense>` (run `next build` — `force-static` will otherwise fail)
-- [ ] Every new server fetcher composes `unstable_cache(impl, [keyParts], { revalidate, tags: ['oneentry', …] })` over React `cache()`
+- [ ] Every consumer of `useSearchParams` wrapped in `<Suspense>` (run `next build` — `force-static` will otherwise fail)
+- [ ] Every new server fetcher composes `unstable_cache(impl, [keyParts], { revalidate, tags: ['oneentry', …] })` on top of React `cache()`
 - [ ] Layout does not `await` data needed only by the client provider — pass Promise
 - [ ] Independent calls to OneEntry in a single server component → `Promise.all`; fan-out by items → `Promise.all(items.map(…))`
-- [ ] Heavy libraries (lightboxes, charts, toasts, editors) → separate `'use client'` module with static CSS imports + `dynamic({ ssr: false })` + sticky state mounting
+- [ ] Heavy libraries (lightboxes, charts, toasts, editors) → separate `'use client'` module with static CSS imports + `dynamic({ ssr: false })` + sticky mount state
 - [ ] Non-critical UI delayed via `requestIdleCallback` (with fallback `setTimeout(1500)`)
 - [ ] Repeating `<Image>` cards gated by `useNearViewport`
 - [ ] Repeating `<Link>` cards set `prefetch={false}`
@@ -411,11 +416,11 @@ const latoItalic = Lato({
 
 > Related performance family rules:
 >
-> - `.claude/rules/performance-popups.md` — popup / curtain system via a single `PopupRoot` + `popupRegistry` + `prefetchPopup`.
+> - `.claude/rules/performance-popups.md` — popup / curtain system via single `PopupRoot` + `popupRegistry` + `prefetchPopup`.
 > - `.claude/rules/performance-rtk.md` — RTK Query: `pollingInterval`, `skip`, `keepUnusedDataFor`, when **not** to use RTK Query.
 > - `.claude/rules/performance-gsap.md` — GSAP: eager vs lazy registration of plugins, `useGSAP({ scope })`, `optimizePackageImports`.
 > - `.claude/rules/performance-images.md` — `next/image` with OneEntry CDN: `remotePatterns`, `deviceSizes`, AVIF/WebP, blur via `previewLink`.
 > - `.claude/rules/performance-streaming.md` — `loading.tsx`, local `<Suspense>` around slow blocks, PPR (`experimental.ppr: 'incremental'`).
-> - `.claude/rules/performance-bundle.md` — `@next/bundle-analyzer`, `optimizePackageImports`, disallow barrel-`index.ts`, disallow SDK in `'use client'`.
+> - `.claude/rules/performance-bundle.md` — `@next/bundle-analyzer`, `optimizePackageImports`, prohibit barrel `index.ts`, prohibit SDK in `'use client'`.
 >
 > Neighboring rules: `.claude/rules/nextjs-pages.md`, `.claude/rules/server-actions.md`, `.claude/rules/localization.md`.

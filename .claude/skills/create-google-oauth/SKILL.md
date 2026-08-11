@@ -2,7 +2,7 @@
 name: create-google-oauth
 description: Google OAuth authorization via OneEntry
 ---
-# /create-google-oauth — Google OAuth authorization via OneEntry
+# /create-google-oauth — Google OAuth authorization through OneEntry
 
 ---
 
@@ -12,7 +12,7 @@ description: Google OAuth authorization via OneEntry
 
 ---
 
-> ### To set up Google OAuth, you need to complete several steps in the Google Cloud Console:
+> ### To set up Google OAuth, you need to complete several steps in Google Cloud Console:
 >
 > **1. Create a project (if you don't have one)**
 > - Open [console.cloud.google.com](https://console.cloud.google.com)
@@ -33,7 +33,7 @@ description: Google OAuth authorization via OneEntry
 > - Click **Create**
 >
 > **4. Copy the data**
-> - In the window that appears, copy the **Client ID** and **Client Secret**
+> - In the window that appears, copy **Client ID** and **Client Secret**
 > - (Or open the created client and copy from there)
 >
 > ---
@@ -50,29 +50,29 @@ After the user provides the data — proceed to **Step 0.1**.
 
 ---
 
-## Step 0.1: Get data and fill in files
+## Step 0.1: Get the data and fill in the files
 
 When the user has sent `Client ID`, `Client Secret`, and `Redirect URI`:
 
 ### 1. Fill in `.env.local`
 
-Read the current `.env.local` (or create it if it doesn't exist). Add/update the variables:
+Read the current `.env.local` (or create it if it doesn't exist). Add / update the variables:
 
 ```env
-NEXT_PUBLIC_GOOGLE_CLIENT_ID=<Client ID from user>
-GOOGLE_CLIENT_SECRET=<Client Secret from user>
-NEXT_PUBLIC_APP_URL=<origin from Redirect URI, e.g. http://localhost:3000>
+NEXT_PUBLIC_GOOGLE_CLIENT_ID=<Client ID from the user>
+GOOGLE_CLIENT_SECRET=<Client Secret from the user>
+NEXT_PUBLIC_APP_URL=<origin from Redirect URI, for example http://localhost:3000>
 ```
 
 > `NEXT_PUBLIC_APP_URL` — only the origin without the path (`http://localhost:3000`, not `http://localhost:3000/auth/callback`).
 
 > ### ⚠️ origin — only from env, never from request
 >
-> **Do not** build `redirect_uri` from `request.url`, `headers()`, `request.headers.get('host')`
+> **Do not** construct `redirect_uri` from `request.url`, `headers()`, `request.headers.get('host')`
 > or `window.location.origin`. When TLS termination occurs on a proxy (Vercel, Railway, Fly, nginx,
-> Docker behind a load balancer), the application sees the internal request: `http://` instead of `https://`
-> and/or the container's host (`0.0.0.0:3000`) → `redirect_uri_mismatch`, with the initial redirect
-> passing and failing only during the exchange.
+> Docker behind a load balancer) the application sees the internal request: `http://` instead of `https://`
+> and/or the container's host (`0.0.0.0:3000`) → `redirect_uri_mismatch`, while the initial redirect
+> passes and fails only during the exchange.
 >
 > Always `${process.env.NEXT_PUBLIC_APP_URL}/auth/callback` — both in the redirect to Google and in the exchange.
 
@@ -89,17 +89,17 @@ At this step, check three places that are currently accessible:
 If the redirect_uri from the user's response differs from `${APP_URL}/auth/callback` — inform them and clarify.
 
 This is **not a complete** list: there is also a field in the OE admin panel and JavaScript origins in Google —
-the canonical list of six points can be found in **Step 2**, check it against before the final verification.
+the canonical list of six items can be found in **Step 2**, check against it before the final verification.
 
-### 3. Ensure the callback page exists
+### 3. Ensure that the callback page exists
 
-Check for the presence of `app/auth/callback/page.tsx`. If it doesn't exist — create it (see Step 4 below).
+Check for the existence of `src/app/auth/callback/page.tsx`. If it doesn't exist — create it (see Step 4 below).
 
 ### 4. Inform the user
 
 After writing the files, say:
 
-> `.env.local` updated. Google OAuth data is set up:
+> `.env.local` has been updated. Google OAuth data is configured:
 > - Client ID: `...first 20 characters...`
 > - Redirect URI: `http://localhost:3000/auth/callback`
 >
@@ -121,13 +121,13 @@ Find the provider with `"type": "oauth"` and Google in the name. Remember:
 
 ### Field "URL for OAuth Origin issuer" (OE admin panel)
 
-The application origin — scheme + host (+ port), **without path**: `https://myapp.com`. Do not confuse with
+The application's origin — scheme + host (+ port), **without path**: `https://myapp.com`. Do not confuse with
 `oauthAuthUrl` (Google URL) and do not write the full `redirect_uri` with `/auth/callback` here.
-It must match the origin of the `redirect_uri` — see all places of agreement in **Step 2**.
+It must match the origin of the `redirect_uri` — see all matching places in **Step 2**.
 
 Suspect #1 when `redirect_uri_mismatch` occurs alongside env (error stages — Step 3),
-check before `client_id`/`client_secret`. Common pitfalls: `http://localhost:3000` remains
-after moving to production; the full path is written. When changing the domain, update it manually.
+check before `client_id`/`client_secret`. Common pitfalls: it remains `http://localhost:3000`
+after moving to production; the full path is written. When changing domains, update manually.
 
 Make sure that `.env.local` contains:
 
@@ -170,7 +170,7 @@ when moving from dev to prod, update all four.
 ## Step 3: Server Action — exchange code for tokens
 
 ```typescript
-// app/actions/auth.ts
+// src/app/actions/auth.ts
 'use server'
 
 import { defineOneEntry } from 'oneentry'
@@ -184,7 +184,7 @@ export async function googleOAuthAction(
   // An empty string will silently substitute the server fingerprint — the token will not refresh from the browser
   if (!deviceMetadata) return { error: 'deviceMetadata not passed from the callback page' }
 
-  // Per-request instance: deviceMetadata in the config, shared getApi()-singleton is not mutated
+  // Per-request instance: deviceMetadata in config, shared getApi()-singleton is not mutated
   const api = defineOneEntry(process.env.NEXT_PUBLIC_ONEENTRY_URL as string, {
     token: process.env.NEXT_PUBLIC_ONEENTRY_TOKEN as string,
     deviceMetadata, // ← refresh token will be tied to the browser fingerprint
@@ -212,13 +212,13 @@ export async function googleOAuthAction(
 
 **Why `deviceMetadata` (SDK ≥ 1.0.155):** The API ties refresh tokens to the header
 `x-device-metadata` (SDK sends it on every POST and on refresh). Without passing the browser
-fingerprint, the server's `oauth()` will substitute the Node server's fingerprint — the issued refresh token
-will not be updated from the browser: both refresh upon access token expiration
-(`login(token)` → `syncTokens()` → 401 → refresh 4xx), and session recovery upon
-page reload (`reDefine` → proactive refresh) will break.
+fingerprint, the server's `oauth()` will substitute the Node fingerprint — the issued refresh token
+will not be updated from the browser: both refresh will break when the access token expires
+(`login(token)` → `syncTokens()` → 401 → refresh 4xx), and session recovery when
+the page is reloaded (`reDefine` → proactive refresh).
 
-**Why a per-request instance, not `setDeviceMetadata` on `getApi()`:** `apiInstance` from
-`lib/oneentry.ts` — a module singleton, shared by parallel requests. The pattern
+**Why a per-request instance instead of `setDeviceMetadata` on `getApi()`:** The `apiInstance` from
+`src/lib/oneentry.ts` is a modular singleton shared by parallel requests. The pattern
 `setDeviceMetadata(dm)` → `oauth()` → `setDeviceMetadata('')` — race condition: parallel
 OAuth callbacks will overwrite each other's fingerprints. A short-lived local instance for one
 stateless POST — a conscious exception to the rule "one instance through getApi()"
@@ -231,20 +231,20 @@ Errors go through processing stages. Determine the stage **before** changing the
 | Response | Stage | What to do |
 | --- | --- | --- |
 | `403 Permission data not found. Provide the permission for requested url` | pre-check rights **before** processing the request | The route `…/marker/{marker}/oauth` is not granted to the user group. The code here is irrelevant — go to the skill **`/admin-grant-permissions`** |
-| `400 Invalid x-device-metadata format` | permission exists, incorrect fingerprint | `deviceMetadata` was not passed from the callback page or was manually assembled — take only from `getDeviceMetadata()` (Step 4) |
-| `redirect_uri_mismatch` | reached Google | Origin mismatch — check against the canonical list (Step 2), verify the field "URL for OAuth Origin issuer" (Step 1) and that the origin is not output from the request (Step 0.1) |
+| `400 Invalid x-device-metadata format` | permission exists, but fingerprint is incorrect | `deviceMetadata` was not passed from the callback page or was collected manually — take only from `getDeviceMetadata()` (Step 4) |
+| `redirect_uri_mismatch` | reached Google | Origin mismatch — check against the canonical list (Step 2), verify the field "URL for OAuth Origin issuer" (Step 1) and that the origin is not derived from the request (Step 0.1) |
 | `400 We couldn't pass the oauth authentication with provided data…` | OneEntry chain fully traversed | The problem lies in the data itself: expired/reused `code` (it is one-time, ~10 minutes) or incorrect credentials — see models below |
 
 **403 — tenant configuration, not code.** Permission is granted to a group (usually "Guest" = Default
 User Group of the provider), not to the App Token, and **for each route separately**. It comes with any
 parameters, even with a fake `code` — the permission is checked before the request body. Hence the cheap
-test: if 403 changes to 400 — the permission worked, no need to burn a real `code`.
+test: a 403 changed to a 400 — the permission worked, no need to burn a real `code`.
 ⚠️ The same 403 can occur on `…/marker/{marker}/users/refresh` and logout — separate routes,
 grant permission to them as well.
 
 ### Reference: two models for code exchange (only when analyzing errors)
 
-**The code above works by default — do not change it while writing.** This section is needed if the exchange
+**The code above works by default — do not change it when writing.** This section is needed if the exchange
 fails or `client_secret` was not provided to you.
 
 | | **Model A — credentials in OE** | **Model B — credentials in the application** |
@@ -253,19 +253,19 @@ fails or `client_secret` was not provided to you.
 | What OE uses during the exchange | its admin settings, body is ignored | what was sent in the body |
 | `GOOGLE_CLIENT_SECRET` in the application | not needed | required |
 
-All 5 fields work with both settings (in Model A, the extra is ignored) — there is no need to determine the model in advance. If the secret is not present, send `client_id: ''`, `client_secret: ''`,
-the rest as above: type `IOauthData` requires all 5 keys, empty strings, not skipping.
+All 5 fields work with both settings (in Model A, the extra is ignored) — there is no need to determine the model in advance. If the secret is not available, send `client_id: ''`, `client_secret: ''`,
+the rest as above: the type `IOauthData` requires all 5 keys, empty strings, not skipping.
 
 ⚠️ Do not try to extract `client_secret` from the provider settings: it is not in `config`
 (`IAuthProvidersEntityConfig` — only TTL and `oauthAuthUrl`), and `getAuthProviderByMarker()`
-goes with a public token from the browser — the secret should not appear there. In Model A, it is not
+works with the public token from the browser — the secret should not appear there. In Model A, it is not
 needed at all, `''` is sufficient.
 
 **Determine the model:** the provider card in the OE admin panel — filled Client ID/Secret =
-Model A, empty = Model B. ⚠️ Do not iterate through the body: `code` is one-time, lives ~10 minutes,
+Model A, empty = Model B. ⚠️ Do not iterate over the body: `code` is one-time, lives ~10 minutes,
 each attempt — re-login in the browser.
 
-⚠️ Model A trap: an incorrect `client_secret` in `.env` **does not give an error**, it is ignored.
+⚠️ Trap for Model A: an incorrect `client_secret` in `.env` **does not give an error**, it is ignored.
 A successful exchange does not confirm the correctness of env — the same configuration will break on a tenant with Model B.
 
 ---
@@ -274,16 +274,16 @@ A successful exchange does not confirm the correctness of env — the same confi
 
 ### Choice: client page `page.tsx` or route handler `route.ts`
 
-`code` comes to `/auth/callback`. The choice of handler **is not cosmetic** — it determines
+`code` comes to `/auth/callback`. The choice of handler is **not cosmetic** — it determines
 whether the refresh token will work.
 
 | | **`page.tsx` (Client Component)** — by default | **`route.ts` (Route Handler)** |
 | --- | --- | --- |
-| Where the fingerprint comes from | `getApi().AuthProvider.getDeviceMetadata()` in the browser | **not available** — only the server's Node fingerprint |
+| Where the fingerprint comes from | `getApi().AuthProvider.getDeviceMetadata()` in the browser | **not available** — only the Node server fingerprint |
 | Refresh token is tied to | the user's browser | the server process |
-| Token update from the browser | works | **breaks**: refresh 4xx upon access token expiration |
+| Token update from the browser | works | **breaks**: refresh 4xx when the access token expires |
 | Tokens go to | localStorage via `login(token)` | httpOnly cookie set by the server |
-| Intermediate "Logging in..." screen | exists | no, redirect immediately |
+| Intermediate "Logging in..." screen | exists | no, redirects immediately |
 
 **Use `page.tsx`** if the session lives in localStorage (standard SDK scenario) — only this way
 `deviceMetadata` is taken from the browser (passed in Server Action — Step 3).
@@ -292,7 +292,7 @@ whether the refresh token will work.
 and updates the refresh token, not giving it to the client.
 
 ```tsx
-// app/auth/callback/page.tsx
+// src/app/auth/callback/page.tsx
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
@@ -355,11 +355,11 @@ export default function AuthCallbackPage() {
 
 ---
 
-## Step 4.1: Save the provider marker — it is needed both on the client and the server
+## Step 4.1: Save the provider marker — it is needed on both client and server
 
 `refresh`/`logout` hit `/marker/{marker}/users/refresh`. For a Google user, the marker —
 `google_web` (what was returned in Step 1), **not `email`**. Hardcoding `'email'` → 4xx on refresh → logout
-upon the first expiration of the access token. The bug surfaces an hour after login, not at login —
+when the access token first expires. The bug surfaces an hour after login, not at login —
 which is why it easily reaches production.
 
 ### 1. localStorage — always do this
@@ -373,14 +373,14 @@ localStorage.setItem('authProviderMarker', MARKER) // MARKER — identifier from
 
 ### 2. httpOnly cookie — only if the project has server-side refresh/logout
 
-**First check if needed.** Grep `AuthProvider.refresh(` / `AuthProvider.logout(`: if all
-calls are client-side — **skip this item**, cookie is not needed. It is only needed when they are in Server
-Action / route handler / middleware, where localStorage is not accessible. Set at the same time as
+**First, check if needed.** Grep `AuthProvider.refresh(` / `AuthProvider.logout(`: if all
+calls are client-side — **skip this item**, the cookie is not needed. It is only needed when they are in Server
+Action / route handler / middleware, where localStorage is not available. Set at the same time as
 the refresh token: both during the OAuth exchange and during email login (`/create-auth`) — otherwise, a symmetric bug
 for email users.
 
 ```typescript
-// app/actions/auth.ts — inside googleOAuthAction after a successful exchange
+// src/app/actions/auth.ts — inside googleOAuthAction after a successful exchange
 import { cookies } from 'next/headers'
 
 const cookieStore = await cookies()
@@ -403,12 +403,12 @@ await getApi().AuthProvider.logout(marker, refreshToken)
 ;(await cookies()).delete('authProviderMarker')
 ```
 
-`|| 'email'` — fallback only for sessions created before the cookie appeared: for OAuth users
+`|| 'email'` — fallback only for sessions created before the cookie existed: for OAuth users
 it is guaranteed to be incorrect.
 
 **Checklist (cookie items — only if it is set):** marker is written to localStorage ✔,
 in cookie during OAuth exchange ✔, during email login ✔, read in server-side refresh ✔ and logout ✔,
-deleted upon logout ✔.
+deleted on logout ✔.
 
 ---
 
@@ -441,7 +441,7 @@ const handleGoogleLogin = async () => {
 
 ---
 
-## Conclusion: full flow
+## Conclusion: complete flow
 
 ```
 Button → getAuthProviderByMarker → config.oauthAuthUrl + query-params → window.location.href
@@ -452,7 +452,7 @@ redirect_uri?code=XXX → /auth/callback → getApi().AuthProvider.getDeviceMeta
     ↓
 googleOAuthAction(code, deviceMetadata) → oauth() on per-request instance with deviceMetadata
     ↓
-IAuthEntity { accessToken, refreshToken } — refresh token is tied to the browser fingerprint
+IAuthEntity { accessToken, refreshToken } — refresh token tied to the browser fingerprint
     ↓
 login(token) → AuthContext → syncTokens() → profile
     ↓
@@ -480,7 +480,7 @@ For selector stability — add `data-testid` to the Google login button and on t
   Sign in with Google
 </button>
 
-// app/auth/callback/page.tsx
+// src/app/auth/callback/page.tsx
 <div data-testid="oauth-callback">
   {error
     ? <p data-testid="oauth-error" className="text-red-500">{error}</p>
@@ -493,10 +493,10 @@ For selector stability — add `data-testid` to the Google login button and on t
 **Algorithm (execute step by step, do not ask in one list):**
 
 1. **Path to the page with the Google login button** — ask: "On which page is the Google login button located? (for example `/login`, `/auth`)".
-   - If silent → find it yourself via Grep for `getTestId('google-login-button'|'google_web'|handleGoogleLogin` or `data-testid="google-login-button"` in `app/**`/`components/**`. Inform: "Found the button at `{path}` — using it".
+   - If silent → find it yourself through Grep for `getTestId('google-login-button'|'google_web'|handleGoogleLogin` or `data-testid="google-login-button"` in `src/app/**`/`src/components/**`. Inform: "Found the button on `{path}` — using it".
 2. **Provider marker** — take it from `/inspect-api auth-providers` (Step 1 of this skill) — provider with `"type": "oauth"` + Google. Inform: "Using marker `{identifier}` from `/inspect-api auth-providers`".
 3. **Real OAuth authorization** — ask: "Do you need to test the full OAuth flow with a real Google account? (a test Google account will be required, headless mode is not suitable)".
-   - By default (user is silent / refused) → **DO NOT** run real OAuth. We only check: click → redirect to `accounts.google.com`, callback with an error in the URL → display of the error. This covers 80% of UX scenarios without real credentials.
+   - By default (user is silent / refused) → **DO NOT** run real OAuth. We only check: click → redirect to `accounts.google.com`, callback with an error in the URL → error display. This covers 80% of UX scenarios without real credentials.
    - If yes → add `E2E_GOOGLE_TEST_EMAIL` / `E2E_GOOGLE_TEST_PASSWORD` to `.env.local` and uncomment the block `test.describe('Real OAuth')`. Inform the user: "The full OAuth flow is unstable in headless mode — Google detects automation. I recommend leaving only the redirect test".
 
 **Example of filling in `.env.local` (do it yourself, do not ask the user to copy):**
@@ -583,14 +583,14 @@ Before completing the task — explicitly inform:
 ✅ data-testid added to the Google login button and on the callback page
 ✅ .env.local updated (E2E_LOGIN_PATH)
 
-Decisions made automatically (if applicable):
-- Path to the page with the button: {LOGIN_PATH} — {specified by user / found via Grep for data-testid="google-login-button"}
+Automatically made decisions (if applicable):
+- Path to the page with the button: {LOGIN_PATH} — {specified by the user / found through Grep for data-testid="google-login-button"}
 - Provider marker: {identifier} — taken from /inspect-api auth-providers
 - Real OAuth flow: test.describe('Real OAuth') left commented out.
   Reason: Google detects headless browsers and blocks automatic logins — tests are unstable.
   If a full flow is needed — add E2E_GOOGLE_TEST_EMAIL/PASSWORD and uncomment the block.
-- Tested: (1) visibility of the button, (2) redirect to accounts.google.com with correct query parameters,
-  (3) callback without code — display of error, (4) callback with error=access_denied — display of error.
+- Testing: (1) visibility of the button, (2) redirect to accounts.google.com with the correct query parameters,
+  (3) callback without code — showing an error, (4) callback with error=access_denied — showing an error.
 
 Run: npm run test:e2e -- google-oauth.spec.ts
 ```

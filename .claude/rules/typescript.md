@@ -1,15 +1,11 @@
-<!-- META
-type: rules
-fileName: typescript.md
-rulePaths: ["**/*.ts","**/*.tsx"]
+---
 paths:
   - "**/*.ts"
   - "**/*.tsx"
--->
-
+---
 # TypeScript — Typing Rules
 
-## Do not use `any`
+## Using `any` is prohibited
 
 `eslint: @typescript-eslint/no-explicit-any`
 
@@ -33,7 +29,7 @@ import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces'
 
 All types are located in `node_modules/oneentry/dist/`:
 
-| Required Type | Import From |
+| Required Type | Where to Import From |
 | --- | --- |
 | `IAuthEntity`, `IAuthProvidersEntity`, `ISignUpData`, `IAuthPostBody` | `oneentry/dist/auth-provider/authProvidersInterfaces` |
 | `IFormsEntity`, `IFormConfig`, `IFormAttribute`, `IFormAttributeAdditionalField`, `IFormLocalizeInfo` | `oneentry/dist/forms/formsInterfaces` |
@@ -52,7 +48,7 @@ All types are located in `node_modules/oneentry/dist/`:
 - `IFormAttributeAdditionalField` — nested fields inside `IFormAttribute.additionalFields` (`{ marker, type, value }`)
 - `IAttributesSetsEntity` — remains for AttributesSets (`getAttributes`, `getAttributeSetByMarker`), NOT for form fields
 
-Before writing code — check the required `.d.ts` file:
+Before writing code — look at the required `.d.ts` file:
 
 ```bash
 cat node_modules/oneentry/dist/<module>/<module>Interfaces.d.ts
@@ -64,7 +60,7 @@ If the SDK type requires a field, but the API returns an error when passing it �
 
 ```typescript
 // ⚠️ ISignUpData requires phoneSMS: string, but an empty string causes a 400 error
-// Use Omit to avoid passing the field
+// Use Omit to not pass the field
 const body: Omit<ISignUpData, 'notificationData'> & {
   notificationData: Omit<ISignUpData['notificationData'], 'phoneSMS'>
 } = { ... }
@@ -73,14 +69,14 @@ await getApi().AuthProvider.signUp(marker, body as ISignUpData)
 
 ## 🚫 Do not duplicate SDK types as "flat DTOs" (including in Server Actions)
 
-Common mistake: inside a Server Action (`'use server'`), the developer writes a local `type FormField = { marker, type, title, isLogin, ... }`, flattens `IFormAttribute` into it, and returns a copy. **This is not allowed.**
+A common mistake: inside a Server Action (`'use server'`), a developer writes a local `type FormField = { marker, type, title, isLogin, ... }`, flattens `IFormAttribute` into it, and returns a copy. **This is not allowed.**
 
 Reasons:
 
-- SDK types (`IFormAttribute`, `IProductsEntity`, `IOrderByMarkerEntity`, …) — are already regular object interfaces (strings / numbers / booleans / nested records). They serialize across the Server Action boundary without issues. The DTO layer is unnecessary.
-- Duplicating fields silently loses everything that wasn't copied (`validators`, `initialValue`, `listTitles`, `settings`, `isVisible`, `additionalFields`, index signatures). The next feature that needs one of these fields will have to pass it through your DTO — or revert to `as any`.
+- SDK types (`IFormAttribute`, `IProductsEntity`, `IOrderByMarkerEntity`, …) are already regular object interfaces (strings / numbers / booleans / nested records). They serialize across the Server Action boundary without issues. The DTO layer is unnecessary.
+- Duplicating fields silently loses everything that was not copied (`validators`, `initialValue`, `listTitles`, `settings`, `isVisible`, `additionalFields`, index signatures). The next feature that needs one of these fields will have to pass it through your DTO — or revert to `as any`.
 - When the SDK adds a field, the DTO does not see it. When the SDK renames a field, the DTO still compiles. Both bugs remain silent.
-- Calculating view fields (`title`, `placeholder`) on the server is dead weight: the client already has `localizeInfos.title` and `additionalFields.placeholder.value`. It's better to retrieve them with small helpers at the point of use.
+- Calculating view fields (`title`, `placeholder`) on the server is dead weight: the client already has `localizeInfos.title` and `additionalFields.placeholder.value`. It's better to retrieve them with small helpers at the place of use.
 
 ```ts
 // ❌ INCORRECT — invented DTO, flattening IFormAttribute
@@ -99,7 +95,7 @@ export async function getFormByMarker(marker: string) {
   }
 }
 
-// ✅ CORRECT — return the SDK type as is, helpers live on the client
+// ✅ CORRECT — return SDK type as is, helpers live on the client
 'use server'
 import type { IFormsEntity, IFormAttribute } from 'oneentry/dist/forms/formsInterfaces'
 export async function getFormByMarker(marker: string) {
@@ -111,16 +107,16 @@ export async function getFormByMarker(marker: string) {
   }
 }
 
-// Client helpers — extract view fields from the SDK type, do not pre-flatten on the server
+// Client helpers — output view fields from the SDK type, do not pre-flatten on the server
 const titleFor       = (f: IFormAttribute) => f.localizeInfos?.title ?? f.marker
 const placeholderFor = (f: IFormAttribute) => (f.additionalFields?.placeholder?.value as string | undefined) ?? ''
 ```
 
-**Rule:** if you feel tempted to write `type FooField = { …trimmed subset of IFoo… }` — stop. Import `IFoo` and move any view-specific things (labels, placeholders, css) into small helpers near the point of use. A new local type is justified only if the form truly diverges from the SDK (for example, merging two entities or adding a frontend flag like `isSelected`).
+**Rule:** if you feel tempted to write `type FooField = { …trimmed subset of IFoo… }` — stop. Import `IFoo` and move any view-specific things (labels, placeholders, css) into small helpers near the place of use. A new local type is justified only if the form truly diverges from the SDK (for example, merging two entities or adding a front-end flag like `isSelected`).
 
 ### The rule applies to any SDK entity, not just form fields
 
-The same mistake, different entities. Flattening `IAuthProvidersEntity` into `{ identifier, title, systemCodeTlsSec }` in a Server Action, retyping `product.attributeValues` as `Record<string, { value?: unknown }>`, casting `user.formData` into `Array<{ marker: string; value: unknown }>` — all of these are the same anti-pattern.
+The same mistake, different entities. Flattening `IAuthProvidersEntity` into `{ identifier, title, systemCodeTlsSec }` in a Server Action, retyping `product.attributeValues` as `Record<string, { value?: unknown }>`, casting `user.formData` to `Array<{ marker: string; value: unknown }>` — all of these are the same anti-pattern.
 
 ```ts
 // ❌ Provider DTO — loses config (oauthAuthUrl, accessTokenTtlSec, …), userGroupIdentifier, isActive
@@ -143,7 +139,7 @@ const attrs: IAttributeValues = product.attributeValues || {}
 // ❌ Retyping user.formData into ad-hoc pair — duplicates FormDataType options
 for (const item of user.formData as Array<{ marker: string; value: unknown }>) { … }
 
-// ✅ Import FormDataType and narrow with a type guard (the Record<string, unknown> variant does not contain marker)
+// ✅ Import FormDataType and narrow with a type guard (Record<string, unknown> variant does not contain marker)
 import type { FormDataType } from 'oneentry/dist/forms-data/formsDataInterfaces'
 function hasMarker(i: FormDataType): i is FormDataType & { marker: string; value: unknown } {
   return typeof i === 'object' && i !== null && 'marker' in i && typeof (i as { marker?: unknown }).marker === 'string'
@@ -156,7 +152,7 @@ for (const item of user.formData as FormDataType[]) {
 
 ### Narrowing `unknown` at the access point — allowed
 
-If the SDK intentionally types a field as `unknown` (for example, `IAttributeValue.value`, because the specific form depends on `type` and admin settings), local narrow-casting at the reading point is **not** a DTO duplicate:
+If the SDK consciously types a field as `unknown` (for example, `IAttributeValue.value`, because the specific form depends on `type` and admin settings), local narrow-casting at the reading point is **not** a DTO duplicate:
 
 ```ts
 // OK — narrowing from unknown to the form we actually read; limited to one helper
@@ -166,14 +162,14 @@ const pic = attrsOf(product).pic?.value as FileValue | FileValue[] | undefined
 const list = attrsOf(product).color?.value as Array<{ title?: string; extended?: { value?: string } }> | undefined
 ```
 
-The difference: on the SDK side — `unknown`, so you are not overriding what the SDK has already described — you are choosing a view over an intentionally wrapped payload. Keep such narrows minimal (only those fields that are actually used) and at the access point, not as an exported top-level type.
+The difference: on the SDK side — `unknown`, so you are not overriding what the SDK has already described — you are choosing a view over the intentionally wrapped payload. Keep such narrows minimal (only those fields that are actually used) and at the access point, not as an exported top-level type.
 
-## Do not declare unused variables and imports
+## Declaring unused variables and imports is prohibited
 
 `eslint: @typescript-eslint/no-unused-vars`
 
 ```typescript
-// ❌ INCORRECT — imported but not used
+// ❌ INCORRECT — importing but not using
 import { logout } from '@/app/actions/auth'
 
 // ✅ CORRECT — only necessary imports

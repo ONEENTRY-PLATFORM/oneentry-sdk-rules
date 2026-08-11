@@ -4,7 +4,7 @@ description: Set up Vitest for a Next.js + OneEntry project and cover the data a
 ---
 # Set Up Vitest and Cover OneEntry Adapters
 
-Installs Vitest, configures the pool and aliases, creates OneEntry response fixtures, and the first adapter tests.
+Installs Vitest, configures the pool and aliases, creates fixtures for OneEntry responses, and the first tests for the adapters.
 
 > Rule: `.claude/rules/unit-testing.md`. E2E — separately, `/setup-playwright`.
 
@@ -12,18 +12,18 @@ Installs Vitest, configures the pool and aliases, creates OneEntry response fixt
 
 ## Step 1: Check What to Test
 
-Find the parsing layer of OneEntry responses:
+Find the layer parsing OneEntry responses:
 
 ```bash
 grep -rln 'attributeValues' lib src app --include=*.ts --include=*.tsx | head -20
 ```
 
-First-round candidates (in this order):
+First round candidates (in this order):
 
 1. `getImageUrl` / `getImageUrls` — all forms of `value`;
 2. product/page adapter (`attributeValues` → domain object);
 3. `sanitizeHtml`, if `dangerouslySetInnerHTML` is present in the project;
-4. env parser for TTL (`lib/isr.ts`), if any;
+4. env parser for TTL (`src/lib/isr.ts`), if any;
 5. loaders — `isError` branch.
 
 If there is no parsing at all and `attributeValues` are read directly in JSX — first extract the parsing into a function, otherwise there is nothing to test.
@@ -62,25 +62,25 @@ const dirname = typeof __dirname !== 'undefined' ? __dirname : path.dirname(file
 
 export default defineConfig({
   plugins: [react()],
-  // Vitest does not read tsconfig.paths — without this, the collection fails
+  // Vitest does not read tsconfig.paths — without this the collection fails
   // on "Failed to resolve import" for tests whose graph reaches the alias
   resolve: { alias: { '@': path.resolve(dirname, 'src') } },
   test: {
     name: 'unit',
     environment: 'jsdom',
     globals: true,
-    include: ['src/**/*.{test,spec}.{ts,tsx}', 'lib/**/*.{test,spec}.ts'],
+    include: ['src/**/*.{test,spec}.{ts,tsx}', 'src/lib/**/*.{test,spec}.ts'],
     exclude: ['node_modules', 'e2e', '.next', 'playwright-report'],
     // ⚠️ The default fork pool on the jsdom set fails with "Timeout waiting for
-    // worker to respond", and affected files are NOT COMPILED — the run is green
-    // on a subset. One third of cores: everything compiles and ~5x faster.
+    // worker to respond", and affected files are NOT BUILT — the run is green
+    // on a subset. A third of the cores: everything builds and ~5x faster.
     maxWorkers: Math.max(2, Math.ceil(cpus().length / 3)),
     sequence: { groupOrder: 0 },
   },
 })
 ```
 
-If the project has Storybook with `@storybook/addon-vitest` — move both sets to `projects` and give them **different** `groupOrder`: Vitest rejects projects with the same `groupOrder` but different `maxWorkers`.
+If the project has Storybook with `@storybook/addon-vitest` — move both sets to `projects` and give them **different** `groupOrder`: Vitest rejects projects with the same `groupOrder`, but different `maxWorkers`.
 
 ---
 
@@ -133,7 +133,7 @@ it('returns an empty list on IError, does not throw', async () => {
 
 ---
 
-## Step 6: Check That ALL Files Are Compiled
+## Step 6: Check That ALL Files Are Built
 
 ```bash
 npm test
@@ -152,7 +152,7 @@ A discrepancy means quietly skipped tests due to the pool — return to `maxWork
 3. The isError branch is covered separately: empty result, NOT an exception
 4. Cache keys: different filters → different keys, the order of keys does not matter
 5. DO NOT cover a flat copy of SDK types with tests — domain aggregation is tested
-6. maxWorkers is limited, otherwise files are silently not compiled
+6. maxWorkers is limited, otherwise files are silently not built
 7. resolve.alias is duplicated from tsconfig.json
 8. include does not capture e2e/** — this is a Playwright run
 ```

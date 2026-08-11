@@ -4,21 +4,21 @@ description: Setup OneEntry SDK
 ---
 ---
 name: setup-oneentry
-description: Initialize OneEntry SDK in a Next.js project — create lib/oneentry.ts with singleton pattern, configure next.config.ts for images
+description: Initialize OneEntry SDK in a Next.js project — create src/lib/oneentry.ts with a singleton pattern, configure next.config.ts for images
 allowed-tools: Read, Glob, Write, Edit, Bash
 ---
 
 # /setup-oneentry - Setup oneentry
 
-Initialize OneEntry SDK in the current project. Follow the steps in order.
+Initialize the OneEntry SDK in the current project. Follow the steps in order.
 
-## Step 1: Check existing file
+## Step 1: Check for existing file
 
-Check if `lib/oneentry.ts` exists. If yes — read and show the current content, then ask if it needs to be overwritten.
+Check if `src/lib/oneentry.ts` exists. If yes — read and show the current content, then ask if it needs to be overwritten.
 
-## Step 2: Create lib/oneentry.ts
+## Step 2: Create src/lib/oneentry.ts
 
-Create `lib/oneentry.ts` with the following content:
+Create `src/lib/oneentry.ts` with the following content:
 
 ```typescript
 import { defineOneEntry } from 'oneentry';
@@ -71,7 +71,7 @@ export async function reDefine(refreshToken: string, langCode?: string): Promise
   });
 }
 
-// ⚠️ CRITICAL: apiInstance — this is { AuthProvider, Users, ... }, it does NOT have .state!
+// ⚠️ CRITICAL: apiInstance is { AuthProvider, Users, ... }, it does NOT have .state!
 // Check accessToken only through apiInstance.AuthProvider.state
 export function hasActiveSession(): boolean {
   return !!(apiInstance.AuthProvider as unknown as { state?: { accessToken?: string } })?.state?.accessToken;
@@ -95,7 +95,7 @@ export function isError(result: unknown): result is { statusCode: number; messag
 }
 ```
 
-> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if the server issues tokens to the user (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; at runtime — `getApi().AuthProvider.setDeviceMetadata(browserString)`, an empty string resets the override). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
+> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if tokens are issued to the user by the server (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; at runtime — `getApi().AuthProvider.setDeviceMetadata(browserString)`, an empty string resets the override). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
 
 ## Step 3: Configure next.config.ts for images
 
@@ -114,7 +114,7 @@ images: {
 
 ## Step 4: Check and create .env.local
 
-Check if the `.env.local` file exists in the root of the project.
+Check if the file `.env.local` exists in the root of the project.
 
 **If the file DOES NOT exist:**
 
@@ -140,10 +140,10 @@ Read it and check for the presence of `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLI
 **1. Pin the server version, not `@latest`.** With `@latest`, the rules change underfoot between sessions: the behavior of last week cannot be reproduced, and without a network, the launch breaks completely.
 
 ```bash
-npm view @oneentry/mcp-server version    # find out the current version
+npm view @oneentry/mcp-server version    # find out the current one
 ```
 
-**2. Do not write the token in the file** — only substitution from the environment:
+**2. Do not write the token in the file** — only substitute from the environment:
 
 ```json
 {
@@ -169,9 +169,9 @@ When updating the server version, change the number consciously and check the ch
 Output the message:
 
 ```
-✅ lib/oneentry.ts created
+✅ src/lib/oneentry.ts created
 ✅ .env.local configured
-✅ .mcp.json — server version pinned, token through ${VAR:-}
+✅ .mcp.json — server version pinned, token via ${VAR:-}
 
 Find the token: in the OneEntry admin panel → Settings → App Token
 ```

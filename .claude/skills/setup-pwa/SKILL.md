@@ -2,9 +2,9 @@
 name: setup-pwa
 description: Add PWA support to a OneEntry storefront — manifest, hand-written service worker, offline fallback
 ---
-# Add PWA to a OneEntry storefront
+# Add PWA to the storefront on OneEntry
 
-Creates `app/manifest.ts`, `public/sw.js`, `public/offline.html`, and SW registration.
+Creates `src/app/manifest.ts`, `public/sw.js`, `public/offline.html`, and SW registration.
 
 > Rule: `.claude/rules/pwa.md`. Key prohibition: **requests to OneEntry are not cached by the service worker**.
 
@@ -12,16 +12,16 @@ Creates `app/manifest.ts`, `public/sw.js`, `public/offline.html`, and SW registr
 
 ## Step 1: Clarify with the user
 
-1. **Name and short name** of the application (`short_name` ≤ 12 characters — otherwise it will be truncated under the icon).
+1. **Name and short name** of the application (`short_name` ≤ 12 characters — otherwise it will be cut off under the icon).
 2. **Colors** `theme_color` / `background_color` — usually from the project's design system.
-3. **Icons 192×192 and 512×512** — are there any ready in `public/icons/`? If not, ask.
-4. **Cache images from CDN** (saves traffic but increases storage).
+3. **Icons 192×192 and 512×512** — are there any ready in `public/icons/`? If not, ask for them.
+4. **Cache CDN images** (saves traffic but increases storage).
 
-If the site's constants already exist (`SITE_NAME`, `SITE_DESCRIPTION` from SEO settings) — take them from there, do not create a second copy.
+If the site constants already exist (`SITE_NAME`, `SITE_DESCRIPTION` from SEO settings) — take them from there, do not create a second copy.
 
 ---
 
-## Step 2: `app/manifest.ts`
+## Step 2: `src/app/manifest.ts`
 
 ```typescript
 import type { MetadataRoute } from 'next'
@@ -84,7 +84,7 @@ self.addEventListener('fetch', (event) => {
   const isDev = url.hostname === 'localhost' || url.hostname === '127.0.0.1'
 
   // Next static — cache-first only in production: in dev the chunk content changes
-  // without changing the filename, and the cached chunk breaks the page
+  // without changing the filename, and a cached chunk breaks the page
   if (!isDev && url.pathname.startsWith('/_next/static/')) {
     event.respondWith(caches.open(STATIC_CACHE).then(async (cache) => {
       const cached = await cache.match(request)
@@ -124,7 +124,7 @@ Do not show an offline version of the catalog — the data is user-scoped, and s
 ## Step 5: SW Registration
 
 ```tsx
-// components/ServiceWorkerRegistrar.tsx — 'use client', connect in layout
+// src/components/ServiceWorkerRegistrar.tsx — 'use client', include in layout
 useEffect(() => {
   if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) return
   navigator.serviceWorker.register('/sw.js').catch(() => { /* not critical */ })
@@ -141,7 +141,7 @@ If security headers are configured in the project (`.claude/rules/security.md`),
 
 ## Step 7: Document the unimplemented
 
-In `docs/PWA.md` or in `MISMATCH-LOG.md` (section "Conscious deviations") list what is intentionally missing: push notifications, background sync, custom `beforeinstallprompt`. Otherwise, the next agent will come to "fix" an incomplete PWA.
+In `docs/PWA.md` or in `MISMATCH-LOG.md` (section "Conscious deviations") list what is intentionally missing: push notifications, background sync, custom `beforeinstallprompt`. Otherwise, the next agent will come to "fix" the incomplete PWA.
 
 ---
 

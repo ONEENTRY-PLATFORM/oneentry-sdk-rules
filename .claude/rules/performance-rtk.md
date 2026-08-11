@@ -1,9 +1,14 @@
-<!-- META
-type: rules
-fileName: performance-rtk.md
-rulePaths: ["**/RTKApi.ts", "**/RTKApi.tsx", "store/**/*.ts", "app/store/**/*.ts", "components/**/*.tsx"]
--->
-
+---
+paths:
+  - "**/RTKApi.ts"
+  - "**/RTKApi.tsx"
+  - "store/**/*.ts"
+  - "src/store/**/*.ts"
+  - "app/store/**/*.ts"
+  - "src/app/store/**/*.ts"
+  - "components/**/*.tsx"
+  - "src/components/**/*.tsx"
+---
 # Performance: RTK Query — OneEntry Rules
 
 Rules for OneEntry-based applications using Redux Toolkit Query as a client-side caching layer. Covers polling, deduplication, `skip` patterns, and tuning `keepUnusedDataFor` to prevent OneEntry endpoints from overwhelming the network on every mount.
@@ -59,11 +64,11 @@ const ComponentB = () => {
 };
 ```
 
-**Important:** deduplication only works with **deep equality** of arguments. `useGetX({ id: 1 })` and `useGetX({ id: 1, extra: undefined })` may yield different cache keys depending on the RTK version — pass minimal canonical objects as arguments.
+**Important:** deduplication only works with **deep equality** of arguments. `useGetX({ id: 1 })` and `useGetX({ id: 1, extra: undefined })` may yield different cache keys depending on the RTK version — pass minimal canonical argument objects.
 
 ## ⚠️ `skip` requests until they are needed
 
-`useGet*Query` makes a request **on mount** by default. Components that mount eagerly (popups, always-present in the DOM, subscriptions in the header) should gate the request via `skip` until the data is truly needed.
+`useGet*Query` makes a request **on mount** by default. Components that mount eagerly (popups, always present in the DOM, subscriptions in the header) should gate the request via `skip` until the data is actually needed.
 
 ```tsx
 // ❌ INCORRECT — `getMe` triggers on every page load, even for guests
@@ -83,7 +88,7 @@ const NavItemProfile = () => {
   // …
 };
 
-// ✅ CORRECT — skip for popup while it is closed
+// ✅ CORRECT — skip for the popup while it is closed
 const CartPopup = () => {
   const isOpen = open && component === 'CartPopup';
   const cartIds = useAppSelector(selectCartIds);
@@ -107,17 +112,17 @@ const CartPopup = () => {
 
 ## ⚠️ Do not use RTK Query for data needed only during SSR
 
-RTK Query lives in the Redux store on the client. Calling from a Server Component hydrates the store on the first render — each visitor refetches data on mount, even if SSR has already delivered the HTML.
+RTK Query lives in the Redux store on the client. Calling from a Server Component hydrates the store on the first render — each visitor refetches data on mount, even if SSR has already delivered HTML.
 
 ```tsx
 // ❌ INCORRECT — server component with RTK Query
-// app/page.tsx
+// src/app/page.tsx
 const Page = async () => {
   const { data } = useGetProductsQuery({ … });   // hook won't even run on the server
 };
 
 // ✅ CORRECT — server fetcher with React `cache()` + `unstable_cache`
-// app/api/server/products/getProducts.ts
+// src/app/api/server/products/getProducts.ts
 import { unstable_cache } from 'next/cache';
 import { cache } from 'react';
 
@@ -128,7 +133,7 @@ const impl = unstable_cache(
 );
 export const getProducts = cache(async (…) => impl(…));
 
-// app/page.tsx
+// src/app/page.tsx
 import { getProducts } from '@/app/api/server/products/getProducts';
 const Page = async () => {
   const data = await getProducts(…);
@@ -142,7 +147,7 @@ RTK Query is for client data that is loaded after user interaction (opening a po
 
 ## `keepUnusedDataFor` — configure for data volatility
 
-Defaults to 60 seconds. Long-lived data (menus, attribute sets, authorization providers) benefit from a longer TTL — when a subscriber is unmounted and remounted within the window, hitting the cache is free.
+Defaults to 60 seconds. Long-lived data (menus, attribute sets, authentication providers) benefit from a longer TTL — when a subscriber is unmounted and remounted within the window, hitting the cache is free.
 
 ```typescript
 // RTKApi.ts
@@ -154,7 +159,7 @@ export const RTKApi = createApi({
   endpoints: (build) => ({
     getAuthProviders: build.query<…, string>({
       queryFn: async () => { … },
-      keepUnusedDataFor: 3600,                         // 1 hr — authorization providers change rarely
+      keepUnusedDataFor: 3600,                         // 1 hr — authentication providers change rarely
     }),
     getMenuByMarker: build.query<…, { marker: string }>({
       queryFn: async ({ marker }) => { … },
@@ -251,13 +256,13 @@ toggleFavorite: build.mutation<void, { productId: number; favorite: boolean }>({
 
 - **`pollingInterval: 1000` for "live" data** — use Events API subscriptions instead of polling.
 - **`refetchOnMountOrArgChange: true` on every query** — devalues `keepUnusedDataFor`. Apply only when data staleness is more important than network costs.
-- **Duplicating RTK Query state in local component state** — re-renders on every fetch, breaks deduplication. Read directly from the hook.
+- **Duplicating RTK Query state in local component state** — rerenders on every fetch, breaks deduplication. Read directly from the hook.
 - **Calling `dispatch(endpoints.x.initiate(...))` in `useEffect`** — use the hook (`useGet*Query`). Manual `initiate` bypasses React's subscription tracking and leads to subscription leaks.
-- **Multiple instances of `createApi`** — each has its own cache. Combine into one `RTKApi`.
+- **Multiple instances of `createApi`** — each has its own cache. Combine into a single `RTKApi`.
 
-## Checklist before commit
+## Checklist Before Commit
 
-- [ ] All `pollingInterval` values ≥ 30,000 ms (justify shorter ones with a comment).
+- [ ] All `pollingInterval` values ≥ 30,000 ms (shorter ones justified with a comment).
 - [ ] Every eagerly mounting query has the option `{ skip: <gate> }`.
 - [ ] No RTK Query hooks in Server Components — server data goes through fetchers with `unstable_cache + cache()`.
 - [ ] Endpoints declare `keepUnusedDataFor`, configured for resource volatility (defaults for OneEntry rarely fit).
