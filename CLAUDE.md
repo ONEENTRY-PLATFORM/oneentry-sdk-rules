@@ -62,7 +62,7 @@ The file already exists — **do not ask**.
 
 ## Context Map — what to load and when
 
-This file is a navigator. It is intentionally thin: details are in the rules and skills and are loaded **on demand**, rather than hanging in context for the entire session.
+This file is a navigator. It is intentionally thin: details are in the rules and skills and are loaded **on demand**, not hanging in the context for the entire session.
 
 **How to load:** rule — `.claude/rules/<name>.md` in the project or MCP tool `get-rule <name>`; skill — command `/<name>` or `get-skill <name>`.
 
@@ -72,21 +72,21 @@ A keyword from the prompt found → **first the skill, then the code**. Multiple
 
 | Skill | Triggers in the prompt | What it creates |
 | --- | --- | --- |
-| `/setup-nextjs` | create next.js project | Next.js project from scratch |
-| `/setup-oneentry` | connect SDK, configure oneentry | `src/lib/oneentry.ts`, `next.config.ts`, environment variables |
+| `/setup-nextjs` | create a next.js project | Next.js project from scratch |
+| `/setup-oneentry` | connect SDK, set up oneentry | `src/lib/oneentry.ts`, `next.config.ts`, environment variables |
 | `/inspect-api` | markers, response structure, what pages/forms/products are available | report with real markers and attribute types |
 | `/create-auth` | login, registration, authorization, personal account, auth | login, registration, logout, AuthContext |
 | `/create-google-oauth` | google login, oauth, login via google/facebook | redirect, callback, code exchange |
-| `/create-profile` | profile, user personal data | profile page |
+| `/create-profile` | profile, user's personal data | profile page |
 | `/create-orders-list` | orders, order history | list of orders with cancellation and pagination |
 | `/create-checkout` | checkout, order processing | delivery form, timeInterval, payment |
 | `/create-product-list` | product list, catalog | catalog with filtering and pagination |
-| `/create-product-card` | product card (in list) | product card |
+| `/create-product-card` | product card (in the list) | product card |
 | `/create-product-page` | product page (detailed) | product page |
 | `/create-page` | page from CMS | page on Pages API |
 | `/create-menu` | menu, navigation | navigation menu |
 | `/create-form` | feedback form, form from CMS | dynamic form from Forms API |
-| `/create-captcha` | captcha, recaptcha | reCAPTCHA v3 in form |
+| `/create-captcha` | captcha, recaptcha | reCAPTCHA v3 in the form |
 | `/create-cart-manager` | cart | cart on server-side cart API |
 | `/create-favorites` | favorites, wishlist | favorites on server-side wishlist API |
 | `/create-filter-panel` | filters, filter panel | filter panel by attributes |
@@ -94,25 +94,25 @@ A keyword from the prompt found → **first the skill, then the code**. Multiple
 | `/create-search` | search, search bar | search for products / pages |
 | `/create-reviews` | reviews, reviews | reviews with hierarchy |
 | `/create-subscription-events` | product subscription, price/availability notifications | subscription to product events |
-| `/create-subscription` | paid subscriptions, tariffs | subscriptions + Stripe |
+| `/create-subscription` | paid subscriptions, rates | subscriptions + Stripe |
 | `/create-locale-switcher` | language switcher, locale switcher | language switcher |
 | `/create-server-action` | server action, server action | Server Action for public SDK methods |
 | `/setup-playwright` | e2e tests, playwright | Playwright + MCP server |
 | `/setup-vitest` | unit tests, vitest, cover adapters with tests | Vitest + OneEntry response fixtures |
 | `/create-seo` | seo, metadata, sitemap, robots, microdata, JSON-LD | `generateMetadata`, `sitemap.ts`, `robots.ts`, `JsonLd` |
 | `/setup-pwa` | pwa, manifest, service worker, offline | `manifest.ts`, `sw.js`, offline fallback |
-| `/admin-fill-content` | fill admin with script, upload content programmatically | content entry via internal admin API |
-| `/admin-upload-images` | upload images to CMS with script, preview/LQIP not created | image upload with preview |
-| `/admin-grant-permissions` | 403 Permission data not found, group rights | granting route to user group |
+| `/admin-fill-content` | fill admin with a script, upload content programmatically | content entry via internal admin API |
+| `/admin-upload-images` | upload images to CMS via script, preview/LQIP is not created | image upload with preview |
+| `/admin-grant-permissions` | 403 Permission data not found, group rights | granting route to a user group |
 
 ### Rules — reference, on demand
 
 | Rule | When needed |
 | --- | --- |
-| `sdk-modules.md` | need SDK method signature or list of module methods |
+| `sdk-modules.md` | need method signature of SDK or list of module methods |
 | `glossary.md` | unclear term: marker, pageUrl, attributeSets, fingerprint, guestId, bonus, … |
 | `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, complete summary of call contexts |
-| `error-handling.md` | centralized `ApiError`/`handleApiError`, “Resource is closed” |
+| `error-handling.md` | centralized `ApiError`/`handleApiError`, "Resource is closed" |
 | `troubleshooting.md` | specific error 400/401/403/404/500 or build/environment issue |
 | `common-mistakes.md` | before reviewing your code — what AI usually invents |
 | `common-patterns.md` | pagination, filtering, SSR/SSG strategies, `user.state`, RTK Query, parallel requests |
@@ -123,7 +123,7 @@ A keyword from the prompt found → **first the skill, then the code**. Multiple
 
 ### Rules — auto-connected by project files
 
-| Rule | File "fingerprints" |
+| Rule | "Fingerprint" files |
 | --- | --- |
 | `linting.md`, `typescript.md` | `**/*.ts`, `**/*.tsx` |
 | `nextjs-pages.md`, `localization.md` | `src/app/**/page.tsx`, `src/app/**/layout.tsx` |
@@ -143,6 +143,7 @@ A keyword from the prompt found → **first the skill, then the code**. Multiple
 | `security.md` | `next.config.ts`, `src/middleware.ts`, components with `dangerouslySetInnerHTML` |
 | `seo-metadata.md` | `src/app/sitemap.ts`, `src/app/robots.ts`, `generateMetadata` in pages |
 | `llms-txt.md` | `src/app/llms.txt/route.ts`, `src/app/robots.ts` |
+| `seo-facets.md` | catalog/category pages, filter and pagination components |
 | `isr-config.md` | `src/lib/isr.ts`, pages with `revalidate` |
 | `observability.md` | `src/lib/**`, `src/app/api/**` |
 | `pwa.md` | `src/app/manifest.ts`, `public/sw.js` |
