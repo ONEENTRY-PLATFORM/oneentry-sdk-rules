@@ -15,9 +15,9 @@ paths:
 
 Skill recipe: **`/create-seo`** — creates `sitemap.ts`, `robots.ts`, `JsonLd` component, and `generateMetadata` using real project data.
 
-Main principle: **everything is taken from OneEntry, nothing is hardcoded**. Titles come from `localizeInfos`, images from `attributeValues`, the list of URLs from `Products`/`Pages`, languages from `Locales.getLocales()`. Hardcoding here means that when content changes, metadata silently diverges from the page content.
+Main principle: **everything is taken from OneEntry, nothing is hardcoded**. Titles are from `localizeInfos`, images are from `attributeValues`, the list of URLs is from `Products`/`Pages`, languages are from `Locales.getLocales()`. Hardcoding here means that when the content changes, the metadata silently diverges from the page content.
 
-The mechanics of `generateMetadata` (why it can't be streamed and why React `cache()`) — `.claude/rules/performance-streaming.md`. Here’s what to put inside.
+The mechanics of `generateMetadata` (why it cannot be streamed and why React `cache()`) — `.claude/rules/performance-streaming.md`. Here — what exactly to put inside.
 
 ---
 
@@ -92,7 +92,12 @@ export default function robots(): MetadataRoute.Robots {
     rules: [
       { userAgent: '*', allow: '/', disallow: PRIVATE_PATHS },
       // AI assistants: product pages are intentionally open to them — this is a traffic channel
-      { userAgent: ['GPTBot', 'ChatGPT-User', 'ClaudeBot', 'anthropic-ai', 'PerplexityBot'],
+      { userAgent: [
+          'GPTBot', 'ChatGPT-User', 'OAI-SearchBot',   // OpenAI: training, browsing, search
+          'ClaudeBot', 'anthropic-ai',                 // Anthropic
+          'PerplexityBot', 'YouBot',                   // AI search engines
+          'Amazonbot', 'meta-externalagent', 'Applebot-Extended', 'cohere-ai',
+        ],
         allow: ['/', '/product/'], disallow: PRIVATE_PATHS },
     ],
     sitemap: `${SITE_URL}/sitemap.xml`,
@@ -102,13 +107,15 @@ export default function robots(): MetadataRoute.Robots {
 
 Cart, favorites, profile, checkout — always in `disallow`: these are user/guest-scoped pages, there is nothing to index there.
 
+Three groups of user-agents differ in meaning, and this should be communicated to the user: **search** (`OAI-SearchBot`, `PerplexityBot`) brings traffic, **link browsing** (`ChatGPT-User`) is a request from a live user, **training** (`GPTBot`, `Applebot-Extended`, `Bytespider`) indexes content into the model. A store usually needs all three, a media project — often only the first two.
+
 ---
 
 ## 4. JSON-LD — and mandatory escaping
 
 Schemas that pay off on the OneEntry showcase:
 
-| Schema | Where | Data Source |
+| Schema | Where | Data source |
 | --- | --- | --- |
 | `Product` + `Offer` | product page | `localizeInfos`, `attributeValues.price/sale`, `statusIdentifier` |
 | `AggregateRating` | product page | **top-level `entity.rating.value`**, not `attrs.rating` |
@@ -117,11 +124,11 @@ Schemas that pay off on the OneEntry showcase:
 | `WebSite` + `SearchAction` | layout | project search URL |
 | `LocalBusiness` | contacts, stores | CMS contacts page |
 
-About `rating`: aggregate rating is **an entity field**, not an attribute; why this is so — `.claude/rules/attribute-values.md`, section "Final Rating".
+About `rating`: aggregate rating is a **field of the entity**, not an attribute; why this is so — `.claude/rules/attribute-values.md`, section "Final Rating".
 
 ### ⚠️ JSON-LD in `<script>` must be escaped
 
-The HTML parser looks for the literal `</script` **before** the JSON is parsed. A product name with `</script><img onerror=…>` will close the block prematurely and inject markup — that is, JSON-LD becomes a second channel for injecting CMS content, besides `dangerouslySetInnerHTML` (see `.claude/rules/security.md`).
+The HTML parser looks for the literal `</script` **before** the JSON is parsed. A product name with `</script><img onerror=…>` will close the block prematurely and inject markup — that is, JSON-LD becomes a second channel for CMS content injection, besides `dangerouslySetInnerHTML` (see `.claude/rules/security.md`).
 
 ```tsx
 function serializeJsonLd(data: unknown): string {
@@ -157,103 +164,26 @@ A hardcoded list of languages diverges from the admin panel when a locale is add
 
 ---
 
-## 6. `llms.txt` — project map for LLM assistants
+## 6. `llms.txt` — project map for AI assistants
 
-`/llms.txt` (specification — [llmstxt.org](https://llmstxt.org)) gives the assistant the structure of the project instead of parsing the HTML showcase.
+`/llms.txt` ([llmstxt.org](https://llmstxt.org)) provides the assistant with the structure of the showcase and its key facts in markdown instead of parsing HTML. It is done **together with other SEO routes, by default** — this is one ISR route on live data.
 
-> ⚠️ **Sober about the status.** This is a proposed standard, not an accepted one: there is no confirmed support from major AI crawlers (OpenAI, Anthropic, Google), and Google representatives have expressed skepticism about it. In reality, it is read by assistants that have been given a link to the site, and some documentation tools.
->
-> **Visibility in AI search (AI Overviews, ChatGPT Search, Perplexity) is ensured not by it, but by three things from the sections above:** access for AI crawlers in `robots.ts`, JSON-LD markup, and content in server-rendered HTML, not just after hydration. `llms.txt` is a cheap addition to them (half an hour of work, one ISR route), not a replacement. If time is short — prioritize the first three.
+Format according to the specification, generation from OneEntry, route caching, synchronization of facts (delivery, return, currency) with JSON-LD and traps — **`.claude/rules/llms-txt.md`**.
 
-### The format is markdown, not arbitrary text
-
-The specification strictly defines the structure, and deviation from it deprives the file of meaning: parsers look for exactly these elements.
-
-```markdown
-# Store Name
-
-> One sentence about what this project is. A blockquote immediately after H1 is mandatory.
-
-Arbitrary paragraphs with context: what you sell, delivery regions, languages.
-
-## Catalog
-
-- [Women's Clothing](https://shop.example/catalog/women): dresses, tops, shoes
-- [Men's Clothing](https://shop.example/catalog/men): shirts, pants
-
-## Information
-
-- [Delivery and Payment](https://shop.example/delivery): terms, regions, methods
-- [Sitemap](https://shop.example/sitemap.xml): full list of products
-
-## Optional
-
-- [Blog](https://shop.example/blog): articles about materials and care
-```
-
-The `## Optional` section is what the assistant may skip if there is not enough context. Everything else is considered important, so do not dump the entire catalog there.
-
-### Generation from live data
-
-```typescript
-// src/app/llms.txt/route.ts
-import { getApiSafe, isError } from '@/lib/oneentry'
-
-export const revalidate = 3600   // literal: segment config cannot be computed (.claude/rules/isr-config.md)
-
-export async function GET() {
-  const lines = [`# ${SITE_NAME}`, '', `> ${SITE_DESCRIPTION}`, '']
-
-  const api = getApiSafe()
-  if (api) {
-    // Catalog sections — the same root pages as in navigation
-    const pages = await api.Pages.getRootPages(DEFAULT_LOCALE)
-    if (!isError(pages)) {
-      lines.push('## Catalog', '')
-      for (const p of pages) {
-        const title = p.localizeInfos?.title ?? p.pageUrl
-        const desc = p.localizeInfos?.plainContent?.slice(0, 100) ?? ''
-        lines.push(`- [${title}](${SITE_URL}/${p.pageUrl})${desc ? `: ${desc}` : ''}`)
-      }
-      lines.push('')
-    }
-  }
-
-  lines.push('## Information', '', `- [Sitemap](${SITE_URL}/sitemap.xml): full list of products`, '')
-
-  return new Response(lines.join('\n'), {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-  })
-}
-```
-
-### Four content rules
-
-1. **Do not list the entire catalog.** Two thousand products in `llms.txt` is not a map, but a dump; for a complete list, there is `sitemap.xml`, refer to it. In the file — sections and up to several dozen key pages.
-2. **Nothing user-scoped.** Cart, favorites, profile, checkout — do not get included, as in `robots.ts`: there is nothing to index and nothing to show the assistant.
-3. **Degrade instead of 500.** If OneEntry is unavailable — return a static minimum (title, description, link to sitemap), not an error: a broken `llms.txt` is worse than a short one. Hence `getApiSafe()` instead of `getApi()` (see `.claude/rules/sdk-init.md`).
-4. **Nothing that is not on the site.** The file is read by an assistant that then responds to the customer; a made-up section turns into a made-up answer.
-
-### Route traps
-
-- Segment name — with a dot: `src/app/llms.txt/route.ts`. This is a valid Next route, returning exactly `/llms.txt`.
-- `Content-Type` — `text/plain; charset=utf-8`. `text/markdown` causes some crawlers to download it as a file instead of reading it.
-- **Do not set `force-dynamic`.** The content changes with the CMS, not with every request; ISR is sufficient here, and dynamics increases latency unnecessarily.
-- Multilingual project: `llms.txt` is one, in the default language, and language versions should be listed as links. Separate `/en/llms.txt` is not provided by the specification.
-- `llms-full.txt` (full text content) should only be created if the content is genuinely textual — for showcases, this is usually unnecessary.
+It is important to understand the order of contribution: visibility in AI search is provided by sections 3 (access for AI crawlers), 4 (JSON-LD), and server-side rendering of content, while `llms.txt` is a cheap addition to them, not a replacement.
 
 ---
 
 ## Checklist
 
 1. `generateMetadata` takes data from `localizeInfos`/`attributeValues`, the fetch is wrapped in React `cache()`.
-2. OG image — through a common `getImageUrl`, not `value[0]`.
+2. OG image — through the common `getImageUrl`, not `value[0]`.
 3. `sitemap.ts` is built with an explicit high `limit` and from an aggregated list without duplicate URLs.
-4. `robots.ts` blocks cart/favorites/account/checkout/api.
+4. `robots.ts` disallows cart/favorites/account/checkout/api.
 5. JSON-LD is serialized with escaping of `<`, `>`, `&`, U+2028/29.
 6. `AggregateRating` is taken from top-level `rating`, not from attributes.
 7. canonical + hreflang are built from `Locales.getLocales()`.
 8. No SEO route required `force-dynamic`.
-9. If you create `llms.txt` — first ensure robots for AI crawlers, JSON-LD, and server-rendered content are done: they affect visibility in AI search, while `llms.txt` is an addition.
+9. `llms.txt` created (by default, not on request) — and after robots for AI crawlers, JSON-LD, and server-side rendering of content, not instead of them.
 
-> Related rules: `.claude/rules/performance-streaming.md` (`generateMetadata` and `cache()`), `.claude/rules/localization.md` (locales and `langCode`), `.claude/rules/security.md` (escaping CMS content), `.claude/rules/isr-config.md` (TTL of loaders that read metadata).
+> Related rules: `.claude/rules/llms-txt.md` (full `llms.txt`), `.claude/rules/performance-streaming.md` (`generateMetadata` and `cache()`), `.claude/rules/localization.md` (locales and `langCode`), `.claude/rules/security.md` (escaping CMS content), `.claude/rules/isr-config.md` (TTL of loaders that read metadata).
