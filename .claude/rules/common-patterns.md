@@ -66,19 +66,19 @@ export const dynamic = 'force-dynamic'
 
 ## user.state — Storage for Arbitrary User Data
 
-`user.state` — an object of arbitrary form in `IUserEntity` for client data: cart, favorites, settings, viewing history.
+`user.state` — an object of arbitrary shape in `IUserEntity` for client data: cart, favorites, settings, viewing history.
 
 **Critical Rules:**
 
 1. **Always spread** `{ ...user.state, newField }` — do not overwrite other fields.
 2. **`formIdentifier`** is taken from `user.formIdentifier` — do not hardcode.
-3. **Call from the client** via `getApi()` after `reDefine()` — the token is managed by `saveFunction`.
+3. **Call from client** via `getApi()` after `reDefine()` — the token is managed by `saveFunction`.
 4. **Before each write — fresh `getUser()`.** The cached object between read and write may be outdated (another code may have changed `cart`/`favorites`).
 
 ```typescript
 // src/lib/userState.ts
 import { getApi, isError } from '@/lib/oneentry';
-import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
+import type { IUserEntity } from 'oneentry';
 
 export async function getUserState() {
   const user = (await getApi().Users.getUser()) as IUserEntity;
@@ -110,9 +110,9 @@ user.state = {
 }
 ```
 
-**Synchronization after login:** `getUserState()` from the client after `reDefine()`. For local storage without server synchronization — `/create-cart-manager` and `/create-favorites`.
+**Synchronization after login:** `getUserState()` from client after `reDefine()`. For local storage without server synchronization — `/create-cart-manager` and `/create-favorites`.
 
-### Versioning for One-Time Redux Initialization from Server State
+### Versioning for Single Initialization of Redux from Server State
 
 Without the `version` flag, the effect will overwrite Redux on each re-render, destroying local user changes. The pattern (shown for one field — similarly for others):
 
@@ -133,7 +133,7 @@ useEffect(() => {
   if (!isAuth) return
   if (cartVersion === 0 && favoritesVersion === 0) return
   updateUserState({ cart: productsInCart, favorites: favoritesIds })
-  // DO NOT pass user as a parameter — updateUserState itself gets fresh data
+  // DO NOT pass user as a parameter — updateUserState fetches fresh data itself
 }, [isAuth, productsInCart, favoritesIds])
 ```
 
@@ -146,7 +146,7 @@ Use when the same data is needed by multiple Client Components (automatic dedupl
 | Server Component, one-time request | Direct `getApi()` |
 | One Client Component, one-time request | Direct `getApi()` |
 | Multiple Client Components read the same data | RTK Query (deduplication) |
-| Polling (updating user state in real time) | RTK Query with `pollingInterval` |
+| Polling (updating user state in real-time) | RTK Query with `pollingInterval` |
 
 ```typescript
 // src/app/api/RTKApi.ts — skeleton

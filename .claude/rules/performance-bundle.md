@@ -11,7 +11,7 @@ paths:
 ---
 # Performance: Bundle and Chunks — OneEntry Rules
 
-Rules about bundle size, code-splitting, and chunk auditing for Next.js + OneEntry. Complements `.claude/rules/performance.md` (which discusses `dynamic()` for lightboxes/toasts) — this is specifically about the `next.config` config, `optimizePackageImports`, and analysis tools.
+Rules about bundle size, code-splitting, and chunk auditing for Next.js + OneEntry. Complements `.claude/rules/performance.md` (there about `dynamic()` for lightboxes/toasts) — here specifically about the `next.config` config, `optimizePackageImports`, and analysis tools.
 
 ## Install and regularly run `@next/bundle-analyzer`
 
@@ -41,9 +41,9 @@ export default withBundleAnalyzer(nextConfig);
 }
 ```
 
-> ⚠️ **Turbopack (Next 16):** `@next/bundle-analyzer` — a webpack plugin, under the Turbopack build the report **is not generated** ("not compatible with Turbopack builds, no report will be generated"). Options: `next experimental-analyze` (interactive treemap) or classic report via `next build --webpack`. The `next build` table under Turbopack also **does not print First Load JS** — measure sizes manually: gzip chunks `.next/static/chunks/*.js` + `build-manifest.json` (`rootMainFiles` = shared first-load; `app-build-manifest.json` — webpack artifact, not available under Turbopack).
+> ⚠️ **Turbopack (Next 16):** `@next/bundle-analyzer` — a webpack plugin, under Turbopack build the report **is not generated** (“not compatible with Turbopack builds, no report will be generated”). Options: `next experimental-analyze` (interactive treemap) or classic report via `next build --webpack`. The `next build` table under Turbopack also **does not print First Load JS** — measure sizes manually: gzip chunks `.next/static/chunks/*.js` + `build-manifest.json` (`rootMainFiles` = shared first-load; `app-build-manifest.json` — webpack artifact, not available under Turbopack).
 
-The goal — first-load JS on the route `/` should be **under 200 KB gzipped**. Each `src/app/[locale]/page.tsx`, `src/app/[locale]/shop/page.tsx`, etc. — a separate number in the `next build` report. If anything is higher — open the HTML report of the analyzer and look for the heaviest modules.
+The goal — first-load JS on the route `/` should be **under 200 KB gzipped**. Each `src/app/[locale]/page.tsx`, `src/app/[locale]/shop/page.tsx`, etc. — a separate number in the `next build` report. If something is higher — open the HTML report of the analyzer and look for the heaviest modules.
 
 ## `optimizePackageImports` — for packages with barrel imports
 
@@ -65,7 +65,7 @@ const nextConfig: NextConfig = {
 };
 ```
 
-The `oneentry` SDK uses subpath exports — no need to add it to the list.
+The `oneentry` SDK does not need to be added to the list: starting from v1.0.159 it is supplied in ESM with `sideEffects: false`, and heavy dependencies (Zod, `socket.io-client`) are loaded on demand — the bundler tree-shakes it itself (see the SDK section in the client bundle below).
 
 How to check if a package is a candidate: open `node_modules/<pkg>/dist/index.{js,mjs}` and look for `export * from './…'` lines. If there are many — the package is barrel-style, add it.
 
@@ -78,7 +78,7 @@ The file `src/components/index.ts`, which re-exports everything, breaks tree-sha
 export * from './ProductCard';
 export * from './CartPopup';
 export * from './FavoritesPopup';
-// + 30 more exports
+// + another 30 exports
 
 // consumer
 import { ProductCard } from '@/components';
@@ -89,11 +89,11 @@ import ProductCard from '@/components/ProductCard';
 import CartPopup from '@/components/popups/CartPopup';
 ```
 
-The same applies to `src/app/api/index.ts`, `src/lib/index.ts`, `utils/index.ts`. Never create such files — they look neat, but turn every page into a monolithic chunk.
+The same applies to `src/app/api/index.ts`, `src/lib/index.ts`, `utils/index.ts`. Never create such files — they look neat but turn every page into a monolithic chunk.
 
-## Threshold for `dynamic()` — 30 KB gzipped or the library is rendered on event
+## Threshold for `dynamic()` — 30 KB gzipped or the library renders on event
 
-Not every component is worth moving to `dynamic()`. The overhead (a separate HTTP request for the chunk, separate code for hydration) pays off only on heavy modules.
+Not every component is worth moving to `dynamic()`. The overhead (a separate HTTP request for the chunk, separate code for hydration) pays off only for heavy modules.
 
 | Candidate | Solution |
 | --- | --- |
@@ -101,7 +101,7 @@ Not every component is worth moving to `dynamic()`. The overhead (a separate HTT
 | Form validator `zod` 12 KB | Static import (used on every form) |
 | Lightbox `yet-another-react-lightbox` 45 KB + CSS | `dynamic({ ssr: false })` |
 | Charts `recharts` 90 KB | `dynamic({ ssr: false })` |
-| Rich-text editor `tiptap` 120 KB | `dynamic({ ssr: false })` + sticky-mounting |
+| Rich-text editor `tiptap` 120 KB | `dynamic({ ssr: false })` + sticky mounting |
 
 Specific patterns (sticky-mount, static CSS import inside a lazy module, bypassing Turbopack issues with dynamic `import()` CSS) — see `.claude/rules/performance.md`.
 
@@ -121,7 +121,7 @@ const nextConfig: NextConfig = {
 };
 ```
 
-If you need error monitoring with stack trace decoding (Sentry, Datadog) — set up the upload of source maps to their sourcemap-storage as a separate CI step, not in the public `_next/static`.
+If error monitoring with stack trace decoding is needed (Sentry, Datadog) — configure the upload of source maps to their sourcemap-storage as a separate CI step, not in the public `_next/static`.
 
 ## `serverExternalPackages` — for native and CommonJS dependencies
 
@@ -136,15 +136,30 @@ const nextConfig: NextConfig = {
 
 The warning `Critical dependency: the request of a dependency is an expression` during `next build` usually indicates a candidate for `serverExternalPackages`.
 
-## ⚠️ OneEntry SDK in the client bundle — the heaviest single module
+## ⚠️ OneEntry SDK in the client bundle
 
-Importing `defineOneEntry` from any `'use client'` file pulls the entire SDK into the client bundle: measurement on SDK 1.0.156 — **~126 KB gzip (~580 KB raw)**, the largest single chunk of the application. Public data (Pages, Products, Menus, Forms) should be read on the server (server components, server actions, route handlers) — the SDK is not needed on the client for them.
+Importing `defineOneEntry` from a `'use client'` file pulls the SDK into the client bundle. How much exactly — depends on the SDK version:
+
+| SDK | What is actually loaded |
+| --- | --- |
+| ≤ 1.0.158 | **~110 KB gzip (536 KB min)** — Zod and validation schemas were always loaded statically, `socket.io-client` too |
+| ≥ 1.0.159 | **~9.7 KB gzip (43 KB min)** for a project without validation and without socket: schemas and Zod are loaded on demand (the first response that is actually validated), `socket.io-client` — on the first `WS.connect()` |
+
+Conditions under which the bottom line works:
+
+- **The bundler performs code-splitting** — the default in webpack, Vite, Rollup, and Next.js. A build forcibly glued into one file compresses only to ~427 KB min: Zod is inlined, although not executed.
+- **`validation.enabled` is turned off** (default `false`). With validation enabled, Zod and schemas arrive in the bundle — this is the price of diagnostics, keep it for the dev environment, not for production (`.claude/rules/troubleshooting.md`).
+- **The `WS` module is not used.** `WS.connect()` remains synchronous and returns `Socket`, but the `socket.io-client` (~41 KB) is loaded on the first call; everything done with the object (`on`, `emit`, `disconnect`) is played on the real socket at the moment of its creation — events are not lost. The only difference is: methods that must **return** something (`listeners()`) and nested objects (`socket.io`) are available only after the chunk is loaded.
+
+Starting from v1.0.159, the package is also supplied in ESM (`module: esm/index.js`, `sideEffects: false`), so unused SDK modules are tree-shaken. Node continues to resolve CommonJS through `main` — there are no `exports` maps, old deep imports are resolved as before.
+
+The rule does not change: public data (Pages, Products, Menus, Forms) should be read on the server (server components, server actions, route handlers) — the SDK is not needed for them on the client at all.
 
 ```typescript
 // ❌ INCORRECT — SDK in the client chunk for public data
 // src/components/AddToCartButton.tsx
 'use client';
-import { defineOneEntry } from 'oneentry';   // +126 KB gzip in every chunk where there is a button
+import { defineOneEntry } from 'oneentry';   // extra weight in every chunk where there is a button
 
 // ✅ CORRECT — SDK on the server, client calls server action
 // src/components/AddToCartButton.tsx
@@ -156,9 +171,9 @@ import { addToCartAction } from '@/app/actions/cart';
 import { getApi } from '@/lib/oneentry';
 ```
 
-**The most insidious leak channel — global client store.** If the Redux/RTK Query store (`'use client'`, provider in the root layout) imports a module with `defineOneEntry` (for example, in `queryFn`), the SDK ends up in **the first-load of every page**, even those where user data is not needed. One client `import` in the store → API module chain — and the 200 KB budget is breached. Check the import chain from the root provider.
+**The most insidious leak channel is the global client store.** If the Redux/RTK Query store (`'use client'`, provider in the root layout) imports a module with `defineOneEntry` (for example, in `queryFn`), the SDK ends up in the **first-load of every page**, even those where user data is not needed. One client `import` in the store → API module chain — and the 200 KB budget is broken. Check the import chain from the root provider.
 
-A conscious exception — **user-auth methods** (`Users`, `Orders`, `Payments` after `reDefine()`): they are called from Client Component (fingerprint, localStorage session), and the SDK is indeed needed on the client for them. In that case: isolate the SDK import in lazy-loaded chunks of account routes (`dynamic()`), not in the common store of the root layout.
+A conscious exception is **user-auth methods** (`Users`, `Orders`, `Payments` after `reDefine()`): they are called from Client Component (fingerprint, localStorage session), and the SDK is indeed needed on the client for them. Then: isolate the SDK import in lazy-loaded chunks of account routes (`dynamic()`), not in the common store of the root layout.
 
 Quick check before commit:
 

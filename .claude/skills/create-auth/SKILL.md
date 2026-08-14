@@ -26,20 +26,20 @@ What to look for in the response:
    - If yes — AuthContext reads `user.state` and loads cart/favorites into Redux
    - For cross-device sync: polling `user.state` every N seconds (see below)
 1. **Where to show the form?** (modal window, separate page, drawer?)
-1. **Is there a layout?** — if yes, copy it exactly, change only the data
+1. **Is there a layout?** — if yes, copy it exactly, only change the data
 
 ---
 
 ## Step 3: Create Server Actions
 
 > **Important:** by default `auth()`, `signUp()`, `generateCode()`, `activateUser()` — call **directly from Client Component** (not through Server Action).
-> The SDK passes the user's device fingerprint — if naively called on the server, `deviceInfo.browser` in the fingerprint will be server-based, not the user's actual browser, and the issued refreshToken will not be updated from the browser.
+> The SDK passes the user's device fingerprint — if naively called on the server, `deviceInfo.browser` in the fingerprint will be server-side, not the user's actual browser, and the issued refreshToken will not be updated from the browser.
 > Through Server Action without additional configuration — only methods without fingerprint: `getAuthProviders`, `logout`, `logoutAll`.
 >
 > **Server token issuance (SDK ≥ 1.0.155).** Token-issuing methods CAN be called on the server if the browser fingerprint is passed:
-> 1. on the client, get the string: `const dm = getApi().AuthProvider.getDeviceMetadata();`
+> 1. on the client get the string: `const dm = getApi().AuthProvider.getDeviceMetadata();`
 > 2. pass `dm` as an argument to Server Action;
-> 3. on the server, create a **per-request** instance: `const api = defineOneEntry(PROJECT_URL, { token, deviceMetadata: dm })` and call `api.AuthProvider.auth/signUp/oauth` — the issued refreshToken will remain tied to the browser and will be updated from it.
+> 3. on the server create a **per-request** instance: `const api = defineOneEntry(PROJECT_URL, { token, deviceMetadata: dm })` and call `api.AuthProvider.auth/signUp/oauth` — the issued refreshToken will remain tied to the browser and will be updated from it.
 >
 > ⚠️ DO NOT call `setDeviceMetadata(dm)` on the shared singleton from `getApi()` on the server — overriding shared state will leak between parallel requests from different users. `setDeviceMetadata` is appropriate only on the client or on your own, non-shared instance (an empty string resets the override).
 
@@ -49,7 +49,7 @@ What to look for in the response:
 'use server';
 
 import { getApi, isError } from '@/lib/oneentry';
-import type { IAuthProvidersEntity } from 'oneentry/dist/auth-provider/authProvidersInterfaces';
+import type { IAuthProvidersEntity } from 'oneentry';
 
 export async function getAuthProviders() {
   const providers = await getApi().AuthProvider.getAuthProviders();
@@ -76,7 +76,7 @@ export async function logout(authProviderMarker: string, token: string) {
 
 ```tsx
 import { getApi, isError } from '@/lib/oneentry';
-import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
+import type { IUserEntity } from 'oneentry';
 
 export async function getUserState(): Promise<
   { cart: Record<number, number>; favorites: number[] } | { error: string }
@@ -104,12 +104,12 @@ export async function oauthExchange(providerMarker: string, code: string, dm: st
   const api = defineOneEntry(process.env.PROJECT_URL!, { deviceMetadata: dm });
   const result = await api.AuthProvider.oauth(providerMarker, {
     client_id: process.env.OAUTH_CLIENT_ID!,
-    client_secret: process.env.OAUTH_CLIENT_SECRET!, // ONLY server env
+    client_secret: process.env.OAUTH_CLIENT_SECRET!, // SERVER env ONLY
     code,
     grant_type: 'authorization_code',
     redirect_uri: process.env.OAUTH_REDIRECT_URI!,
   });
-  // on success return accessToken/refreshToken to the client — save as after a normal login
+  // on success return accessToken/refreshToken to the client — save as after a regular login
   return result; // IAuthEntity | IError
 }
 ```
@@ -122,22 +122,22 @@ export async function oauthExchange(providerMarker: string, code: string, dm: st
 
 ### Key principles of the component
 
-- The form is loaded via Server Action `getFormByMarker(formIdentifier, locale)`
+- The form is loaded through Server Action `getFormByMarker(formIdentifier, locale)`
 - Fields are rendered **dynamically** from `form.attributes` — do not hardcode fields!
-- **🚨 Fields are routed by flags, DO NOT dump everything into `authData`:**
+- **🚨 Fields are routed by flags, DO NOT lump everything into `authData`:**
   - `authData` — **only login-credentials**: fields with `isLogin: true` + fields with `isPassword: true`
   - `formData` — profile fields (name, address, phone, etc.) in the form `{ marker, type, value }` — everything that is not a login-credential and not pure-notification
   - `notificationData.email` — value of the field with `isNotificationEmail: true` (fallback: value of the login field)
   - `notificationData.phonePush` — array with the value of the field with `isNotificationPhonePush: true` (skip if empty)
   - `notificationData.phoneSMS` — value of the field with `isNotificationPhoneSMS: true`; **DO NOT pass** if empty (empty string → 400)
   - ⚠️ `isSignUp: true` and `isSignUpRequired: true` — UI registration flags (visibility and necessity), NOT routing — such fields still go into `formData` if they are not `isLogin: true` and not `isPassword: true`
-  - ⚠️ The password is determined ONLY by the flag `isPassword: true` and is always routed to `authData`. Do not use `additionalFields.type.value === 'password'` — this is an outdated detect
-  - ⚠️ `isSignUpRequired` — a standalone indicator of "mandatory at registration", it is not related to `validators.requiredValidator.strict` (the validator checks format/length, not "mandatory for signup")
+  - ⚠️ The password is determined ONLY by the flag `isPassword: true` and is always routed in `authData`. Do not use `additionalFields.type.value === 'password'` — this is an outdated detection
+  - ⚠️ `isSignUpRequired` — an independent sign of "required at registration", it is not related to `validators.requiredValidator.strict` (the validator checks format/length, not "required for signup")
 - **🚨 `isCheckCode: true` → MUST add mode `'verify'` with a field for the code and a call to `activateUser()`**
-- **🔄 In mode `'verify'` — MUST have a "Resend code" button** with a cooldown (`generateCode(marker, email, EVENT_REGISTRATION)`). The cooldown = `config.systemCodeTlsSec` of the provider (default 80 sec). Starts immediately after `signUp()` and after each resend.
-- **⚠️ `eventIdentifier` — DO NOT hardcode!** Get the real event marker from the admin panel (Events section). Extract it into a constant: `const EVENT_REGISTRATION = 'user_registration'` (check in the admin panel!)
+- **🔄 In mode `'verify'` — MUST have a "Resend code" button** with a cooldown (`generateCode(marker, email, EVENT_REGISTRATION)`). Cooldown = `config.systemCodeTlsSec` of the provider (default 80 sec). Starts immediately after `signUp()` and after each resend.
+- **⚠️ `eventIdentifier` — DO NOT hardcode!** Get the real event marker from the admin panel (Events section). Extract to a constant: `const EVENT_REGISTRATION = 'user_registration'` (check in the admin panel!)
 - After login, save `accessToken`, `refreshToken`, `authProviderMarker` in localStorage
-- After login, call `getUserState` and dispatch the `auth-state` event (if synchronization is needed)
+- After login, call `getUserState` and dispatch `auth-state` event (if synchronization is needed)
 
 ### src/components/AuthForm.tsx
 
@@ -148,10 +148,9 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { getFormByMarker } from '@/app/actions/forms';
 import { logout } from '@/app/actions/auth';
 import { getApi, isError } from '@/lib/oneentry';
-import type { IFormAttribute } from 'oneentry/dist/forms/formsInterfaces';
-import type { IAuthEntity, ISignUpData } from 'oneentry/dist/auth-provider/authProvidersInterfaces';
+import type { IAuthEntity, IFormAttribute, ISignUpData } from 'oneentry';
 
-// Cooldown between resending codes (= config.systemCodeTlsSec of the provider)
+// Cooldown between resending the code (= config.systemCodeTlsSec of the provider)
 const RESEND_COOLDOWN_SEC = 80;
 
 // Event markers from the OneEntry admin panel (Events section)
@@ -246,7 +245,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, isCheckCode, loca
   };
 
   // authData — ONLY login-credentials (isLogin/isPassword), only non-empty.
-  // The same builder is valid for signin/auth().
+  // The same builder is correct for signin/auth().
   const buildAuthData = () =>
     fields
       .filter(f => (f.isLogin === true || f.isPassword === true) && values[f.marker]?.trim())
@@ -310,7 +309,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, isCheckCode, loca
           formIdentifier,
           authData: buildAuthData(),
           formData: buildFormData(),   // profile fields { marker, type, value }
-          // ⚠️ add phoneSMS ONLY if the field is filled — empty string causes 400
+          // ⚠️ phoneSMS is added ONLY if the field is filled — an empty string causes 400
           notificationData: {
             email: getEmail(),
             phonePush: getPhonePush(),
@@ -399,7 +398,7 @@ export function AuthForm({ authProviderMarker, formIdentifier, isCheckCode, loca
             field.isLogin === true ||
             field.isNotificationEmail === true ||
             field.marker.includes('email');
-          // Mandatory at registration — by isSignUpRequired, not by validator
+          // Requirement at registration — by isSignUpRequired, not by validator
           const isRequired =
             mode === 'signup'
               ? field.isSignUpRequired === true || field.isLogin === true || isPassword
@@ -474,12 +473,12 @@ async function handleLogout() {
 
 ## Step 5: AuthContext with polling (cross-device sync)
 
-If cart/favorites synchronization between devices is needed — AuthContext polls `user.state` on a timer. When data is updated, the Redux store receives the current cart and favorites.
+If cart/favorites synchronization between devices is needed — AuthContext polls `user.state` on a timer. When data is updated, the Redux store gets the current cart and favorites.
 
 ```typescript
-// AuthContext — polling pattern via RTK Query (or direct setInterval)
+// AuthContext — polling pattern through RTK Query (or direct setInterval)
 const [trigger] = useLazyGetMeQuery({
-  pollingInterval: isAuth ? 30000 : 0, // every 30 seconds only when authorized
+  pollingInterval: isAuth ? 30000 : 0, // every 30 seconds only when authenticated
 });
 
 // When receiving a new user — load state into Redux
@@ -496,7 +495,7 @@ useEffect(() => {
 }, [user, cartVersion]);
 ```
 
-> Writing back to the server — via Server Action `updateUserState` when cart/favorites change.
+> Writing back to the server — through Server Action `updateUserState` when cart/favorites change.
 > Pattern: `.claude/rules/tokens.md` → section `updateUserState`.
 
 ---
@@ -517,10 +516,10 @@ useEffect(() => {
 7. Fields are rendered dynamically from Forms API — do not hardcode <input>
 8. After login, save 'refresh-token' in localStorage
 9. auth/signUp/generateCode/activateUser — from Client Component, OR on the server per-request instance with deviceMetadata = getDeviceMetadata() from the browser (SDK ≥ 1.0.155)
-10. 🚨 isCheckCode: true → MUST add mode 'verify' with a code field + activateUser(marker, email, code)
-11. 🔄 In verify mode — MUST have a "Resend code" button with cooldown (generateCode + config.systemCodeTlsSec)
-12. ⚠️ eventIdentifier for generateCode/checkCode/changePassword — get from the admin panel (Events section), DO NOT hardcode without checking
-13. Cross-device sync: polling user.state every 30 seconds, writing via updateUserState Server Action
+10. 🚨 isCheckCode: true → MANDATORY add mode 'verify' with code field + activateUser(marker, email, code)
+11. 🔄 In verify mode — MANDATORY "Resend code" button with cooldown (generateCode + config.systemCodeTlsSec)
+12. ⚠️ eventIdentifier for generateCode/checkCode/changePassword — get from admin panel (Events section), DO NOT hardcode without checking
+13. Cross-device sync: polling user.state every 30 seconds, writing through updateUserState Server Action
 ```
 
 ---
@@ -556,16 +555,16 @@ For selector stability — add `data-testid` when generating `AuthForm.tsx`:
 
 **Algorithm (perform step by step, do not ask in one list):**
 
-1. **Path to the login page** — ask: "Where is the login form located? (path to the page, e.g., `/login`, `/auth`, or the name of the trigger component that opens the modal)". 
-   - If the user is silent/does not know → find it yourself through Glob (`src/app/**/login/**`, `src/app/**/auth/**`) and/or Grep for `<AuthForm`. Inform: "Found the form at `{path}` — using it. If incorrect, tell me where to open it".
+1. **Path to the authorization page** — ask: "Where is the authorization form located? (path to the page, e.g. `/login`, `/auth`, or the name of the trigger component that opens the modal)"
+   - If the user is silent/does not know → find it yourself through Glob (`src/app/**/login/**`, `src/app/**/auth/**`) and/or Grep for `<AuthForm`. Inform: "Found the form at `{path}` — using it. If incorrect, tell me where to open."
 2. **Test credentials** (existing user in OneEntry):
-   - Ask: "Provide the email and password of an existing test user for successful login verification. I will skip it — the successful signin check will be disabled (`test.skip`), other tests will work".
-   - If the user provides values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (via Edit/Write), add these keys to `.gitignore` if the file is not in it.
-   - If the user is silent/refuses → leave the variables empty in `.env.local` with a placeholder comment. Inform: "Credentials not set — the test `signin: successful login` will be skipped via `test.skip`. Add values to `.env.local` when there is a test user".
-3. **`isCheckCode` of the provider** — check yourself through the already running `/inspect-api auth-providers` from Step 1.
+   - Ask: "Provide the email and password of an existing test user for successful login verification. I will skip — the successful signin check will be disabled (`test.skip`), other tests will work."
+   - If the user provided values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (through Edit/Write), add these keys to `.gitignore` if the file is not in it.
+   - If the user is silent/refused → leave the variables empty in `.env.local` with a placeholder comment. Inform: "Credentials not set — the test `signin: successful login` will be skipped through `test.skip`. Add values to `.env.local` when there is a test user."
+3. **`isCheckCode` of the provider** — check yourself through the already running `/inspect-api auth-providers` in Step 1.
    - ⚠️ **Regardless of the value — DO NOT run signUp-submit in E2E**. Empirically verified: with `isCheckCode: true`, `AuthProvider.auth()` under an unactivated user returns 401 "User is not activated", and the SDK has no way to delete someone else's/unactivated user (`deleteUser` goes to `/me/account`). Creating signup in the test — the user will forever remain garbage in the client's project.
-   - Signup tests check ONLY UI without `submit`: mode switching, number of fields, validation.
-   - For authenticated-flow tests (profile, cart sync), use an existing active user from `E2E_TEST_EMAIL` — DO NOT create new ones.
+   - Signup tests check ONLY the UI without `submit`: mode switching, number of fields, validation.
+   - For authenticated-flow tests (profile, cart sync) use an existing active user from `E2E_TEST_EMAIL` — DO NOT create new ones.
    - More details: `.claude/rules/playwright-e2e.md` → section "Cleanup test data".
 
 **Example of filling in `.env.local` (do it yourself, do not ask the user to copy):**
@@ -585,7 +584,7 @@ E2E_TEST_PASSWORD=
 
 ### 7.3 Create `e2e/auth.spec.ts`
 
-> ⚠️ Tests work with the real OneEntry project — provider and form markers are taken from `/inspect-api`. Replace `/login` with the real path, `TEST_EMAIL`/`TEST_PASSWORD` — with real credentials (via `process.env`, do not hardcode).
+> ⚠️ Tests work with the real OneEntry project — provider and form markers are taken from `/inspect-api`. Replace `/login` with the real path, `TEST_EMAIL`/`TEST_PASSWORD` — with real credentials (through `process.env`, do not hardcode).
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -610,7 +609,7 @@ test.describe('Authorization', () => {
 
   test('signin: empty form — shows browser validation', async ({ page }) => {
     await page.getByTestId('auth-submit').click();
-    // required fields do not allow form submission — stay on the page
+    // required fields do not allow submitting the form — stay on the page
     await expect(page).toHaveURL(new RegExp(AUTH_PATH));
   });
 
@@ -655,11 +654,11 @@ test.describe('Authorization', () => {
 // Empirically verified: signUp under `isCheckCode: true` creates a user with isActive: false,
 // auth() under it returns 401 "User is not activated" → no accessToken →
 // Users.deleteUser() cannot be called → user remains garbage in the client's project forever.
-// The SDK has no admin API to delete someone else's user by id/email.
+// The SDK does not have an admin API to delete someone else's user by id/email.
 // See `.claude/rules/playwright-e2e.md` → "Cleanup test data".
 ```
 
-### 7.4 Report to the user about the decisions made
+### 7.4 Report to the user on accepted decisions
 
 Before completing the task — explicitly inform:
 
@@ -668,12 +667,12 @@ Before completing the task — explicitly inform:
 ✅ data-testid added to AuthForm
 ✅ .env.local updated (E2E_TEST_EMAIL / E2E_TEST_PASSWORD)
 
-Automatically made decisions (if applicable):
-- Path to the login form: {AUTH_PATH} — {user-specified / found via Glob search in src/app/**}
-- Test credentials: {user-specified / left empty — the successful signin test will be test.skip. Reason: user did not provide a test user}
-- isCheckCode of the provider: {true / false} — signup tests in any case only UI check without submit (real signUp would create garbage user that cannot be deleted)
+Decisions made automatically (if applicable):
+- Path to the authorization form: {AUTH_PATH} — {user-specified / found through Glob search in src/app/**}
+- Test credentials: {provided by user / left empty — the test for successful signin will be test.skip. Reason: user did not provide a test user}
+- isCheckCode of the provider: {true / false} — signup tests in any case only UI check without submit (real signUp would create a garbage user that cannot be deleted)
 
 Run: npm run test:e2e -- auth.spec.ts
 ```
 
-If credentials are not set — the successful login test is skipped (`test.skip`), other tests work with any configuration.
+If credentials are not set — the test for successful login is skipped (`test.skip`), others work with any configuration.

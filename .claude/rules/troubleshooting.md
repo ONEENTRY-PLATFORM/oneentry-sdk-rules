@@ -8,7 +8,7 @@
 
 **Cause:** `reDefine(refreshToken)` was not called before accessing user-auth methods, or the session has expired.
 
-**Solution:** Ensure that `reDefine(refreshToken, locale)` is called during initialization (e.g., in AuthContext) before any user-auth calls. `saveFunction` automatically updates the token in localStorage with each rotation.
+**Solution:** Ensure that `reDefine(refreshToken, locale)` is called during initialization (e.g., in AuthContext) before any user-auth calls. `saveFunction` automatically updates the token in localStorage on each rotation.
 
 > Pattern: `.claude/rules/tokens.md` | Skill: **`/create-orders-list`**
 
@@ -41,7 +41,7 @@ A typical expired session. Redirect to `/login`.
 
 **Cause 1:** insufficient permissions for the action (user group settings in the admin).
 
-**Cause 2:** calling `AuthProvider.auth/signUp/generateCode` via Server Action → fingerprint (`x-device-metadata`) will be server-side, not browser-side, and the refresh token will be tied to the server. By default, move the call to Client Component. With SDK ≥ 1.0.155, server-side calls are allowed with the browser's fingerprint passed through `config.deviceMetadata` (per-request instance `defineOneEntry(url, { token, deviceMetadata })`); the main case is server-side OAuth code exchange. See `.claude/rules/sdk-init.md` → "Device metadata".
+**Cause 2:** calling `AuthProvider.auth/signUp/generateCode` via Server Action → fingerprint (`x-device-metadata`) will be server-side, not browser-side, and the refresh token will be bound to the server. By default — move the call to Client Component. With SDK ≥ 1.0.155, server-side calls are allowed with the browser fingerprint passed through `config.deviceMetadata` (per-request instance `defineOneEntry(url, { token, deviceMetadata })`); the main case — server-side OAuth code exchange. See `.claude/rules/sdk-init.md` → "Device metadata".
 
 **Method distribution by context:**
 
@@ -69,9 +69,9 @@ const authData = formFields
 
 > Full auth pattern: `.claude/rules/auth-provider.md` | Skill: **`/create-auth`**
 
-### 400 Bad Request — `Login or password values are missed` on `Users.updateUser`
+### 400 Bad Request — `Login or password values are missed` when `Users.updateUser`
 
-The message is misleading: it comes for both `authData: []` and for a single login element. The password is NOT required when saving the profile — simply **do not pass the `authData` key at all** when the password is not changing. The full contract (`maximum 1 element — password`, `{ marker, value }` without `type`, login cannot be changed) — skill **`/create-profile`**.
+The message is misleading: it comes for both `authData: []` and a single login element. The password is NOT required when saving the profile — simply **do not pass the `authData` key at all** when the password is not changing. The full contract (`maximum 1 element — password`, `{ marker, value }` without `type`, login cannot be changed) — skill **`/create-profile`**.
 
 ### 404 Not Found
 
@@ -82,7 +82,7 @@ if (isError(product) && product.statusCode === 404) return <NotFound />
 
 ### 500 Server Error
 
-**Cause:** calling `Users.*`, `Orders.*`, `Payments.*` via `getApi()` without prior `reDefine()`. These methods require user accessToken.
+**Cause:** calling `Users.*`, `Orders.*`, `Payments.*` through `getApi()` without prior `reDefine()`. These methods require user accessToken.
 
 ```typescript
 // ❌ INCORRECT — reDefine() was not called, no user accessToken
@@ -97,13 +97,15 @@ const user = await getApi().Users.getUser();
 
 Enable logging: `validation: { enabled: true, logErrors: true }` in the `defineOneEntry` config.
 
+> ⚠️ Keep this as a dev setting (`enabled: process.env.NODE_ENV !== 'production'` or a separate flag). Starting from v1.0.159, Zod and response schemas are loaded **only on the first real validation** — with validation turned off, they are not present in the client bundle at all (~110 → ~10 KB gzip, see `.claude/rules/performance-bundle.md`). Enabled validation returns this weight back.
+
 ## Environment and Build
 
 ### 400 on `/_next/image` for CMS images with correct `remotePatterns` (dev)
 
 **Symptom:** all `/_next/image?url=https://…oneentry.cloud/…` return `400 "url" parameter is not allowed`, although `remotePatterns` in `next.config` are correct; clearing caches and restarting do not help.
 
-**Cause:** The SSRF protection of the Next optimizer (16+) resolves the image host with **all** DNS records and blocks the request if any are private. In networks with DNS64/NAT64, the resolver synthesizes an AAAA record `64:ff9b::/96` alongside the public A record → every remote image is blocked. Only a generalized 400 goes to the browser; the real reason is the line `⨯ upstream image … resolved to private ip` in the **stdout of the dev server** — when getting a 400 on images, first check there, rather than guessing from the config.
+**Cause:** The SSRF protection of the Next optimizer (16+) resolves the image host with **all** DNS records and blocks the request if even one is private. In networks with DNS64/NAT64, the resolver synthesizes an AAAA record `64:ff9b::/96` next to the public A record → every remote image is blocked. Only a generic 400 goes to the browser; the real reason is the line `⨯ upstream image … resolved to private ip` in the **stdout of the dev server** — when getting a 400 on images, first check there, rather than guessing by the config.
 
 **Solution (dev-only, production retains protection):**
 
@@ -116,4 +118,4 @@ images: { dangerouslyAllowLocalIP: process.env.NODE_ENV === 'development' }
 
 **Cause:** Static pages (`force-static` / ISR) read CMS **only once — during `next build`**. The CI runner is usually far from the CMS and generates many pages in bulk → transient timeout/429; wrappers that "degrade without errors" turn a failure into an empty section, and it **gets baked into static**. Intermittently and in different sections — requests are independent. ISR later regenerates the page at runtime — hence "then it appeared".
 
-**Mitigation:** a separate build profile in the fetch wrapper based on `process.env.NEXT_PHASE === 'phase-production-build'` — increased timeout (~30s), more retries with exponential backoff+jitter, limiting concurrency of requests to CMS, and mandatory `console.warn` on degradation after all retries (the CI log shows which section went empty). An alternative is fail-fast: drop `next build` on critical data unavailability + retry the CI job, then nothing empty gets deployed.
+**Mitigation:** a separate build profile in the fetch wrapper based on `process.env.NEXT_PHASE === 'phase-production-build'` — increased timeout (~30s), more retries with exponential backoff+jitter, limiting concurrency of requests to the CMS, and mandatory `console.warn` on degradation after all retries (the CI log shows which section went empty). An alternative — fail-fast: drop `next build` when critical data is unavailable + retry the CI job, then nothing empty is deployed.

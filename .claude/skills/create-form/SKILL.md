@@ -18,7 +18,7 @@ If the marker is not provided:
 
 Look at the `identifier` field — this is the marker for `getFormByMarker()`.
 
-Or directly via the API:
+Or directly through the API:
 
 ```typescript
 const res = await getApi().Forms.getAllForms();
@@ -45,14 +45,14 @@ if (isError(res)) { /* handle error: res.message, res.statusCode */ }
 
 ### src/app/actions/forms.ts
 
-> If the file already exists — read and supplement, do not duplicate.
+> If the file already exists — read and supplement it, do not duplicate.
 
 ```typescript
 // src/app/actions/forms.ts
 'use server';
 
 import { getApi, isError } from '@/lib/oneentry';
-import type { IFormsEntity, IFormAttribute } from 'oneentry/dist/forms/formsInterfaces';
+import type { IFormsEntity, IFormAttribute } from 'oneentry';
 
 // ⚠️ Validators return message as string[] — markers of fields with errors
 // To show custom messages, build a map from form attributes
@@ -72,7 +72,7 @@ function mapErrors(message: string | string[], validatorErrors: Record<string, s
   return msgs.map(m => validatorErrors[m] || m).join('; ');
 }
 
-// Getting the form structure — returning attributes as is from the API (IFormAttribute[])
+// Getting the form structure — returning attributes as is from API (IFormAttribute[])
 export async function getFormByMarker(marker: string, locale = 'en_US') {
   const form = await getApi().Forms.getFormByMarker(marker, locale);
   if (isError(form)) return { error: String(form.message), statusCode: form.statusCode };
@@ -116,7 +116,7 @@ export async function submitForm(
 
 ## Step 4: Create the form component
 
-### Key principles
+### Key Principles
 
 - Fields are rendered **dynamically** by `field.type` — do not hardcode `<input>`
 - The `spam` field is an **invisible captcha** (reCAPTCHA v3), render `<FormReCaptcha>`, NOT `<input>`
@@ -124,11 +124,11 @@ export async function submitForm(
   - ⚠️ **If the form has a `spam` field — use `/create-captcha`**: this is a verified
     end-to-end recipe (siteKey from `settings.captcha.key`, `value` of the spam field — object
     `{ event: { token, siteKey } }`, `status: ''`, mandatory module config). The captcha blocks
-    below are adjusted to it, but `/create-captcha` is the source of truth.
+    below are aligned with it, but `/create-captcha` is the source of truth.
 - `formData` for submission — `{ marker, type, value }`, only non-empty values (`type` is mandatory: the SDK filters button fields and triggers upload file/image/groupOfImages)
 - Fields `file`/`image`/`groupOfImages` — in `value` only `File[]`, never a string: string value crashes `postFormsData` entirely (TypeError), not just skips the upload
 
-### Field types → HTML table
+### Field Types Table → HTML
 
 | `field.type`                | Render                                            |
 |-----------------------------|---------------------------------------------------|
@@ -143,9 +143,9 @@ export async function submitForm(
 | `file`, `image`             | `<input type="file">` — uncontrolled, in state `File[]` |
 | `groupOfImages`             | `<input type="file" multiple>` — uncontrolled, in state `File[]` |
 | `spam`                      | `<FormReCaptcha>` — NOT `<input>`!                 |
-| `button`                    | NOT input: skip (SDK filters it during submission) |
-| `textWithHeader`            | decorative header/text, NOT input                  |
-| `entity`, `timeInterval`    | skip — do not render as text input                 |
+| `button`                    | DO NOT render input: skip (the SDK filters button fields during submission) |
+| `textWithHeader`            | decorative header/text, NOT input                 |
+| `entity`, `timeInterval`    | skip — do not render as text input                |
 
 #### src/components/DynamicForm.tsx
 
@@ -227,8 +227,8 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
       .map(f => ({ marker: f.marker, type: f.type, value: mapValue(f, values[f.marker]!) }));
 
     // Captcha token — in the value of the spam field itself (its marker is arbitrary, set in the admin panel).
-    // ⚠️ value — OBJECT { event: { token, siteKey } }, NOT a raw string of the token!
-    // Raw string → 400 "Captcha Validation Failed". Full recipe — /create-captcha.
+    // ⚠️ value — OBJECT { event: { token, siteKey } }, NOT a bare string token!
+    // Bare string → 400 "Captcha Validation Failed". Full recipe — /create-captcha.
     const spamField = fields.find(f => f.type === 'spam');
     if (captchaToken && spamField) {
       const siteKey = spamField.settings?.captcha?.key || '';
@@ -371,9 +371,9 @@ function renderField(
     );
   }
 
-  // file / image / groupOfImages: uncontrolled input WITHOUT passing value, in state we put File[].
-  // Array.from is mandatory: raw FileList cannot be serialized across the Server Action boundary,
-  // while an array of File — is serializable, and the SDK will upload files itself (branch Array.isArray in postFormsData)
+  // file / image / groupOfImages: uncontrolled input WITHOUT value prop, in state we store File[].
+  // Array.from is mandatory: raw FileList is not serialized across the Server Action boundary,
+  // while an array of File is serialized, and the SDK will upload files itself (the Array.isArray branch in postFormsData)
   if (['file', 'image', 'groupOfImages'].includes(field.type)) {
     return (
       <>
@@ -389,7 +389,7 @@ function renderField(
     );
   }
 
-  // button: DO NOT render input — if desired, take localizeInfos.title as the text for the submit button;
+  // button: DO NOT render input — if desired, take localizeInfos.title as text for the submit button;
   // do not include in formData (the SDK filters button fields in postFormsData anyway)
   if (field.type === 'button') return null;
 
@@ -514,7 +514,7 @@ export function FormReCaptcha({
 4. Forms API requires Server Action — cannot be called from 'use client' directly
 5. Sort fields by field.position before rendering
 6. submitForm via FormData.postFormsData, not via Forms API
-7. The form marker — obtain via /inspect-api forms, DO NOT guess
+7. Form marker — get via /inspect-api forms, DO NOT guess
 ```
 
 ---
@@ -530,7 +530,7 @@ For selector stability — add `data-testid` when generating `DynamicForm.tsx`:
 
 ```tsx
 <form data-testid="dynamic-form" onSubmit={handleSubmit}>
-  {/* Inside map by fields — in renderField() wrap each field in a container with testid: */}
+  {/* Inside map over fields — in renderField() wrap each field in a container with testid: */}
   <div data-testid={`form-field-${field.marker}`}>
     {/* input / textarea / select — add data-testid to the element itself: */}
     <input data-testid={`form-input-${field.marker}`} ... />
@@ -539,7 +539,7 @@ For selector stability — add `data-testid` when generating `DynamicForm.tsx`:
     {/* for select: */}
     <select data-testid={`form-input-${field.marker}`} ... />
   </div>
-  {/* captcha wrapper (to check for presence in the test): */}
+  {/* captcha wrapper (to check presence in the test): */}
   <div data-testid="form-recaptcha">{/* <FormReCaptcha ... /> */}</div>
   {error && <div data-testid="form-error" role="alert">{error}</div>}
   {success && <div data-testid="form-success" role="status">{success}</div>}
@@ -549,11 +549,11 @@ For selector stability — add `data-testid` when generating `DynamicForm.tsx`:
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (perform step by step, do not ask in one list):**
+**Algorithm (execute step by step, do not ask in one list):**
 
 1. **Form marker** — use the marker that the user provided as an argument `/create-form <marker>`. If it is not there — take it from the results of `/inspect-api forms` (Step 1) and inform: "Using marker `{identifier}` from `/inspect-api forms`. If another is needed — say so".
-2. **Page path with the form** — ask: "On which URL in the application is the form rendered? (for example `/contact`, `/feedback`)".
-   - If the user is silent → find it yourself via Grep for `<DynamicForm` / `marker="{marker}"` in `src/app/**`. Inform: "Found the form at `{path}` — using it. If incorrect, say so".
+2. **Path to the page with the form** — ask: "On which URL in the application is the form rendered? (for example `/contact`, `/feedback`)".
+   - If the user is silent → find it yourself through Grep for `<DynamicForm` / `marker="{marker}"` in `src/app/**`. Inform: "Found the form at `{path}` — using it. If incorrect, say so".
 3. **Test values for fields** — read `form.attributes` from `/inspect-api forms` (already called in Step 1). For each field, generate a valid value yourself:
    - `string` / `text` → `'E2E Test value'`
    - `integer` / `number` → `'42'`
@@ -574,7 +574,7 @@ E2E_SKIP_CAPTCHA=1
 
 ### 6.3 Create `e2e/form.spec.ts`
 
-> ⚠️ Tests work with the real form from OneEntry Forms API — fields are loaded dynamically. Test values are generated based on field type.
+> ⚠️ Tests work with the real form from OneEntry Forms API — fields are loaded dynamically. Test values are generated by field type.
 
 ```typescript
 import { test, expect, Page } from '@playwright/test';
@@ -662,7 +662,7 @@ Before completing the task — explicitly inform:
 
 Decisions made automatically (if applicable):
 - Form marker: {marker} — {provided by user / taken from /inspect-api forms}
-- Path to the form: {FORM_PATH} — {provided by user / found via Grep for <DynamicForm}
+- Path to the form: {FORM_PATH} — {provided by user / found through Grep for <DynamicForm}
 - Test values for fields generated automatically by field.type
 - Spam field (reCAPTCHA): {present → successful submission test skipped via test.skip, reason: v3 Enterprise does not pass in headless / not present → test works fully}
 - File fields: {present → upload test skipped, reason: a real file is required / not present → no skip needed}
@@ -670,4 +670,4 @@ Decisions made automatically (if applicable):
 Run: npm run test:e2e -- form.spec.ts
 ```
 
-If the form has a `spam` field — the successful submission test is skipped (`test.skip`), while rendering and validation tests work.
+If the form has a `spam` field — the successful submission test is skipped (`test.skip`), rendering and validation tests work.

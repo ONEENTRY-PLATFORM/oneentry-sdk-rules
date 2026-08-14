@@ -2,7 +2,7 @@
 name: create-content-filter
 description: Render a content filter tree from Filters API — getFilterByMarker, recursive nodes by type (page/product/discount/...)
 ---
-# Create a content filter render (Filters API)
+# Create a content filter renderer (Filters API)
 
 Loads a content filter by marker (`Filters.getFilterByMarker`) and renders its node tree. A content filter is a customizable structure in the admin panel that combines heterogeneous entities: pages, products, attributes, discounts, bonuses, payment methods. It is convenient for promo panels, navigation trees, and "collections".
 
@@ -12,7 +12,7 @@ Loads a content filter by marker (`Filters.getFilterByMarker`) and renders its n
 
 ---
 
-## Step 1: Know the structure (node types)
+## Step 1: Learn the structure (node types)
 
 `getFilterByMarker` returns `IContentFilter`:
 
@@ -48,7 +48,7 @@ File: `src/app/actions/filters.ts`
 'use server';
 
 import { getApi, isError } from '@/lib/oneentry';
-import type { IContentFilter } from 'oneentry/dist/filters/filtersInterfaces';
+import type { IContentFilter } from 'oneentry';
 
 export async function getContentFilter(
   marker: string,
@@ -71,7 +71,7 @@ File: `src/app/components/ContentFilterTree.tsx`
 
 ```tsx
 import Link from 'next/link';
-import type { IContentFilterItem } from 'oneentry/dist/filters/filtersInterfaces';
+import type { IContentFilterItem } from 'oneentry';
 
 function FilterNode({ node }: { node: IContentFilterItem }) {
   const title = node.localizeInfos?.title ?? node.marker ?? '';
@@ -159,12 +159,12 @@ export default async function PromoPage({
 ## Important details
 
 ```md
-✅ Created a content filter render (Filters API). Key rules:
+✅ Created a content filter renderer (Filters API). Key rules:
 
 1. Filters.getFilterByMarker — public (app-token), load from Server Component
 2. A node is identified by item.type — render differently (page→url, product→marker, discount/bonus→value)
 3. The tree is recursive (children) — always sort by position
-4. localizeInfos.title — main title of the node; value — unified value (discount/attribute)
+4. localizeInfos.title — the main title of the node; value — unified value (discount/attribute)
 5. graceful fallback on IError — return null, do not crash the page
 6. Do not confuse with catalog filters IFilterParams[] (Products.getProducts)
 ```

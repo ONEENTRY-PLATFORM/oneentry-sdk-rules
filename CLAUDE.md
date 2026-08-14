@@ -4,7 +4,7 @@ oneentry — OneEntry NPM package
 
 **SDK Documentation:** <https://js-sdk.oneentry.cloud/docs/index/>
 
-This file is the core of the context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
+This file is the core context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
 
 ## Project Context
 
@@ -24,10 +24,10 @@ The SDK is isomorphic: it works on both the server and the client. Public method
 
 ### Two Mandatory Questions (once per session)
 
-Ask them at the beginning of the work and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
+Ask them at the beginning of your work and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
 
-1. **“Is it necessary to save tokens?”** — **save**: do not run linter/build, do not write comments; **full**: JSDoc + lint + build after writing. Save as `feedback_token_mode.md`
-2. **“Is it necessary to write E2E tests with Playwright?”** — **yes**: run `/setup-playwright`, write a test in `e2e/` for each new component, add `data-testid`; **no**: do not create `e2e/`. Save as `feedback_playwright.md`
+1. **"Is it necessary to save tokens?"** — **economy**: do not run linter/build, do not write comments; **full**: JSDoc + lint + build after writing. Save as `feedback_token_mode.md`
+2. **"Is it necessary to write E2E tests with Playwright?"** — **yes**: run `/setup-playwright`, write a test in `e2e/` for each new component, add `data-testid`; **no**: do not create `e2e/`. Save as `feedback_playwright.md`
 
 ```markdown
 ---
@@ -37,7 +37,7 @@ type: feedback
 ---
 
 <mode>: [value].
-**Why:** the user indicated at the beginning of the session.
+**Why:** the user specified at the beginning of the session.
 **How to apply:** do not ask again, use automatically.
 ```
 
@@ -45,16 +45,16 @@ The file already exists — **do not ask**.
 
 ### Mandatory Code Requirements
 
-- **No `any`** — types from `node_modules/oneentry/dist/**/*.d.ts` (see `typescript.md`). Exception — fields that the SDK itself declares as `any` (`ILocalizeInfo`, `IError`)
-- **Linter** — code must pass without errors and without auto-formatting afterwards (`next/core-web-vitals` + `next/typescript`)
+- **No `any`** — import types from the package root: `import type { IPagesEntity } from 'oneentry'` (SDK ≥ 1.0.159; see `typescript.md`). Exception — fields that the SDK itself declares as `any` (`ILocalizeInfo`, `IError`)
+- **Linter** — code must pass without errors and without post-factum auto-formatting (`next/core-web-vitals` + `next/typescript`)
 - **Imports** — only used ones
 - **`<img>`** → `next/image`, **`<a>`** → `next/link`
 - **Temporary files** (inspection, debugging scripts) — **only** in `.claude/temp/`, this folder survives sessions
-- **Structure of `src/components/`** — never flat: organize into groups (`layout/`, `product/`, `catalog/`, `cart/`, `favorites/`, `search/`, `user/`, `ui/` — primitives without business logic). If it doesn’t fit — create a new group
+- **Structure of `src/components/`** — never flat: organize into groups (`layout/`, `product/`, `catalog/`, `cart/`, `favorites/`, `search/`, `user/`, `ui/` — primitives without business logic). If it doesn't fit — create a new group
 
 ### Architectural Decisions of the Project
 
-- **Tokens**: `localStorage`, key `'refresh-token'`; rotation is handled by `saveFunction` automatically (`tokens.md`)
+- **Tokens**: `localStorage`, key `'refresh-token'`; rotation is handled automatically by `saveFunction` (`tokens.md`)
 - **`src/lib/oneentry.ts`**: the only file with `getApi`, `reDefine`, `hasActiveSession`, `syncTokens`, `isError`, `getLang`, `getImageUrl` — do not duplicate `isError` in other files
 - **User Authentication**: user-auth methods (Orders, Users, Payments, Events, Subscriptions) are called from the Client Component via `getApi()` after `reDefine(refreshToken, langCode)` — the SDK itself performs proactive refresh and token rotation
 - **AuthProvider.auth/signUp/generateCode**: only from Client Component (fingerprint); server call — only with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155)
@@ -150,7 +150,7 @@ A keyword from the prompt found → **first the skill, then the code**. Multiple
 | `jsdoc.md` | projects with strict JSDoc standard |
 | `admin-api.md`, `admin-ui.md` | scripts for writing to admin (`scripts/**`) |
 
-## Main Rule: Check Types and Markers BEFORE Code
+## Main rule: check types and markers BEFORE the code
 
 Applies to **every** subtask.
 
@@ -163,7 +163,7 @@ grep -r "interface IAuthPostBody" node_modules/oneentry/dist --include="*.d.ts" 
 grep -r "auth(marker" node_modules/oneentry/dist --include="*.d.ts" -A 5
 ```
 
-Import types: `import type { IPagesEntity } from 'oneentry/dist/pages/pagesInterfaces'`. Method signatures by modules — `sdk-modules.md`.
+Import types: `import type { IPagesEntity } from 'oneentry'`. Method signatures by modules — `sdk-modules.md`.
 
 ### 2. Markers — from API via `/inspect-api`, not from memory
 
@@ -175,10 +175,10 @@ Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` �
 // ❌ If you see it in the code — DO NOT repeat without verification:
 const inStock = product.statusIdentifier === 'in_stock'
 const stockQty = attrs.units_product?.value
-// Confirm these markers through `/inspect-api` before use.
+// Before using these markers — confirm via `/inspect-api`.
 ```
 
-### 3. Entities must exist in OneEntry before connection
+### 3. Entities must exist in OneEntry before connecting
 
 If asked "add form X" / "connect product Y" — first confirm existence via API (`Forms.getAllForms()`, `Pages.getRootPages()`, `Products.getProducts()`, `AttributesSets.getAttributes()`).
 
@@ -186,7 +186,7 @@ If not found → respond: **“First create [name] in OneEntry Admin Panel, then
 
 ### 4. SDK binding immediately, without static stub
 
-If the user provided the layout of a component that should work with SDK — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
+If the user provided the layout of a component that should work with the SDK — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
 
 ### 5. Forms — ALWAYS dynamic
 
@@ -206,25 +206,25 @@ In Next.js 15+ `params` — is `Promise<{locale: string}>`, need to `await param
 | **integer / float / real** | `attrs.marker?.value` — number or `null` (not `0`!) |
 | **spam** (reCAPTCHA) | Render `<FormReCaptcha>`, NOT `<input>` |
 
-The file `value` depends only on the **number of files**, not on the module (Products/Pages/Blocks/Orders — the same). Stable access: `const v = attrs.marker?.value; const f = Array.isArray(v) ? v[0] : v;`. If you don't know the type — `console.log(attrs.marker)`. Full table: `attribute-values.md`.
+The file `value` depends only on **the number of files**, not on the module (Products/Pages/Blocks/Orders — the same). Stable access: `const v = attrs.marker?.value; const f = Array.isArray(v) ? v[0] : v;`. If you don't know the type — `console.log(attrs.marker)`. Full table: `attribute-values.md`.
 
 ### 8. "Add to Cart" button — by default, without question
 
-For card / catalog / product page `AddToCartButton` is added automatically. If the cart is not implemented — first `/create-cart-manager`. The "Add to Favorites" button (`FavoriteButton`) — **only on request**.
+For the card / catalog / product page `AddToCartButton` is added automatically. The cart is not implemented — first `/create-cart-manager`. The "Add to Favorites" button (`FavoriteButton`) — **only on request**.
 
 ### 9. `isError` + singleton SDK + exact types
 
-Check every API call through type guard `isError`. One instance of SDK in `src/lib/oneentry.ts`, use via `getApi()`. For configuration changes (`refreshToken`, `langCode`) — `reDefine()`, **not** a new `defineOneEntry()`.
+Check every API call through type guard `isError`. One instance of SDK in `src/lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** a new `defineOneEntry()`.
 
 ### 10. Server Action — thin proxy
 
 Do not create intermediate types and do not map API responses to custom objects. Only `filter` and `sort` are allowed; everything else — in the component. Breakdown with examples: `common-mistakes.md`.
 
-## 📋 Composite Prompt = Step-by-Step Execution
+## 📋 Composite prompt = step-by-step execution
 
 “Do X + add Y + create Z” — this is **not** a single pass. Real case: skipping the flag `isCheckCode: true` in the auth flow due to “general pass”.
 
-**Step 1. Decomposition in TodoWrite:** for each subtask, define the required skill (see “Context Map”) and relevant rules.
+**Step 1. Decomposition in TodoWrite:** for each subtask define the required skill (see “Context Map”) and relevant rules.
 
 **Step 2. Execution mode:**
 
@@ -235,15 +235,15 @@ Do not create intermediate types and do not map API responses to custom objects.
 
 ❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in one message without a checklist in between.
 
-## When to Stop and Ask the User
+## When to stop and ask the user
 
-- **Don't know the marker** → `/inspect-api`; no Bash — ask.
+- **Don’t know the marker** → `/inspect-api`; no Bash — ask.
 - **403 Forbidden** → check: is `AuthProvider.auth/signUp/generateCode` called via Server Action? Move to Client Component (fingerprint). Or check group permissions in the admin panel.
-- **No layout** → “Is there a layout/design example?”
-- **Don't understand the data source** → “Where should the data for [component] come from?”
+- **No layout** → “Is there an example of layout/design?”
+- **Don’t understand the data source** → “Where should the data for [component] come from?”
 - **Multiple solution options** → “X or Y, which do you prefer?”
 
-## API Permissions for the "Guests" Group
+## API permissions for the "Guests" group
 
 By default, the "Guests" group has a limit of **10 objects** per entity. Before requests:
 
@@ -251,7 +251,7 @@ By default, the "Guests" group has a limit of **10 objects** per entity. Before 
 2. For each entity (Pages, Products, Forms, …): **Read: Yes, with restriction → without restrictions**
 3. Without this, `getPages()`, `getProducts()`, etc. will return a maximum of 10 records.
 
-Error `403 “Permission data not found. Provide the permission for requested url”` = route not granted to the group — skill `/admin-grant-permissions`. Programmatic content writing (public SDK — read-only) — internal admin API: `admin-api.md`, skills `/admin-fill-content` and `/admin-upload-images`; web UI of the admin panel — `admin-ui.md`.
+Error `403 "Permission data not found. Provide the permission for requested url"` = route not granted to the group — skill `/admin-grant-permissions`. Programmatic content writing (public SDK — read-only) — internal admin API: `admin-api.md`, skills `/admin-fill-content` and `/admin-upload-images`; web UI of the admin panel — `admin-ui.md`.
 
 ## Miscellaneous
 
@@ -362,7 +362,7 @@ Details — `nextjs-pages.md` and `localization.md`.
 
 The SDK by default (`isShell: true`) does not throw exceptions — errors are returned as values: HTTP error responses come as an `IError` object (with `statusCode`), while network / parsing / unexpected errors come as a raw `Error` (without `statusCode`, so `isError` does NOT catch it). Check the result with the `isError` guard. When `isShell: false`, the SDK throws all of this as an exception — a `try/catch` is needed.
 
-> **Initialization (`defineOneEntry`, SDK ≥ 1.0.154):** input is validated synchronously — when `url` or `config.token` is empty/missing, a regular `Error` is thrown (NOT `IError`, it does not depend on `isShell`). Empty/whitespace values (unfilled `.env`) are considered missing. Catch it with a regular `try/catch` during initialization.
+> **Initialization (`defineOneEntry`, SDK ≥ 1.0.154):** input is validated synchronously — when `url` or `config.token` is empty/missing, a regular `Error` is thrown (NOT `IError`, does not depend on `isShell`). Empty/whitespace values (unfilled `.env`) are considered missing. Catch it with a regular `try/catch` during initialization.
 
 ```typescript
 function isError(result: any): result is IError {
@@ -384,29 +384,29 @@ async function getProduct(id: number) {
 ### Structure of IError
 
 ```typescript
-// oneentry/dist/base/utils
+// import type { IError } from 'oneentry'
 interface IError {
   message: string
   pageData: unknown
   statusCode: number
   timestamp: string
   localizeMessage?: string      // filled in case of response validation failure (Zod)
-  validationErrors?: unknown[]  // Zod issues in case of response validation failure
+  validationErrors?: unknown[]  // Zod-issues in case of response validation failure
 }
 ```
 
-⚠️ The type declares `message: string`, but in case of form validator errors (`postFormsData`), the API actually sends **an array of strings** — normalize it before displaying.
+⚠️ The type declares `message: string`, but in the case of form validator errors (`postFormsData`), the API actually sends **an array of strings** — normalize it before displaying.
 
-⚠️ `403` + `"Resource is closed"` — is not an authorization error, but "the admin has not yet configured the resource." Handle it as an empty result and log it in `mismatch-log.md`.
+⚠️ `403` + `"Resource is closed"` — is not an authorization error, but "the admin has not yet set up the resource". Handle it as an empty result and log it in `mismatch-log.md`.
 
 Centralized `ApiError`/`handleApiError`, normalization of `message`, code table — `error-handling.md`. Analysis of specific API errors and builds — `troubleshooting.md`.
 
 ## API Response Structure
 
-**Entity Interfaces** can be found in `node_modules/oneentry/dist/`. Key fields of any entity: `id`, `localizeInfos`, `attributeValues`, `pageUrl`.
+**Entity interfaces** can be found in `node_modules/oneentry/dist/`. Key fields of any entity: `id`, `localizeInfos`, `attributeValues`, `pageUrl`.
 
 ```typescript
-import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
+import type { IProductsEntity } from 'oneentry'
 ```
 
 ### attributeValues — access to value by type
@@ -444,7 +444,7 @@ Examples for each type, `plainValue`/`mdValue`, `extended` — `attribute-values
 
 - **Filtering by `attributeValues`** — `IFilterParams` and operators `eq/neq`, `mth/lth`, `in/nin`, `exs/nexs`: `common-patterns.md`. Special values `conditionValue`: `today` (date/dateTime), `now` (time/dateTime).
 - **`localizeInfos`** — flat access to `title` / `htmlContent` / `plainContent`, without nesting by language: `localization.md`.
-- **Page Blocks** — with SDK ≥ 1.0.153, products come directly in the block (`block.products`, `block.similarProducts?.items`), when `traficLimit: true` there are no fields: `pages-blocks.md`.
+- **Page blocks** — with SDK ≥ 1.0.153, products come directly in the block (`block.products`, `block.similarProducts?.items`), when `traficLimit: true` there are no fields: `pages-blocks.md`.
 
 ## Working with Real Project Data
 

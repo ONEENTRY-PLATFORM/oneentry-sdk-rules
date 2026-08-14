@@ -11,9 +11,9 @@ Server Actions are **one of the patterns**, not the only way to call the SDK. Th
 
 | Operation | Recommended Approach | Reason |
 | --- | --- | --- |
-| Public data (Pages, Products, Menus) | Server Component directly / Server Action / Client Component | Depends on the rendering strategy (SSR/SSG/CSR) |
+| Public Data (Pages, Products, Menus) | Server Component directly / Server Action / Client Component | Depends on the rendering strategy (SSR/SSG/CSR) |
 | Authorization (auth, signUp, generateCode) | **Client Component directly** | ⚠️ The SDK passes the device fingerprint — on the client, the fingerprint is unique for each user device |
-| User data (Orders, Users) | Client Component via `getApi()` after `reDefine()` | The token is managed by `saveFunction` automatically |
+| User Data (Orders, Users) | Client Component via `getApi()` after `reDefine()` | The token is managed by `saveFunction` automatically |
 | Mutations (form submissions, order creation) | Server Action | Server-side validation |
 
 ## Mandatory (for Server Actions)
@@ -55,9 +55,9 @@ export async function myAction(...) {
 
 ## ⚠️ AuthProvider — NOT via Server Action
 
-Methods `auth`, `signUp`, `generateCode`, `checkCode` **should be called directly from Client Component** — the SDK passes the device fingerprint. On the server, `deviceInfo.browser` will be `"Node.js/..."` instead of the actual user browser, and the refresh token tied to the server fingerprint will not be updated from the browser.
+Methods `auth`, `signUp`, `generateCode`, `checkCode` **should be called directly from Client Component** — the SDK passes the device fingerprint. On the server, `deviceInfo.browser` will be `"Node.js/..."` instead of the user's actual browser, and the refresh token tied to the server fingerprint will not be updated from the browser.
 
-Exception (SDK ≥ 1.0.155): server call is allowed by passing the browser fingerprint through `deviceMetadata` (main case — OAuth code exchange). Pattern — `.claude/rules/sdk-init.md`, section "Device metadata", and `.claude/rules/auth-provider.md`.
+Exception (SDK ≥ 1.0.155): server call is allowed with passing the browser fingerprint via `deviceMetadata` (main case — OAuth code exchange). Pattern — `.claude/rules/sdk-init.md`, section "Device metadata", and `.claude/rules/auth-provider.md`.
 
 ```typescript
 // ❌ INCORRECT — auth in Server Action
@@ -105,9 +105,9 @@ const orders = await getApi().Orders.getAllOrdersByMarker('storage');
 For read operations in Server Components, it is more convenient to create regular async functions (not Server Actions) that return a standard response shape. This allows using Next.js cache and avoids the overhead of `'use server'`.
 
 ```typescript
-// src/app/api/server/products/getProducts.ts — NOT a Server Action, just an async function
+// src/app/api/server/products/getProducts.ts — NOT Server Action, just async function
 import { getApi, isError } from '@/lib/oneentry'
-import type { IFilterParams } from 'oneentry/dist/products/productsInterfaces'
+import type { IFilterParams } from 'oneentry'
 
 export const getProducts = async (filters?: IFilterParams[]) => {
   const data = await getApi().Products.getProducts(filters)
@@ -119,13 +119,13 @@ export const getProducts = async (filters?: IFilterParams[]) => {
 const { items, total, isError: hasError } = await getProducts(filters)
 ```
 
-**When to Use Server Action, When to Use Wrapper:**
+**When to Use Server Action vs. Wrapper:**
 
 | Criterion              | Server Action `'use server'` | Server Component Wrapper |
 |-----------------------|------------------------------|--------------------------|
-| Who calls             | Client Components, browser   | Only Server Components |
-| Next.js cache         | Not cached                   | Works with `cache()`     |
-| User auth             | Not applicable (client only) | Only public data        |
+| Who Calls             | Client Components, browser    | Only Server Components    |
+| Next.js Cache         | Not cached                   | Works with `cache()`      |
+| User Auth             | Not applicable (only Client) | Only public data          |
 | Mutations             | Yes                          | No                       |
 
 ## Direct SDK Call from Client Component
@@ -133,8 +133,8 @@ const { items, total, isError: hasError } = await getProducts(filters)
 The SDK is available on the client thanks to `NEXT_PUBLIC_*` environment variables. Acceptable cases:
 
 - **Authorization** — must be on the client (fingerprint)
-- **Dynamic data** — searching, filtering, loading based on user action
-- **CSR strategy** — when SSR is not needed
+- **Dynamic Data** — searching, filtering, loading based on user action
+- **CSR Strategy** — when SSR is not needed
 
 ```tsx
 'use client';
@@ -150,5 +150,5 @@ async function handleSearch(query: string) {
 
 > Related rules:
 >
-> - `.claude/rules/performance.md` — composition of `unstable_cache(impl, [keyParts], { revalidate, tags })` over React `cache()` for server fetchers; `Promise.all` for independent calls within a single server action.
-> - `.claude/rules/performance-bundle.md` — `@oneentry/web-sdk` is imported **only** in server-action / server-component files; importing in `'use client'` pulls +80 KB gzipped into each client chunk.
+> - `.claude/rules/performance.md` — composition `unstable_cache(impl, [keyParts], { revalidate, tags })` over React `cache()` for server fetchers; `Promise.all` for independent calls within a single server action.
+> - `.claude/rules/performance-bundle.md` — `@oneentry/web-sdk` is imported **only** in server-action / server-component files; import in `'use client'` pulls +80 KB gzipped into each client chunk.

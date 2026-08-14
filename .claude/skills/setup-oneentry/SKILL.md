@@ -14,7 +14,7 @@ Initialize the OneEntry SDK in the current project. Follow the steps in order.
 
 ## Step 1: Check for existing file
 
-Check if `src/lib/oneentry.ts` exists. If yes — read and show the current content, then ask if it needs to be overwritten.
+Check if `src/lib/oneentry.ts` exists. If it does — read and show the current content, then ask if it needs to be overwritten.
 
 ## Step 2: Create src/lib/oneentry.ts
 
@@ -79,7 +79,7 @@ export function hasActiveSession(): boolean {
 
 // Synchronizes tokens directly in the current instance.
 // Use in login() INSTEAD of reDefine(): after auth() tokens are already written in the SDK state,
-// and reDefine will recreate the instance without accessToken — before the first SDK request it will make
+// and reDefine will recreate the instance without accessToken — before the first SDK request it will do
 // an unnecessary /refresh, unnecessarily rotating the just issued one-time refresh token.
 export function syncTokens(accessToken: string, refreshToken: string): void {
   apiInstance.AuthProvider.setAccessToken(accessToken);
@@ -114,7 +114,7 @@ images: {
 
 ## Step 4: Check and create .env.local
 
-Check if the file `.env.local` exists in the root of the project.
+Check if the `.env.local` file exists in the root of the project.
 
 **If the file DOES NOT exist:**
 
@@ -137,10 +137,10 @@ Read it and check for the presence of `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLI
 
 `.mcp.json` **is committed to the repository**. This implies two requirements.
 
-**1. Pin the server version, not `@latest`.** With `@latest`, the rules change underfoot between sessions: the behavior of last week cannot be reproduced, and without a network, the launch breaks completely.
+**1. Pin the server version, not `@latest`.** With `@latest`, rules change underfoot between sessions: the behavior of last week cannot be reproduced, and without a network, the launch breaks completely.
 
 ```bash
-npm view @oneentry/mcp-server version    # find out the current one
+npm view @oneentry/mcp-server version    # find out the current version
 ```
 
 **2. Do not write the token in the file** — only substitute from the environment:
@@ -183,3 +183,8 @@ Check that the `oneentry` package is installed in `package.json`. If not — inf
 ```text
 ⚠️ Install the package: npm install oneentry
 ```
+
+Check the installed version (`node -p "require('oneentry/package.json').version"`) — it affects the form of type imports:
+
+- **≥ 1.0.159** — types are taken from the root: `import type { IPagesEntity } from 'oneentry'` (or `oneentry/types`). Requires Node ≥ 18.
+- **≤ 1.0.158** — only deep paths (`oneentry/dist/pages/pagesInterfaces`). If the version is old, suggest updating: `npm install oneentry@latest` — rules and skills are written for root import.

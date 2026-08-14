@@ -12,7 +12,7 @@ paths:
 ## locale from params (Next.js 15+)
 
 ```typescript
-// ✅ params — this is a Promise, must await
+// ✅ params is a Promise, must await
 export default async function Page({
   params,
 }: {
@@ -36,7 +36,7 @@ getApi().Pages.getPageByUrl('home', locale)
 
 ## langCode — optional parameter
 
-`langCode` is set during the initialization `defineOneEntry(url, { token, langCode })` (`token` is required — since 1.0.154 SDK throws `Error` if it's missing) and is used by default. 
+`langCode` is set during the initialization of `defineOneEntry(url, { token, langCode })` (`token` is required — since 1.0.154 SDK throws `Error` if it's missing) and is used by default. 
 Pass `locale` explicitly only in the multilingual route `src/app/[locale]/`.
 
 ```typescript
@@ -57,7 +57,7 @@ import { useParams } from 'next/navigation'
 const params = useParams()
 const locale = params.locale as string || 'en_US'
 
-// ✅ Monolingual project — getLang() from src/lib/oneentry.ts (reads the current langCode from SDK)
+// ✅ Monolingual project — getLang() from src/lib/oneentry.ts (reads current langCode from SDK)
 import { getLang } from '@/lib/oneentry'
 const lang = getLang() // 'en_US' or another SDK initialization language
 ```
@@ -68,8 +68,8 @@ const lang = getLang() // 'en_US' or another SDK initialization language
 page.localizeInfos?.title        // title
 page.localizeInfos?.htmlContent  // HTML content — in dangerouslySetInnerHTML only through sanitizeHtml()
 
-// plain text — from v1.0.158 declared in ILocalizeInfo (`plainContent?: string | null`), no cast needed.
-// In SDK ≤ 1.0.157 the field was received, but it was not in the type — a cast was still needed.
+// plain text — from v1.0.158 declared in ILocalizeInfo (`plainContent?: string | null`), cast is not needed.
+// In SDK ≤ 1.0.157 the field was present, but it was not in the type — a cast was still needed.
 const plain = page.localizeInfos?.plainContent
 
 // Blocks: localizeInfos as fallback if attributes are not present
@@ -93,7 +93,7 @@ For UI microcopy (`"Add to cart"`, `"No reviews yet"`, section headers) — crea
 ```typescript
 // src/app/dictionaries.ts
 import 'server-only';
-import type { IAttributeValue, IAttributeValues } from 'oneentry/dist/base/utils';
+import type { IAttributeValue, IAttributeValues } from 'oneentry';
 import { getApi } from '@/lib/oneentry';
 
 // Simple in-memory cache on request
@@ -159,6 +159,6 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
 }
 ```
 
-**If the marker is not in the admin panel** — `t()` returns fallback. Add an entry in `MISMATCH-LOG.md` (rule `.claude/rules/mismatch-log.md`) (section C.4) with the table `marker | type | title | notes`, so the user can add the missing markers in the AttributeSet `static_content`.
+**If the marker is not present in the admin panel** — `t()` returns fallback. Add an item to `MISMATCH-LOG.md` (rule `.claude/rules/mismatch-log.md`) (section C.4) with the table `marker | type | title | notes`, so the user can create the missing markers in the AttributeSet `static_content`.
 
 > For Client Components — extract the dictionary through React Context (`<DictionaryProvider value={dict}>`) or through props from the nearest Server Component, rather than calling the SDK on the client.

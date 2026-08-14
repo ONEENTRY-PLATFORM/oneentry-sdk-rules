@@ -39,7 +39,7 @@ grep -r "interface I" node_modules/oneentry/dist/<module>/ --include="*.d.ts" -l
 
 import { getApi } from '@/lib/oneentry';
 import { isError } from '@/lib/oneentry';
-import type { IFormsEntity } from 'oneentry/dist/forms/formsInterfaces';
+import type { IFormsEntity } from 'oneentry';
 
 export async function getFormByMarker(marker: string, locale?: string) {
   const result = await getApi().Forms.getFormByMarker(marker, locale) as IFormsEntity;
@@ -64,11 +64,11 @@ These methods are called **directly from the Client Component** via `getApi()` a
 
 import { useState, useEffect, useRef } from 'react';
 import { getApi, isError, reDefine, hasActiveSession } from '@/lib/oneentry';
-import type { IUserEntity } from 'oneentry/dist/users/usersInterfaces';
+import type { IUserEntity } from 'oneentry';
 
 export function ProfileData() {
   // useRef guard — protection against double execution in React StrictMode (dev).
-  // Eliminates unnecessary pairs of requests (reDefine + proactive /refresh) and setState races.
+  // Eliminates an extra pair of requests (reDefine + proactive /refresh) and setState races.
   const initRef = useRef(false);
 
   useEffect(() => {
@@ -80,8 +80,8 @@ export function ProfileData() {
       if (!refreshToken) return;
       // ⚠️ hasActiveSession() is mandatory before reDefine.
       // After login, the SDK is already authorized — reDefine without checking will recreate the working instance,
-      // and the new one before the first request will make an unnecessary proactive /refresh, wasting
-      // just issued token (spurious 401 is no longer present, SDK ≥ 1.0.152; see .claude/rules/tokens.md).
+      // and the new one will make an unnecessary proactive /refresh before the first request, wasting
+      // the just issued token (spurious 401 is no longer present, SDK ≥ 1.0.152; see .claude/rules/tokens.md).
       if (!hasActiveSession()) {
         await reDefine(refreshToken, 'en_US');
       }
@@ -122,4 +122,4 @@ export function MyComponent() {
 For user-auth methods, remind:
 
 ⚠️ `reDefine(refreshToken, locale)` must be called before accessing user-auth methods.
-Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without them, double execution in StrictMode leads to an unnecessary pair of requests (`reDefine` + proactive `/refresh`) and setState races (the token pattern `reDefine`+`getUser` does not burn out — both requests share one proactive refresh, SDK ≥ 1.0.152; see `.claude/rules/tokens.md`). `saveFunction` automatically updates the token in localStorage with each rotation.
+Mandatory: `useRef` guard + `hasActiveSession()` check before `reDefine`. Without them, double execution in StrictMode results in an extra pair of requests (`reDefine` + proactive `/refresh`) and setState races (the token pattern `reDefine`+`getUser` does not burn out — both requests share one proactive refresh, SDK ≥ 1.0.152; see `.claude/rules/tokens.md`). `saveFunction` automatically updates the token in localStorage with each rotation.

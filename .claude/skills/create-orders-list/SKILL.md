@@ -15,7 +15,7 @@ Creates a Client Component with a list of orders: loading through all storages, 
 ```typescript
 // src/lib/orders.ts
 import { getApi, isError } from '@/lib/oneentry';
-import type { IOrdersEntity, IOrderByMarkerEntity } from 'oneentry/dist/orders/ordersInterfaces';
+import type { IOrdersEntity, IOrderByMarkerEntity } from 'oneentry';
 
 // Default SDK limit for getAllOrdersStorage / getAllOrdersByMarker
 const ORDERS_PAGE_LIMIT = 30;
@@ -26,7 +26,7 @@ const ORDERS_PAGE_LIMIT = 30;
  * storageIdToMarker is needed for cancelOrder (order.storageId → storageMarker).
  *
  * ⚠️ The SDK does NOT throw an error when isShell=true (by default), but returns an object
- *    IError { statusCode, message } — detect through isError(), not through try/catch.
+ *    IError { statusCode, message } — detect it using isError(), not try/catch.
  * ⚠️ getAllOrdersByMarker has a default limit=30 — "all orders" are reached only
  *    by fetching pages based on the total field of the response (the same applies to getAllOrdersStorage when >30 storages).
  */
@@ -52,13 +52,13 @@ export async function loadAllOrders(): Promise<
     if (!storage.identifier) continue;
     storageIdToMarker[storage.id] = storage.identifier;
     try {
-      // Fetch ALL orders of the storage: default limit=30, going by total
+      // Fetch ALL orders of the storage: default limit=30, go by total
       let offset = 0;
       let total = 0;
       do {
         const result = await getApi().Orders.getAllOrdersByMarker(
           storage.identifier,
-          undefined, // langCode — defaults from instance
+          undefined, // langCode — defaults from the instance
           offset,
           ORDERS_PAGE_LIMIT,
         );
@@ -79,8 +79,8 @@ export async function loadAllOrders(): Promise<
 /**
  * Cancels an order: updateOrderByMarkerAndId with statusMarker: 'canceled'.
  * storageMarker is obtained from storageIdToMarker[order.storageId].
- * The SDK does not throw an error (isShell=true) — check the result through isError,
- * otherwise, the cancellation failure will be falsely accepted as success.
+ * The SDK does not throw an error (isShell=true) — check the result using isError,
+ * otherwise, a cancellation failure will be falsely accepted as success.
  */
 export async function cancelOrder(
   storageMarker: string,
@@ -117,9 +117,9 @@ export async function cancelOrder(
 ### Key Principles
 
 - `'use client'` + `useParams()` — NOT a server component
-- `loadAllOrders` — one instance goes through all storages; `getAllOrdersByMarker` has a default `limit=30`, so "all orders" are reached only by fetching pages based on the `total` field of the response
-- **API Errors:** The SDK does NOT throw when `isShell=true` (by default) — it returns an object `IError { statusCode, message }`; detect through `isError()`, not just `try/catch`
-- **Authorization:** SDK ≥ 1.0.152 performs single-flight proactive refresh and internal 401→refresh→retry — manual retry is not needed; log out ONLY on confirmed 401/403; localStorage key — `'refresh-token'` (with a hyphen)
+- `loadAllOrders` — a single instance traverses all storages; `getAllOrdersByMarker` has a default `limit=30`, so "all orders" are reached only by fetching pages based on the `total` field of the response
+- **API Errors:** The SDK does NOT throw when `isShell=true` (by default) — it returns an object `IError { statusCode, message }`; detect it using `isError()`, not just `try/catch`
+- **Authorization:** SDK ≥ 1.0.152 automatically performs single-flight proactive refresh and internal 401→refresh→retry — manual retry is not needed; log out ONLY on confirmed 401/403; localStorage key — `'refresh-token'` (with a hyphen)
 - **storageIdToMarker** — mapping `storage.id → storage.identifier` for `cancelOrder`
 - **previewImage** — can be an array or an object → normalize: `Array.isArray(img) ? img[0] : img`
 - **Sorting** by `createdDate` in descending order (newest first)
@@ -135,11 +135,11 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { reDefine, hasActiveSession } from '@/lib/oneentry';
 import { loadAllOrders, cancelOrder } from '@/lib/orders';
-import type { IOrderByMarkerEntity, IOrderProducts } from 'oneentry/dist/orders/ordersInterfaces';
+import type { IOrderByMarkerEntity, IOrderProducts } from 'oneentry';
 
 const PAGE_SIZE = 10;
 
-// Status markers depend on the project — replace with real ones from admin panel
+// Status markers depend on the project — replace with real ones from the admin panel
 const STATUS_LABELS: Record<string, string> = {
   created: 'Created',
   inProgress: 'In Progress',
@@ -152,7 +152,7 @@ export default function OrdersPage() {
   const locale = (params.locale as string) || 'en_US';
 
   // Protection against double execution in React StrictMode (dev).
-  // Single-flight refresh SDK works only within one instance; without a guard
+  // Single-flight refresh SDK works only within a single instance; without a guard
   // StrictMode through reDefine creates TWO instances, and the second proactive refresh
   // will burn the already rotated one-time refresh-token.
   const initRef = useRef(false);
@@ -366,7 +366,7 @@ export default function OrdersPage() {
 }
 
 /**
- * previewImage can be an array (type image) or an object (type file).
+ * previewImage can be an array (image type) or an object (file type).
  * Normalize and take downloadLink.
  */
 function getProductImage(product: IOrderProducts): string | null {
@@ -381,20 +381,20 @@ function getProductImage(product: IOrderProducts): string | null {
 
 ## Step 3: Remind key rules
 
-✅ The orders page has been created. Key rules:
+✅ Orders page created. Key rules:
 
 ```md
 1. loadAllOrders/cancelOrder — call from Client Component, getApi() after reDefine()
 2. storageIdToMarker: storage.id → identifier — needed for cancelOrder
 3. Log out ONLY on 401/403
-4. previewImage can be an array or an object — normalize through Array.isArray(). With SDK ≥ 1.0.157, a single file in orders comes as an object (earlier in Orders unpacking did not work and it was always an array) — normalization is mandatory on both versions
+4. previewImage can be an array or an object — normalize using Array.isArray(). With SDK ≥ 1.0.157 a single file in orders comes as an object (previously in Orders unpacking did not work and it was always an array) — normalization is mandatory on both versions
 5. Sorting orders by createdDate in descending order
 6. Client-side pagination through visibleCount — do not reload the list
 7. cancelOrder updates status locally (setOrders), without reload
 8. Repeat order: addToCart(p.id) for each product from order.products
-9. statusLocalizeInfos — primary source of the status title (title or locale-keyed entry), STATUS_LABELS — fallback for old orders/without localization; real status markers ('created'/'canceled') take from Orders.getAllStatusesByStorageMarker(marker) → IOrderStatus.identifier + localizeInfos
-10. paymentAccountLocalizeInfos — already normalized SDK to the instance language (NOT locale-keyed): `paymentAccountLocalizeInfos?.title || paymentAccountIdentifier`
-11. With SDK ≥ 1.0.157, the order has separate payment and fulfillment statuses: paymentStatusIdentifier / paymentStatusLocalizeInfos and fulfillmentStatusIdentifier / fulfillmentStatusLocalizeInfos (null, until assigned). Show them on a separate line only if they are actually filled in the project — see .claude/rules/orders.md
+9. statusLocalizeInfos — primary source of status title (title or locale-keyed entry), STATUS_LABELS — fallback for old orders/no localization; real status markers ('created'/'canceled') take from Orders.getAllStatusesByStorageMarker(marker) → IOrderStatus.identifier + localizeInfos
+10. paymentAccountLocalizeInfos — already normalized by SDK to the instance language (NOT locale-keyed): `paymentAccountLocalizeInfos?.title || paymentAccountIdentifier`
+11. With SDK ≥ 1.0.157, the order has separate payment and fulfillment statuses available: paymentStatusIdentifier / paymentStatusLocalizeInfos and fulfillmentStatusIdentifier / fulfillmentStatusLocalizeInfos (null, until assigned). Show them on a separate line only if they are actually filled in the project — see .claude/rules/orders.md
 ```
 
 ---
@@ -402,7 +402,7 @@ function getProductImage(product: IOrderProducts): string | null {
 ## Step 4: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> To set up Playwright — first `/setup-playwright`.
+> For Playwright setup — first `/setup-playwright`.
 
 ### 4.1 Add `data-testid` to the component
 
@@ -466,17 +466,17 @@ return (
 
 ### 4.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (perform step by step, do not ask in one list):**
+**Algorithm (execute step by step, do not ask in one list):**
 
-1. **Path of the orders page** — ask: "What is the path of the orders page? (e.g. `/orders`, `/en_US/account/orders`)".
-   - Silent → find it yourself through Glob (`src/app/**/orders/**/page.tsx`, `src/app/**/account/**/orders/**/page.tsx`). Report: "Found the orders page at `{path}` — using it".
-2. **Path of the authorization page** — needed for redirect test to check that an unauthorized user sees the login block.
-   - Ask: "Where is the authorization form located? (`/login`, `/auth`, etc.)". Silent → Glob by `src/app/**/login/**` / `src/app/**/auth/**` or Grep by `<AuthForm`. Report the found.
+1. **Path to the orders page** — ask: "What is the path to the orders page? (e.g. `/orders`, `/en_US/account/orders`)".
+   - Silent → find it yourself via Glob (`src/app/**/orders/**/page.tsx`, `src/app/**/account/**/orders/**/page.tsx`). Report: "Found the orders page at `{path}` — using it".
+2. **Path to the login page** — needed for the redirect test to check that an unauthorized user sees the login block.
+   - Ask: "Where is the login form located? (`/login`, `/auth`, etc.)". Silent → Glob by `src/app/**/login/**` / `src/app/**/auth/**` or Grep by `<AuthForm`. Report the found.
 3. **Test credentials** (authorized user who has at least one order in OneEntry):
-   - Ask: "Provide the email and password of a test user who has at least one order. I will skip — tests with the order list/cancellation/pagination will be disabled through `test.skip`".
-   - If the user provides values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (through Edit/Write), check that `.env.local` is in `.gitignore`.
-   - If silent/refused → leave the variables empty with a comment. Report: "Credentials not set — tests requiring authorization will be skipped through `test.skip`. Reason: without a test user with orders, the list/cancellation cannot be checked".
-4. **Status marker 'created' / 'canceled'** — obtain real identifiers through `Orders.getAllStatusesByStorageMarker(marker, locale)` → `IOrderStatus[]` (check `isError`, filter by `isUsed`, sort by `position`; default `limit=30`): `identifier` — marker, `localizeInfos` — title. As an alternative — `/inspect-api`. If the identifiers differ from the defaults — update `STATUS_LABELS` in the code and constants in the spec file. Report: "Status markers: created=`{value}`, canceled=`{value}` — substituted in tests".
+   - Ask: "Please provide the email and password of a test user who has at least one order. I will skip — tests with the order list/cancellation/pagination will be disabled via `test.skip`".
+   - If the user provides values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (via Edit/Write), check that `.env.local` is in `.gitignore`.
+   - If silent/refused → leave the variables empty with a comment. Report: "Credentials not set — tests requiring authorization will be skipped via `test.skip`. Reason: without a test user with orders, the list/cancellation cannot be verified".
+4. **Status marker 'created' / 'canceled'** — get real identifiers via `Orders.getAllStatusesByStorageMarker(marker, locale)` → `IOrderStatus[]` (check `isError`, filter by `isUsed`, sort by `position`; default `limit=30`): `identifier` — marker, `localizeInfos` — title. Alternatively — `/inspect-api`. If the identifiers differ from the defaults — update `STATUS_LABELS` in the code and constants in the spec file. Report: "Status markers: created=`{value}`, canceled=`{value}` — substituted in tests".
 
 **Example of filling `.env.local` (do it yourself):**
 
@@ -491,7 +491,7 @@ E2E_TEST_PASSWORD=user-password
 
 ### 4.3 Create `e2e/orders.spec.ts`
 
-> ⚠️ Tests work with the real OneEntry project. A test user with existing orders is required — otherwise, pagination and cancellation cannot be checked.
+> ⚠️ Tests work with the real OneEntry project. A test user with existing orders is required — otherwise, pagination and cancellation cannot be verified.
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -510,7 +510,7 @@ async function signIn(page: import('@playwright/test').Page) {
   await expect(page.getByTestId('auth-success')).toBeVisible({ timeout: 10_000 });
 }
 
-test.describe('Orders Page', () => {
+test.describe('Orders page', () => {
   test('without authorization shows "Please log in" block', async ({ page, context }) => {
     // Ensure no refresh-token
     await context.clearCookies();
@@ -529,7 +529,7 @@ test.describe('Orders Page', () => {
       await expect(page.getByTestId('orders-page')).toBeVisible({ timeout: 10_000 });
     });
 
-    test('renders the list of orders (or empty-state)', async ({ page }) => {
+    test('renders list of orders (or empty-state)', async ({ page }) => {
       const items = page.getByTestId('order-item');
       const empty = page.getByTestId('orders-empty');
       const hasItems = await items.first().isVisible().catch(() => false);
@@ -547,7 +547,7 @@ test.describe('Orders Page', () => {
 
     test('the "Load more" button loads the next page', async ({ page }) => {
       const loadMore = page.getByTestId('orders-load-more');
-      test.skip(!(await loadMore.isVisible().catch(() => false)), 'Orders are less than one page — Load more not shown');
+      test.skip(!(await loadMore.isVisible().catch(() => false)), 'Fewer orders than one page — Load more not shown');
 
       const before = await page.getByTestId('order-item').count();
       await loadMore.click();
@@ -586,12 +586,12 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_ORDERS_PATH, E2E_AUTH_PATH, E2E_TEST_EMAIL, E2E_TEST_PASSWORD)
 
 Decisions made automatically:
-- Path of the orders page: {ORDERS_PATH} — {specified by user / found through Glob}
-- Path of the login page: {AUTH_PATH} — {specified / found through Glob}
-- Test credentials: {set / left empty — tests of the authorized block will be test.skip}
+- Path to the orders page: {ORDERS_PATH} — {user-specified / found via Glob}
+- Path to the login page: {AUTH_PATH} — {specified / found via Glob}
+- Test credentials: {set / left empty — tests for the authorized block will be test.skip}
 - Status markers: created=`{value}`, canceled=`{value}` — from /inspect-api
 
 Run: npm run test:e2e -- orders.spec.ts
-``` 
+```
 
-If credentials are not set — tests of the authorized part are skipped, leaving only the test for redirecting unauthorized users.
+If credentials are not set — tests for the authorized part are skipped, leaving only the test for redirecting unauthorized users.

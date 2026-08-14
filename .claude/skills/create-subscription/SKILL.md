@@ -8,11 +8,11 @@ Creates a flow for paid subscriptions through the `Subscriptions` module of OneE
 
 > ⚠️ **All methods require an authorized user.** Call after `reDefine(refreshToken)` on the client, then `getApi().Subscriptions.*` from the Client Component. Without authorization, the server will return `IError`.
 
-> ⚠️ These are NOT subscriptions for product events (availability/price) — for them, use `/create-subscription-events` (module `Events`). Here are **paid** subscriptions (billing through Stripe).
+> ⚠️ These are NOT product event subscriptions (availability/price) — for them, use `/create-subscription-events` (module `Events`). Here — **paid** subscriptions (billing through Stripe).
 
 ---
 
-## Step 0: Find Subscription Markers
+## Step 0: Know the Subscription Markers
 
 Plan markers are configured in OneEntry Admin. You can get a list of available ones directly from the SDK:
 
@@ -22,12 +22,12 @@ const plans = await getApi().Subscriptions.getAllSubscriptions()
 // [{ id, identifier, localizeInfos: { title }, productIds, periodInDays, paymentAccountId, isUsed }]
 ```
 
-> ⚠️ **Breaking (v1.0.157):** `getAllSubscriptions()` returns `ISubscriptionEntity[]`, not `string[]`. The old code `markers.map(m => ...)` now receives objects — the marker is in `identifier`, the title in `localizeInfos.title`, and the duration in `periodInDays`. `getActiveSubscriptions()` **has not changed** — it is still `string[]` markers, so activity is checked as `activeMarkers.includes(plan.identifier)`.
+> ⚠️ **Breaking (v1.0.157):** `getAllSubscriptions()` returns `ISubscriptionEntity[]`, not `string[]`. The old code `markers.map(m => ...)` now receives objects — the marker is in `identifier`, the name in `localizeInfos.title`, and the duration in `periodInDays`. `getActiveSubscriptions()` **has not changed** — still `string[]` markers, so activity is checked as `activeMarkers.includes(plan.identifier)`.
 
-**There is no price in the response** — `ISubscriptionEntity` describes the plan (name, period, composition of `productIds`, payment account), but not the amount. Keep prices in your own dictionary or create them as entities in the admin panel. The name and period can already be taken from the API — no need to duplicate them in the dictionary.
+**There is no price in the response** — `ISubscriptionEntity` describes the plan (name, period, composition `productIds`, payment account), but not the amount. Keep the prices in your own dictionary or create them as entities in the admin panel. The name and period can already be taken from the API — no need to duplicate them in the dictionary.
 
 ```ts
-// src/app/config/subscriptions.ts — only what is not in the API (markers are real from the admin panel)
+// src/app/config/subscriptions.ts — only what is not in the API (real markers from the admin panel)
 export const SUBSCRIPTION_PRICES: Record<string, string> = {
   pro_monthly: '$9 / month',
   pro_yearly:  '$90 / year',
@@ -46,7 +46,7 @@ File: `src/app/hooks/useSubscriptions.ts`
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import type { ISubscriptionEntity } from 'oneentry/dist/subscriptions/subscriptionsInterfaces';
+import type { ISubscriptionEntity } from 'oneentry';
 import { getApi, isError, reDefine, hasActiveSession } from '@/lib/oneentry';
 
 export function useSubscriptions(locale: string) {
@@ -189,7 +189,7 @@ export default function SuccessPage() {
 }
 ```
 
-> Activation occurs **after** payment confirmation via webhook on the OneEntry side — `getActiveSubscriptions()` may not return the new marker immediately. If needed, make several repeated reads with an interval (like polling `paymentUrl` for orders in `.claude/rules/orders.md`).
+> Activation occurs **after** payment confirmation via webhook on the OneEntry side — `getActiveSubscriptions()` may return a new marker not instantly. If needed — make several repeated reads with an interval (like polling `paymentUrl` for orders in `.claude/rules/orders.md`).
 
 ---
 
@@ -200,10 +200,10 @@ export default function SuccessPage() {
 
 1. All methods require a user session — ensureSession() (reDefine) before each call
 2. getAllSubscriptions() → ISubscriptionEntity[] (v1.0.157, previously string[]): marker = identifier, name = localizeInfos.title, duration = periodInDays. There is NO price in the response — keep it in your dictionary or admin entities
-3. getActiveSubscriptions() is still string[] MARKERS — check against plan.identifier
+3. getActiveSubscriptions() still returns string[] MARKERS — check against plan.identifier
 4. subscribe() → { paymentUrl } → redirect to Stripe (like createSession for orders)
-5. An active subscription will appear in getActiveSubscriptions() after the payment webhook — not immediately
-6. cancelSubscription/recoverSubscriptions from v1.0.157 actually return IError on API refusal (previously silently responded true). Check the result strictly: `if (result !== true)`, not `if (result)`
-7. recoverSubscriptions({ marker }) sends a request for recovery (via Stripe Billing Portal on the OneEntry side) — the redirect URL is NOT returned; after success, just reload getActiveSubscriptions()
+5. An active subscription will appear in getActiveSubscriptions() after the payment webhook — not instantly
+6. cancelSubscription/recoverSubscriptions with v1.0.157 actually return IError on API refusal (previously silently responded true). Check the result strictly: `if (result !== true)`, not `if (result)`
+7. recoverSubscriptions({ marker }) sends a request for recovery (through Stripe Billing Portal on the OneEntry side) — the URL for redirection is NOT returned; after success, just reload getActiveSubscriptions()
 8. Do not confuse with Events subscriptions for products (/create-subscription-events)
 ```

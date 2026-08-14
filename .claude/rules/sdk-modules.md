@@ -12,17 +12,17 @@ const {
 **Methods requiring user authorization** (call after `reDefine(refreshToken)` on the client):
 Events, Orders, Payments, Subscriptions, Users, WebSocket
 
-**Guest mode.** Cart/wishlist (`Users.getCart/...`), activity tracking (`UserActivity`), and recommendations Blocks work for **unauthorized guests** — the SDK sends the header `x-guest-id` instead of `Authorization`. Details — `.claude/rules/sdk-init.md` (section "Guest mode").
+**Guest mode.** Cart/wishlist (`Users.getCart/...`), activity tracking (`UserActivity`) and recommendations Blocks work for **unauthorized guests** — the SDK sends the header `x-guest-id` instead of `Authorization`. Details — `.claude/rules/sdk-init.md` (section "Guest Mode").
 
 **The `rating` field** (aggregate rating) is now available in `IProductsEntity`, `IPagesEntity`, and `IUserEntity` — use it for stars on cards. Rating forms — form type `'rating'` (see `/create-reviews`).
 
-**`langCode` — optional parameter** for most methods. The default language is set during SDK initialization. Pass it explicitly only in multilingual applications. All interfaces and types of returned values are in `node_modules/oneentry/dist/`.
+**`langCode` — optional parameter** for most methods. The default language is set during SDK initialization. Pass it explicitly only in multilingual applications. All interfaces and types of returned values are imported from the root of the package: `import type { IPagesEntity } from 'oneentry'` (SDK ≥ 1.0.159, see `.claude/rules/typescript.md`).
 
-> **Rarely used modules** (`GeneralTypes`, `IntegrationCollections`, `Templates`, `TemplatePreviews`, `System`) are described at the end of the file. They are rarely needed in regular site code: only `IntegrationCollections` supports writing, and `System` is for service use. The types of returned values are in `node_modules/oneentry/dist/*/...Interfaces.d.ts`.
+> **Rarely used modules** (`GeneralTypes`, `IntegrationCollections`, `Templates`, `TemplatePreviews`, `System`) are described at the end of the file. They are rarely needed in regular site code: only `IntegrationCollections` supports writing, and `System` is for service use. The types of returned values are from `oneentry`.
 
-**Unified attribute normalization (v1.0.157).** Applies to **all** modules: a single `image`/`file` comes as an object (multiple files as an array), `groupOfImages` is always an array, `integer`/`float`/`real` are converted to a number, an empty attribute is always `null`, form fields `attributes` are sorted by `position`. Previously, some of this only worked in products/menus/forms/attribute-sets — code that read `value[0]` in blocks, pages, users, orders will break. Details and migration — `.claude/rules/attribute-values.md`.
+**Unified attribute normalization (v1.0.157).** Applied to **all** modules: a single `image`/`file` comes as an object (multiple files as an array), `groupOfImages` is always an array, `integer`/`float`/`real` are converted to a number, an empty attribute is always `null`, form fields `attributes` are sorted by `position`. Previously, some of this worked only in products/menus/forms/attribute-sets — code that read `value[0]` in blocks, pages, users, orders will break. Details and migration — `.claude/rules/attribute-values.md`.
 
-**⚠️ Recommendations Blocks and vector search now return a response object (v1.0.158).** Ten recommendation methods of `Blocks` (`getCartComplement`, `getCartSimilar`, `getWishlistSimilar`, `getPersonalRecommendations`, `getRecentlyViewed`, `getRepeatPurchase`, `getTrending`, and their `...ByProductIds` versions), `Products.getProductsByVectorSearch`, and `Events.getFormSubscriptions` previously returned an array but now return `IProductsResponse` (`{ items, total, totalFound? }`) and `IFormSubscriptionsResponse` (`{ items, total }`). Code that did `.map` directly on the result or read `result[0]` will **silently receive `undefined`**. Migration — use `result.items` (and `?? []` just in case):
+**⚠️ Recommendations Blocks and vector search now return a response object (v1.0.158).** Ten recommendation methods of `Blocks` (`getCartComplement`, `getCartSimilar`, `getWishlistSimilar`, `getPersonalRecommendations`, `getRecentlyViewed`, `getRepeatPurchase`, `getTrending` and their `...ByProductIds` versions), `Products.getProductsByVectorSearch`, and `Events.getFormSubscriptions` previously returned an array, but now return `IProductsResponse` (`{ items, total, totalFound? }`) and `IFormSubscriptionsResponse` (`{ items, total }`). Code that did `.map` directly on the result or read `result[0]` will **silently receive `undefined`**. Migration — use `result.items` (and `?? []` just in case):
 
 ```typescript
 // ❌ before 1.0.158
@@ -35,9 +35,9 @@ if (isError(res)) return []
 const similar = res.items ?? []
 ```
 
-**Other type clarifications (v1.0.158).** There is no breaking behavior — the API returned this before, only the declarations changed, but now they can be relied upon without casts: `ILocalizeInfo.plainContent` (plain text next to `htmlContent`); `IOrderStatus` + `axis`/`isCancelFinal`/`isFinalSuccess`/`isMapped`; `IBaseOrdersEntity.totalSum` — **number** (for `IOrderByMarkerEntity` it remains a string); a form without fields returns `attributes: []`, not `{}` (normalized in `_normalizeAttr`); flags `IFormAttribute` (`isLogin`, `isSignUp`, …) and `IFormLocalizeInfo.title` have become optional; `IAttributeSchemaItem` + `position`/`listTitles`/`listType`/`moduleIdentifier`/`parentId`/`splitParts`, while `initialValue`/`isPrice` are optional; `IProductsResponse.totalFound?`; `IContentApiEvent.module` is optional; `IDiscountsEntity.attributeSetId` and `IDiscountValue.maxAmount` — `number | null`; `ITimeIntervalRange.period` — `number | null`; `ITimeIntervalSchedule.fullMonth`/`selectedYear` are optional; `IProductBlockSimilarRule` rewritten to the actual form (`{ id, title, attributeMarker, conditionMarker, conditionValue, statusMarker, pageUrls }`).
+**Other type clarifications (v1.0.158).** No breaking changes — the API returned this before, only declarations changed, but now they can be relied upon without casts: `ILocalizeInfo.plainContent` (plain text next to `htmlContent`); `IOrderStatus` + `axis`/`isCancelFinal`/`isFinalSuccess`/`isMapped`; `IBaseOrdersEntity.totalSum` — **number** (for `IOrderByMarkerEntity` it remains a string); a form without fields returns `attributes: []`, not `{}` (normalized in `_normalizeAttr`); flags `IFormAttribute` (`isLogin`, `isSignUp`, …) and `IFormLocalizeInfo.title` have become optional; `IAttributeSchemaItem` + `position`/`listTitles`/`listType`/`moduleIdentifier`/`parentId`/`splitParts`, while `initialValue`/`isPrice` are optional; `IProductsResponse.totalFound?`; `IContentApiEvent.module` is optional; `IDiscountsEntity.attributeSetId` and `IDiscountValue.maxAmount` — `number | null`; `ITimeIntervalRange.period` — `number | null`; `ITimeIntervalSchedule.fullMonth`/`selectedYear` are optional; `IProductBlockSimilarRule` rewritten to the actual form (`{ id, title, attributeMarker, conditionMarker, conditionValue, statusMarker, pageUrls }`).
 
-**Device metadata (v1.0.155).** Each module has `setDeviceMetadata(value)` and `getDeviceMetadata()` — override the header `x-device-metadata` (to which the API binds refresh tokens); there is also an option `config.deviceMetadata`. This is needed for server-side OAuth code exchange — see `.claude/rules/sdk-init.md` (section "Device metadata") and `/create-google-oauth`.
+**Device metadata (v1.0.155).** Each module has `setDeviceMetadata(value)` and `getDeviceMetadata()` — overrides the header `x-device-metadata` (to which the API binds refresh tokens); there is also the option `config.deviceMetadata`. Needed for server-side OAuth code exchange — see `.claude/rules/sdk-init.md` (section "Device metadata") and `/create-google-oauth`.
 
 ## Admins
 
@@ -45,11 +45,11 @@ const similar = res.items ?? []
 getAdminsInfo(body?: IFilterParams[], langCode?, offset?, limit?): IAdminEntity[]
 ```
 
-The "command/specialists" pattern: OneEntry admins with a designated set of attributes work as content entities (masters, doctors, trainers) — photo, rating, service-`entity`, schedule-`timeInterval`. The "team member" indicator is a filled key attribute (for example, name): filter the list on your side, there is no separate flag.
+The "team/experts" pattern: OneEntry admins with a designated set of attributes work as content entities (masters, doctors, trainers) — photo, rating, service-`entity`, schedule-`timeInterval`. The "team member" indicator is a filled key attribute (for example, name): filter the list on your side, there is no separate flag.
 
 - ⚠️ **Positional signature** (`body, langCode, offset, limit`) — an options object instead of positional arguments will return a 4xx envelope, not a list.
-- ⚠️ **Default `limit` = 30**: calling without arguments silently returns only the first page — some admins "disappear" without an error (classic: "32 masters in CMS, 30 on the site"). Always pass an explicit `limit` or paginate.
-- `body` — the same `IFilterParams[]` as in Products (filters by attribute values); types — `oneentry/dist/admins/adminsInterfaces`.
+- ⚠️ **Default `limit` = 30**: calling without arguments silently returns only the first page — part of the admins "disappears" without an error (classic: "32 masters in CMS, 30 on the site"). Always pass an explicit `limit` or paginate.
+- `body` — the same `IFilterParams[]` as in Products (filters by attribute values); types — from `oneentry`.
 
 ## AttributesSets
 
@@ -60,8 +60,8 @@ getSingleAttributeByMarkerSet(setMarker, attributeMarker, langCode?): IAttribute
 getAttributeSetByMarker(marker, langCode?): IAttributeSetsEntity    // SET object, not attribute
 ```
 
-- Do not confuse the two types: **`IAttributesSetsEntity`** — a separate attribute (`{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`); **`IAttributeSetsEntity`** — a set object (`{ id, identifier, title, schema, isVisible, type: { id, type }, position }`). Since v1.0.155, the fields `typeId` and `properties` have been removed from the set — read the type of the set from `type.id` / `type.type`.
-- `getAttributesByMarker` returns an array of **attributes** (`IAttributesSetsEntity[]`, without `id`/`identifier`/`schema`), not sets. Since v1.0.158, this is reflected in the types; until 1.0.157 inclusive, d.ts declared `IAttributeSetsEntity[]` — do not trust the declared type in the old SDK here.
+- Do not confuse the two types: **`IAttributesSetsEntity`** — a separate attribute (`{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`); **`IAttributeSetsEntity`** — a set object (`{ id, identifier, title, schema, isVisible, type: { id, type }, position }`). Since v1.0.155, the set has removed the fields `typeId` and `properties` — read the type of the set from `type.id` / `type.type`.
+- `getAttributesByMarker` returns an array of **attributes** (`IAttributesSetsEntity[]`, without `id`/`identifier`/`schema`), not sets. Since v1.0.158 this is reflected in the types; until 1.0.157 inclusive, d.ts declared `IAttributeSetsEntity[]` — do not trust the declared type here on the old SDK.
 
 ## AuthProvider
 
@@ -104,12 +104,12 @@ getRecentlyViewed(marker, langCode?, signPrice?): IProductsResponse
 getRepeatPurchase(marker, langCode?, signPrice?): IProductsResponse
 getTrending(marker, langCode?, signPrice?): IProductsResponse
 
-// Slider (only for slider_block): tree of slides as a flat pre-order array
+// Slider (only for block slider_block): tree of slides as a flat pre-order array
 getSlides(marker): IBlockSlidesResponse
 ```
 
 - `...ByProductIds` — versions by explicit list: `body: IBlockProductsLookup = { productIds: number[], langCode?, limit?, signPrice? }`. Versions without `ByProductIds` take the cart/wishlist **from context** (authorized user or guest by `x-guest-id`).
-- `BlockType` has been supplemented with values: `'frequently_ordered_block'`, `'trending_block'`, `'recently_viewed_block'`, `'repeat_purchase_block'`, `'slider_block'`, `'personal_recommendations_block'`, `'cart_complement_block'`, `'cart_similar_block'`, `'wishlist_similar_block'`. Take the block marker in the OneEntry admin → Blocks.
+- `BlockType` has been expanded with values: `'frequently_ordered_block'`, `'trending_block'`, `'recently_viewed_block'`, `'repeat_purchase_block'`, `'slider_block'`, `'personal_recommendations_block'`, `'cart_complement_block'`, `'cart_similar_block'`, `'wishlist_similar_block'`. Get the block marker in the OneEntry admin → Blocks.
 
 ## Discounts
 
@@ -121,13 +121,13 @@ getBonusBalance(): IBonusBalanceEntity                      // ⚠️ user — {
 getBonusHistory(type?, dateFrom?, dateTo?, discountId?, moduleId?, isAdmin?): IBonusTransactionEntity[]  // ⚠️ user
 ```
 
-- `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate a discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
+- `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate the discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
 - Bonuses: `getBonusBalance` / `getBonusHistory` require user authorization. `IBonusTransactionType` = `'ACCRUAL' | 'USAGE' | 'REDUCE' | 'REVERSAL_ACCRUAL' | 'REVERSAL_USAGE' | 'EXPIRATION'`.
 
 ## Events ⚠️ require authorization
 
 ```ts
-// Subscriptions to products (availability / price)
+// Product subscriptions (availability / price)
 getAllSubscriptions(offset?, limit?): ISubscriptions
 subscribeByMarker(marker, productId, langCode?): boolean | IError
 unsubscribeByMarker(marker, productId, langCode?): boolean | IError
@@ -140,9 +140,9 @@ getFormSubscriptions(offset?, limit?): IFormSubscriptionsResponse   // [{ eventM
 getAllEvents(): IContentApiEvent[]                               // public via SDK, but see note about 401
 ```
 
-> ⚠️ **Breaking (v1.0.157):** `subscribeByMarker`, `unsubscribeByMarker`, `subscribeToForm`, `unsubscribeFromForm` now truly return `IError` on API refusal. Until 1.0.157, the common helper only caught exceptions, and with `isShell: true` (default) the SDK **returns** the error instead of throwing it — therefore, any refusal was reported as `true`. Check strictly: `if (result === true)`, `if (result)` will skip the error object. The same pitfalls were present in `Subscriptions.cancelSubscription` / `recoverSubscriptions`.
+> ⚠️ **Breaking (v1.0.157):** `subscribeByMarker`, `unsubscribeByMarker`, `subscribeToForm`, `unsubscribeFromForm` now actually return `IError` on API refusal. Until 1.0.157, the common helper only caught exceptions, and with `isShell: true` (default) the SDK **returns** the error instead of throwing it — therefore, any refusal was reported as `true`. Check strictly: `if (result === true)`, `if (result)` will skip the error object. The same pitfalls were present in `Subscriptions.cancelSubscription` / `recoverSubscriptions`.
 >
-> ⚠️ `getAllEvents` is public from the SDK side, but the events route must be **granted to a group of guests** — it is not granted on some tenants, and the method returns `401` with the app token. Then view event markers in the admin → Events, via admin API (`GET /api/admin/events`, rule `admin-api`) or grant permission (`/admin-grant-permissions`). The existence of an event cannot be checked with trial `generateCode`/`checkCode` — they mask the error (see `.claude/rules/auth-provider.md`).
+> ⚠️ `getAllEvents` is public from the SDK side, but the route events must be **issued to the guest group** — on some tenants it is not issued, and the method returns `401` with the app token. Then look for event markers in the admin panel → Events, via admin API (`GET /api/admin/events`, rule `admin-api`) or grant permission (`/admin-grant-permissions`). The existence of an event cannot be checked with trial `generateCode`/`checkCode` — they mask the error (see `.claude/rules/auth-provider.md`).
 >
 > Do not confuse with the **Subscriptions** module (paid subscriptions) — these are different entities. `Events.getAllSubscriptions` → user subscriptions to products (`ISubscriptions`); `Subscriptions.getAllSubscriptions` → available paid plans (`ISubscriptionEntity[]`, v1.0.157).
 
@@ -163,7 +163,7 @@ getFile(id, type, entity, filename, template?): Response   // raw fetch Response
 getFilterByMarker(marker, langCode?): IContentFilter            // tree of items (IContentFilterItem[])
 ```
 
-Content filter — a customizable tree of nodes in the admin (pages, products, attributes, discounts, bonuses, payment methods). `IContentFilterItem.type` = `'page' | 'product' | 'admin' | 'attribute' | 'discount' | 'personal-discount' | 'bonus' | 'payment-method' | 'custom'`. Nodes are nested via `children`. Public (app-token).
+Content filter — a customizable tree of nodes in the admin panel (pages, products, attributes, discounts, bonuses, payment methods). `IContentFilterItem.type` = `'page' | 'product' | 'admin' | 'attribute' | 'discount' | 'personal-discount' | 'bonus' | 'payment-method' | 'custom'`. Nodes are nested through `children`. Public (app-token).
 
 ## Forms
 
@@ -172,7 +172,7 @@ getAllForms(langCode?, offset?, limit?): IFormsResponse   // paginated: { total,
 getFormByMarker(marker, langCode?): IFormsEntity
 ```
 
-> `IFormsEntity.type` is narrowed to `'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`.
+> `IFormsEntity.type` has been narrowed down to `'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) has received the field `exceptionIds?: string[]`.
 
 ## FormData
 
@@ -212,13 +212,13 @@ createOrder(marker, body: IOrderData, langCode?): IBaseOrdersEntity
 updateOrderByMarkerAndId(marker, id, body: IOrderData, langCode?): IBaseOrdersEntity
 getAllStatusesByStorageMarker(marker, langCode?, offset?, limit?): IOrderStatus[]
 
-// Refunds (refund requests) for the order
+// Returns (refund requests) by order
 getRefunds(id): IRefundRequest[]
 createRefundRequest(id, body: ICreateRefundRequest): boolean    // body: { products: Record<string, { quantity }>, note? }
 cancelRefundRequest(id): boolean
 ```
 
-> Bonuses and coupons: `ICreateOrderPreview` / `IOrderData` accept `couponCode`, `additionalDiscountsMarkers`, `bonusAmount`; responses (`IBaseOrdersEntity`, `IOrderPreviewResponse`) return `bonusApplied`, `totalDue`, `discountConfig`. Split payment (`IOrderSplit`) and `discountConfig` come in `getOrderByMarkerAndId`. Elements `products` in body — `{ productId, quantity, signedPrice? }`: `signedPrice` take from the product obtained with the `signPrice` parameter (price fixation, v1.0.154). Details — `.claude/rules/orders.md`.
+> Bonuses and coupons: `ICreateOrderPreview` / `IOrderData` accept `couponCode`, `additionalDiscountsMarkers`, `bonusAmount`; responses (`IBaseOrdersEntity`, `IOrderPreviewResponse`) return `bonusApplied`, `totalDue`, `discountConfig`. Split payment (`IOrderSplit`) and `discountConfig` come in `getOrderByMarkerAndId`. The elements `products` in body are `{ productId, quantity, signedPrice? }`: `signedPrice` should be taken from the product received with the `signPrice` parameter (price fixation, v1.0.154). Details — `.claude/rules/orders.md`.
 >
 > Order statuses (v1.0.157, fields declared in types — previously validation cut them out): in `IOrderByMarkerEntity` (`getOrderByMarkerAndId`, `getAllOrdersByMarker`) — `fulfillmentStatusIdentifier`, `fulfillmentStatusLocalizeInfos`, `paymentStatusIdentifier`, `paymentStatusLocalizeInfos` (each `null` until the status is assigned); in `IBaseOrdersEntity` (`createOrder`, `updateOrderByMarkerAndId`) — `statusLocalizeInfos` (localized status name). If the project included `validation.enabled`, these fields did not reach the code at all until 1.0.157.
 
@@ -235,11 +235,11 @@ getConfigPageByUrl(url): IPageConfig
 searchPage(name, url?, langCode?): IPagesEntity[] | IPageSearchResult[]   // ⚠️ form depends on traficLimit
 ```
 
-> `IPagesEntity.type` is now typed as `PageType` = `'catalog_page' | 'common_page' | 'error_page' | 'external_page'` (subset of `BlockType`). `categoryPath` has become `string | null` (for nested pages it comes as `null`).
+> `IPagesEntity.type` is now typed as `PageType` = `'catalog_page' | 'common_page' | 'error_page' | 'external_page'` (a subset of `BlockType`). `categoryPath` has become `string | null` (for nested pages it comes as `null`).
 >
 > `searchPage` with `traficLimit: true` returns short cards `IPageSearchResult` (`{ id, title }`) — see the Products section, there is also a type narrowing pattern. Since v1.0.157, in this mode, the useless pass for templates has been skipped (short cards do not have `templateIdentifier`).
 >
-> `getBlocksByPageUrl` enriches blocks with products (v1.0.153): for block `type: 'product_block'` appears `products?: IProductsEntity[]`, for `type: 'similar_products_block'` — `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. With `traficLimit: true` in the SDK config, enrichment is disabled, in case of a loading error, an empty array is placed in the field — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
+> `getBlocksByPageUrl` enriches blocks with products (v1.0.153): for a block `type: 'product_block'`, `products?: IProductsEntity[]` appears, for `type: 'similar_products_block'` — `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. When `traficLimit: true` in the SDK config, enrichment is disabled, and in case of a loading error, an empty array is placed in the field — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
 
 ## Payments ⚠️ require authorization
 
@@ -276,7 +276,7 @@ getProductsCountByPageUrl(url, body?): IProductsCount
 - Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price', signPrice? }` — for `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. For `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`); for `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); for `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting are no longer accepted by this endpoint, extra fields are a TS error). `IProductsQuery` — deprecated alias `IProductsQueryBase`, do not use in new code.
 - `getProductsByVectorSearch` — `body: IVectorSearchProducts = { queryText, vectorDistanceThreshold?, maxHits?, debug? }`. Semantic search by the meaning of the query (not by substring, like `searchProduct`).
 - `getProductsEmptyPage` — now **POST**, returns `IAggregatedProductGroup[]` (`{ attrValue, items, productIds, total }`), not `IProductsResponse`.
-- **Quick search and `traficLimit` (types clarified in v1.0.157).** `searchProduct` → `IProductsEntity[] | IProductSearchResult[] | IError`, `Pages.searchPage` → `IPagesEntity[] | IPageSearchResult[] | IError`. With `traficLimit: true`, the **raw response of quick search** is returned — short card `IProductSearchResult = { id, title, pageId }` / `IPageSearchResult = { id, title }`, without `attributeValues`, `localizeInfos`, `blocks`. Runtime behavior has not changed — previously the signature just lied, and `attributeValues` in traficLimit mode silently came as `undefined`. Narrow down by config or by field:
+- **Quick search and `traficLimit` (types clarified in v1.0.157).** `searchProduct` → `IProductsEntity[] | IProductSearchResult[] | IError`, `Pages.searchPage` → `IPagesEntity[] | IPageSearchResult[] | IError`. When `traficLimit: true`, it returns the **raw response of quick search** — short card `IProductSearchResult = { id, title, pageId }` / `IPageSearchResult = { id, title }`, without `attributeValues`, `localizeInfos`, `blocks`. Runtime behavior has not changed — previously the signature simply lied, and `attributeValues` in traficLimit mode silently came as `undefined`. Narrow down by config or by field:
 
 ```ts
 const found = await getApi().Products.searchProduct(query);
@@ -309,14 +309,14 @@ subscribe(body: ISubscribe): ICreatedSubscription             // body: { marker 
 cancelSubscription(body: ICancelSubscription): boolean | IError  // body: { marker }
 getAllSubscriptions(): ISubscriptionEntity[]                  // ⚠️ v1.0.157: objects, NOT markers
 getActiveSubscriptions(): string[]                            // markers of active user subscriptions
-recoverSubscriptions(body: ICancelSubscription): boolean | IError  // recovery via Stripe Billing Portal
+recoverSubscriptions(body: ICancelSubscription): boolean | IError  // recovery through Stripe Billing Portal
 ```
 
 Paid subscriptions. `subscribe` returns `paymentUrl` for redirect to payment (like `createSession` for orders). Skills: `/create-subscription`.
 
 > ⚠️ **Breaking (v1.0.157):** `getAllSubscriptions` returns `ISubscriptionEntity[]`, not `string[]` — the old signature was taken from swagger and never matched the data (with `validation.enabled` the method failed with `expected string, received object`). Fields: `{ id, identifier, localizeInfos, productIds, periodInDays, paymentAccountId, isUsed }` — the plan name is taken from `localizeInfos.title`, the marker from `identifier`. Code on markers: `subs.map((s) => s.identifier)`. `getActiveSubscriptions` has not changed (`string[]`).
 >
-> ⚠️ **Breaking (v1.0.157):** `cancelSubscription` / `recoverSubscriptions` no longer respond `true` on API error — with `isShell: true` (default) it returns `IError`. Check only strictly with `if (result === true)`: the error object is also truthy.
+> ⚠️ **Breaking (v1.0.157):** `cancelSubscription` / `recoverSubscriptions` no longer respond with `true` on API error — with `isShell: true` (default) it returns `IError`. Check only with strict `if (result === true)`: the error object is also truthy.
 
 ## UserActivity
 
@@ -339,7 +339,7 @@ deleteFCMToken(token): boolean
 // Cart — works for user OR guest (x-guest-id)
 getCart(): ICartResponse                       // { items: [{ productId, qty, addedAt? }], total }
 setCart(body: ICartSet): ICartResponse         // full replacement: { items }
-addCartItem(body: ICartAddItem): ICartResponse // { productId, qty } — add / update qty
+addCartItem(body: ICartAddItem): ICartResponse // { productId, qty } — add/update qty
 removeCartItem(productId): ICartResponse
 
 // Wishlist — works for user OR guest (x-guest-id)
@@ -356,6 +356,8 @@ removeWishlistItem(productId): IWishlistResponse
 ```ts
 connect(): Socket
 ```
+
+> v1.0.159: `socket.io-client` (~41 KB) loads **on the first `connect()`**, not together with the SDK. The signature is synchronous and `Socket` is returned immediately: `on`, `emit`, `disconnect` accumulate and are played on the real socket at the moment of its creation — before the connection can deliver anything, so events are not lost. `id` (`undefined`) and `connected` (`false`) are read correctly — for a freshly created socket they are the same. Only methods that must **return** a value (`listeners()`), and nested objects (`socket.io`) do not work until the chunk is loaded.
 
 ## Templates
 
@@ -397,7 +399,7 @@ createICollectionRow(marker, body: ICollectionFormObject, langCode?): ICollectio
 updateICollectionRow(marker, id, body: { formIdentifier, formData }, langCode?): ICollectionRow
 deleteICollectionRowByMarkerAndId(marker, id): boolean
 
-// marker check
+// marker validation
 validateICollectionMarker(marker): ICollectionIsValid
 ```
 
@@ -405,7 +407,7 @@ The only content module with full CRUD — use it if the project stores data in 
 
 > v1.0.157: in `ICollectionRow` `langCode` and `formIdentifier` are declared (`formIdentifier` comes on update) — the API always returned them, but when `validation.enabled` they were cut from the response.
 >
-> ⚠️ `validateICollectionMarker` — the semantics are **opposite** to JSDoc: `true` = marker is FREE (does not exist), `false` = occupied. To check the existence of a collection, you need to use `getICollections()`, not this method. Details — `product-statuses.md` (an analogous case is described there).
+> ⚠️ `validateICollectionMarker` — the semantics are **opposite** to JSDoc: `true` = marker is FREE (does not exist), `false` = occupied. To check the existence of a collection, you should use `getICollections()`, not this method. Details — `product-statuses.md` (there is also a similar case described).
 
 ## System
 
@@ -429,8 +431,18 @@ import {
 } from 'oneentry';
 ```
 
-- `expandAttributeTimeIntervals(attr, window)` — expands the **entire** `timeInterval` attribute of the entity (`page.attributeValues.interval` etc.): traverses groups and schedules, merges slots. Non-timeInterval attribute → `[]` (safe without type checking).
-- `expandTimeIntervals(schedule, window)` — expands **one** schedule. Accepts both types: entity schedules (`attributeValues[marker].value[].values[]`) and **forms** (`attributes[].localizeInfos.intervals[]`, already typed — main case).
-- `TimeIntervalPair = [startISO, endISO]` (UTC). The window `ITimeIntervalWindow = { from, to }`. Also exported are `ITimeIntervalAttributeValue`, `ITimeIntervalGroup`, `ITimeIntervalEntitySchedule`, `ITimeIntervalSchedule`, `IAttributeValue`.
+- `expandAttributeTimeIntervals(attr, window)` — expands the **entire** `timeInterval` attribute
+  of the entity (`page.attributeValues.interval` etc.): traverses groups and schedules, merges slots.
+  Non-timeInterval attribute → `[]` (safe without checking `type`).
+- `expandTimeIntervals(schedule, window)` — expands **one** schedule. Accepts both types:
+  schedules of entities (`attributeValues[marker].value[].values[]`) and **forms**
+  (`attributes[].localizeInfos.intervals[]`, already typed — main case).
+- `TimeIntervalPair = [startISO, endISO]` (UTC). The window `ITimeIntervalWindow = { from, to }`.
+  Also exported are `ITimeIntervalAttributeValue`, `ITimeIntervalGroup`,
+  `ITimeIntervalEntitySchedule`, `ITimeIntervalSchedule`, `IAttributeValue`.
 
-> ⚠️ **Breaking (v1.0.156):** the computed field `timeIntervals` is no longer added to responses (materialized a year of slots and inflated the cache). Public `Module._addTimeIntervalsToSchedules` / `_addTimeIntervalsToFormSchedules` have also been removed. Migrate to `expandAttributeTimeIntervals` / `expandTimeIntervals` with the required window. The raw schedule (`dates`/`range`, `times`/`intervals`, `inEveryWeek`, `inEveryMonth`) has not changed. See `.claude/rules/attribute-values.md`, `/create-checkout`.
+> ⚠️ **Breaking (v1.0.156):** the computed field `timeIntervals` is no longer added to responses
+> (materialized a year of slots and inflated the cache). Public `Module._addTimeIntervalsToSchedules`
+> / `_addTimeIntervalsToFormSchedules` have also been removed. Migrate to `expandAttributeTimeIntervals` / `expandTimeIntervals`
+> with the required window. The raw schedule (`dates`/`range`, `times`/`intervals`, `inEveryWeek`, `inEveryMonth`)
+> has not changed. See `.claude/rules/attribute-values.md`, `/create-checkout`.

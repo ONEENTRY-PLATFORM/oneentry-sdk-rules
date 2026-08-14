@@ -2,9 +2,9 @@
 name: create-cart-manager
 description: Create cart manager on the native server cart API (Users.getCart/addCartItem/...) — guest + user, cross-device sync, React Context with optimistic updates
 ---
-# Create a cart manager (server-side cart API)
+# Create a cart manager (server cart API)
 
-Creates a cart manager on the **native server API** OneEntry (`Users.getCart/setCart/addCartItem/removeCartItem`). The cart is stored on the server and synchronized between devices — for authenticated users and for guests (by `guestId`). It does not require Redux/redux-persist.
+Creates a cart manager on the **native server API** OneEntry (`Users.getCart/setCart/addCartItem/removeCartItem`). The cart is stored on the server and synchronized between devices — for an authorized user and for a guest (by `guestId`). It does not require Redux/redux-persist.
 
 > ℹ️ **Server cart vs Redux+localStorage.** The server API is cross-device, survives device changes, and is immediately ready for checkout. If you need a purely client-side offline cart without a network — that's a different pattern (Redux+persist), but by default, we use the server API.
 
@@ -18,7 +18,7 @@ Cart from the server: `ICartResponse = { items: ICartItem[], total }`, where `IC
 
 ```typescript
 // src/app/types/cart.ts
-import type { ICartItem } from 'oneentry/dist/users/usersInterfaces';
+import type { ICartItem } from 'oneentry';
 export type { ICartItem };
 ```
 
@@ -58,7 +58,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const [items, setItems] = useState<ICartItem[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Apply the server response (ICartResponse) as new state
+  // Apply server response (ICartResponse) as new state
   const apply = useCallback((res: unknown) => {
     const r = res as { items?: ICartItem[] };
     if (!isError(res) && Array.isArray(r?.items)) setItems(r.items);
@@ -159,7 +159,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
 
 ---
 
-## Step 4: "Add to cart" button
+## Step 4: "Add to Cart" button
 
 ```tsx
 'use client';
@@ -169,11 +169,11 @@ export function AddToCartButton({ productId }: { productId: number }) {
   const { isInCart, qtyOf, add, remove } = useCart();
   return isInCart(productId) ? (
     <button data-testid="remove-from-cart" data-product-id={productId} onClick={() => remove(productId)}>
-      In cart ({qtyOf(productId)})
+      In Cart ({qtyOf(productId)})
     </button>
   ) : (
     <button data-testid="add-to-cart" data-product-id={productId} onClick={() => add(productId, 1)}>
-      Add to cart
+      Add to Cart
     </button>
   );
 }
@@ -241,13 +241,13 @@ export async function getProductsByIds(ids: number[]) {
 
 > ⚠️ Do NOT take the total amount (money) from `cart.total` — this is the number of items. Calculate the price based on product attributes (`price`/`sale`) after loading, or via `Orders.previewOrder` at checkout (see `.claude/rules/orders.md`).
 
-> 🔒 **Price fixation at checkout (SDK ≥ 1.0.154).** To ensure the price in the order matches the one shown in the cart, load products with the `signPrice` parameter: `Products.getProductsByIds(ids, langCode, { signPrice: '<order storage marker, e.g. "orders">' })` — each product will return a `signedPrice` field (JWT with fixed price), which is passed in the order item: `products: [{ productId, quantity, signedPrice }]` (`IOrderProductData.signedPrice`). Note: `userQuery` is the third argument, so you need to explicitly pass the second (`langCode`). The fixation and passing of `signedPrice` in the order is handled in the skill `/create-checkout`.
+> 🔒 **Price fixation at checkout (SDK ≥ 1.0.154).** To ensure the price in the order matches the one shown in the cart, load products with the parameter `signPrice`: `Products.getProductsByIds(ids, langCode, { signPrice: '<order storage marker, e.g. "orders">' })` — each product will return with a `signedPrice` field (JWT with fixed price), which is passed to the order item: `products: [{ productId, quantity, signedPrice }]` (`IOrderProductData.signedPrice`). Note: `userQuery` is the third argument, so you need to explicitly pass the second one (`langCode`). The fixation and passing of `signedPrice` in the order — in the skill `/create-checkout`.
 
 ---
 
 ## Step 6: Merging guest cart upon login (optional)
 
-After authentication, the SDK switches from `guestId` to user token — these are **different carts**. If you need to keep the guest cart, merge it into the user cart immediately after `reDefine`:
+After authorization, the SDK switches from `guestId` to user token — these are **different carts**. If you need to save the guest cart, merge it into the user cart immediately after `reDefine`:
 
 ```ts
 // call ONCE immediately after successful login, before reloading the user cart
@@ -275,13 +275,13 @@ async function mergeGuestCartIntoUser(guestItems: { productId: number; qty: numb
 ```md
 ✅ A cart manager has been created on the server API. Key rules:
 
-1. The cart on the server (Users.*) is cross-device, works for user and guest (guest id auto in the browser)
+1. The cart on the server (Users.*) — cross-device, works for user and guest (guest id auto in the browser)
 2. addCartItem({ productId, qty }) — UPSERT (sets qty), not increment
-3. Each mutating method returns the updated cart — apply it as truth, roll back to prev on IError
+3. Each mutating method returns the updated cart — apply it as truth, rollback to prev on IError
 4. The server only stores productId+qty — load full products via getProductsByIds
-5. cart.total — number of items, NOT the sum of money; calculate the price based on attributes / previewOrder
+5. cart.total — number of items, NOT the amount of money; calculate the price based on attributes / previewOrder
 6. After login, guest and user — different carts; if necessary, merge via setCart (Step 6)
-7. On the server (SSR/Server Action), guest id is NOT auto — explicit setGuestId from cookie is needed (see `.claude/rules/sdk-init.md`)
+7. On the server (SSR/Server Action) guest id is NOT auto — explicit setGuestId from cookie is needed (see `.claude/rules/sdk-init.md`)
 ```
 
 ---
@@ -325,7 +325,7 @@ test.describe('Cart (server API, guest mode)', () => {
     await page.getByTestId('add-to-cart').first().waitFor({ timeout: 10_000 });
   });
 
-  test('click "Add to cart" adds product and changes button', async ({ page }) => {
+  test('click "Add to Cart" adds product and changes button', async ({ page }) => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();
@@ -349,7 +349,7 @@ test.describe('Cart (server API, guest mode)', () => {
     ).toBeVisible({ timeout: 10_000 });
   });
 
-  test('changing quantity: + increases, − decreases', async ({ page }) => {
+  test('quantity change: + increases, − decreases', async ({ page }) => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();
@@ -365,7 +365,7 @@ test.describe('Cart (server API, guest mode)', () => {
     await expect(qty).toHaveText('1');
   });
 
-  test('removing product clears the cart', async ({ page }) => {
+  test('removing a product clears the cart', async ({ page }) => {
     const addBtn = page.getByTestId('add-to-cart').first();
     const productId = await addBtn.getAttribute('data-product-id');
     await addBtn.click();
