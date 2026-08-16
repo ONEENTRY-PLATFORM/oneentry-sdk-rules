@@ -27,12 +27,13 @@ What to look for in `items[0].attributeValues`:
 ## Step 2: Clarify with the User
 
 1. **Page route** — for example `src/app/[locale]/shop/product/[id]/page.tsx`
-2. **Are related products needed?** (`getRelatedProductsById`)
+2. **Are similar products needed?** (`getRelatedProductsById`)
 3. **Is an image gallery or a single image needed?**
-4. **Is there a layout?** — if yes, copy it exactly
+4. **Blur placeholder?** — ask, **only if** the files from step 1 have `previewLink` (it only appears for uploaded files with a configured preview template): "Include `placeholder="blur"` from the built-in LQIP?". If silent → include **only on the main product image** (LCP candidate), not in the gallery or similar products; see `.claude/rules/performance-images.md`
+5. **Is there a layout?** — if yes, copy exactly
 
 > **🛒 The "Add to Cart" button is ALWAYS added by default.**
-> Do not ask the user "do you need a button?". If the user **explicitly** did not say "without a button" — add it.
+> Do not ask the user "is the button needed?". If the user **explicitly** did not say "without a button" — add it.
 > If the cart is not yet implemented — first run `/create-cart-manager`.
 > The "Add to Favorites" button is added **only at the user's request** (→ `/create-favorites`).
 
@@ -40,7 +41,7 @@ What to look for in `items[0].attributeValues`:
 
 ## Step 3: Create Server Action (if not already)
 
-> If `src/app/actions/products.ts` already exists — read it and supplement it, do not duplicate.
+> If `src/app/actions/products.ts` already exists — read it and supplement, do not duplicate.
 
 ```typescript
 // src/app/actions/products.ts
@@ -65,7 +66,7 @@ export async function getRelatedProducts(
   // from /inspect-api product-statuses, do not hardcode 'in_stock'.
   // ⚠️ Do not confuse with listing methods (getProducts, etc.): there statusMarker is absent in query
   // (TS error) and status is filtered through IFilterParams body (see .claude/rules/product-statuses.md);
-  // in getRelatedProductsById there are no body filters — statusMarker is passed in query
+  // getRelatedProductsById has no body filters — statusMarker is passed in query
   // (in 1.0.154 types are aligned with actually supported endpoint parameters).
   const result = await getApi().Products.getRelatedProductsById(id, locale, {
     offset: 0,
@@ -81,7 +82,7 @@ export async function getRelatedProducts(
 
 ---
 
-## Step 4: Create the Product Page
+## Step 4: Create Product Page
 
 ### Basic Template
 
@@ -107,7 +108,7 @@ export default async function ProductPage({
   const attrs = product.attributeValues || {};
 
   // ⚠️ Replace markers with real ones from /inspect-api!
-  // image: 1 file → OBJECT, 2+ → ARRAY (v1.0.157, the same in all modules) — capture universally
+  // image: 1 file → OBJECT, 2+ → ARRAY (v1.0.157, same across all modules) — capture universally
   const rawPic = attrs.pic?.value;
   const imageUrl = (Array.isArray(rawPic) ? rawPic[0] : rawPic)?.downloadLink || '';
   const title = product.localizeInfos?.title || '';
@@ -258,7 +259,7 @@ const gallery = attrs.gallery?.value || [];
 
 ```md
 1. params in Next.js 15+ — this is a Promise, must use await
-2. image/file → 1 file: OBJECT, 2+: ARRAY (v1.0.157, the same in all modules) → const i = Array.isArray(v) ? v[0] : v; i?.downloadLink
+2. image/file → 1 file: OBJECT, 2+: ARRAY (v1.0.157, same across all modules) → const i = Array.isArray(v) ? v[0] : v; i?.downloadLink
 2. groupOfImages → value is always an ARRAY → attrs.gallery?.value?.[0]?.downloadLink
 3. text → array OR object → (Array.isArray(v) ? v[0] : v)?.htmlValue or ?.plainValue; htmlValue in dangerouslySetInnerHTML — only through sanitizeHtml (.claude/rules/security.md)
 4. Numeric attributes (integer/float/real) — number or null; unfilled no longer comes as 0 → use ?? 0
@@ -348,7 +349,7 @@ return (
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Route of the product page** — taken from the path of the created file (`src/app/[locale]/shop/product/[id]/page.tsx`). Claude knows the pattern itself. Inform: "Tests will go to `/{locale}/shop/product/{id}` — I will substitute real id and locale".
+1. **Product page route** — taken from the path of the created file (`src/app/[locale]/shop/product/[id]/page.tsx`). Claude knows the pattern itself. Inform: "Tests will go to `/{locale}/shop/product/{id}` — I will substitute real id and locale".
 2. **ID of a real product** — take it directly via `/inspect-api products`: `items[0].id`. Inform: "For the test, I will use product id=`{value}` (`{title}`) — the first from /inspect-api".
 3. **Locale** — the first from `/inspect-api` (usually `en_US`). If the project is monolocal and the route does not have `[locale]` — adjust `E2E_PRODUCT_PATH_TEMPLATE` (remove the prefix).
 4. **Presence of a gallery** — check via `/inspect-api`: whether the product has the attribute `groupOfImages` with a non-empty array. If not — the gallery test will include `test.skip`. Inform: "The product `id={id}` {has a gallery of N images / no groupOfImages — gallery test disabled}".
@@ -365,7 +366,7 @@ If any value is not defined — leave it empty, the test will be `test.skip`.
 
 ### 6.3 Create `e2e/product-page.spec.ts`
 
-> ⚠️ Tests work with the real OneEntry project — use the real product id from `/inspect-api`.
+> ⚠️ Tests work with the real OneEntry project — they use the real product id from `/inspect-api`.
 
 ```typescript
 import { test, expect } from '@playwright/test';
@@ -409,7 +410,7 @@ test.describe('Product Page', () => {
   });
 
   test('gallery renders multiple images (groupOfImages)', async ({ page }) => {
-    test.skip(!EXPECT_GALLERY, 'The product does not have groupOfImages — gallery test disabled');
+    test.skip(!EXPECT_GALLERY, 'The product has no groupOfImages — gallery test disabled');
 
     await page.goto(`${PATH_TEMPLATE}${PRODUCT_ID}`);
     const gallery = page.getByTestId('product-page-gallery');

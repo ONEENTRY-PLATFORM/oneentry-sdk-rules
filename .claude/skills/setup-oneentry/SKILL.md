@@ -4,7 +4,7 @@ description: Setup OneEntry SDK
 ---
 ---
 name: setup-oneentry
-description: Initialize OneEntry SDK in a Next.js project — create src/lib/oneentry.ts with a singleton pattern, configure next.config.ts for images
+description: Initialize OneEntry SDK in a Next.js project — create src/lib/oneentry.ts with singleton pattern, configure next.config.ts for images
 allowed-tools: Read, Glob, Write, Edit, Bash
 ---
 
@@ -71,7 +71,7 @@ export async function reDefine(refreshToken: string, langCode?: string): Promise
   });
 }
 
-// ⚠️ CRITICAL: apiInstance is { AuthProvider, Users, ... }, it does NOT have .state!
+// ⚠️ CRITICAL: apiInstance — this is { AuthProvider, Users, ... }, it does NOT have .state!
 // Check accessToken only through apiInstance.AuthProvider.state
 export function hasActiveSession(): boolean {
   return !!(apiInstance.AuthProvider as unknown as { state?: { accessToken?: string } })?.state?.accessToken;
@@ -79,7 +79,7 @@ export function hasActiveSession(): boolean {
 
 // Synchronizes tokens directly in the current instance.
 // Use in login() INSTEAD of reDefine(): after auth() tokens are already written in the SDK state,
-// and reDefine will recreate the instance without accessToken — before the first SDK request it will do
+// and reDefine will recreate the instance without accessToken — before the first SDK request it will make
 // an unnecessary /refresh, unnecessarily rotating the just issued one-time refresh token.
 export function syncTokens(accessToken: string, refreshToken: string): void {
   apiInstance.AuthProvider.setAccessToken(accessToken);
@@ -95,7 +95,7 @@ export function isError(result: unknown): result is { statusCode: number; messag
 }
 ```
 
-> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if tokens are issued to the user by the server (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; at runtime — `getApi().AuthProvider.setDeviceMetadata(browserString)`, an empty string resets the override). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
+> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if the server issues tokens to the user (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; at runtime — `getApi().AuthProvider.setDeviceMetadata(browserString)`, an empty string resets the override). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
 
 ## Step 3: Configure next.config.ts for images
 
@@ -120,7 +120,7 @@ Check if the `.env.local` file exists in the root of the project.
 
 Ask the user:
 1. OneEntry project URL (for example: `https://your-project.oneentry.cloud`)
-2. App Token (find in the OneEntry admin panel → Settings → App Token)
+2. App Token (find it in the OneEntry admin panel → Settings → App Token)
 
 After receiving the answers, create `.env.local` with the entered values:
 
@@ -137,13 +137,13 @@ Read it and check for the presence of `NEXT_PUBLIC_ONEENTRY_URL` and `NEXT_PUBLI
 
 `.mcp.json` **is committed to the repository**. This implies two requirements.
 
-**1. Pin the server version, not `@latest`.** With `@latest`, rules change underfoot between sessions: the behavior of last week cannot be reproduced, and without a network, the launch breaks completely.
+**1. Pin the server version, not `@latest`.** With `@latest`, the rules change underfoot between sessions: the behavior of last week cannot be reproduced, and without a network, the launch breaks completely.
 
 ```bash
 npm view @oneentry/mcp-server version    # find out the current version
 ```
 
-**2. Do not write the token in the file** — only substitute from the environment:
+**2. Do not write the token in the file** — only substitution from the environment:
 
 ```json
 {
@@ -176,7 +176,7 @@ Output the message:
 Find the token: in the OneEntry admin panel → Settings → App Token
 ```
 
-## Step 7: Check oneentry import
+## Step 7: Check the import of oneentry
 
 Check that the `oneentry` package is installed in `package.json`. If not — inform:
 
@@ -186,5 +186,6 @@ Check that the `oneentry` package is installed in `package.json`. If not — inf
 
 Check the installed version (`node -p "require('oneentry/package.json').version"`) — it affects the form of type imports:
 
-- **≥ 1.0.159** — types are taken from the root: `import type { IPagesEntity } from 'oneentry'` (or `oneentry/types`). Requires Node ≥ 18.
-- **≤ 1.0.158** — only deep paths (`oneentry/dist/pages/pagesInterfaces`). If the version is old, suggest updating: `npm install oneentry@latest` — rules and skills are written for root import.
+- **≥ 1.0.160** — types are taken from the root: `import type { IPagesEntity } from 'oneentry'` (or `oneentry/types`). Requires Node ≥ 18.
+- **exactly 1.0.159** — ⚠️ broken tarball: built from an outdated directory, `require('oneentry')` fails with `Cannot find module '../base/lazySchema'`. Fixed only by updating — `npm install oneentry@latest` (functionally the same release as 1.0.160).
+- **≤ 1.0.158** — only deep paths (`oneentry/dist/pages/pagesInterfaces`). If the version is old, suggest updating: `npm install oneentry@latest` — the rules and skills are written for root import.

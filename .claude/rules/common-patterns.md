@@ -3,7 +3,7 @@
 ## Working with Markers
 
 ```typescript
-// By ID — one product
+// By ID — single product
 const product = await getApi().Products.getProductById(123)
 // By category page URL — list of products (IProductsResponse)
 const catalog = await getApi().Products.getProductsByPageUrl('sneakers')
@@ -33,6 +33,7 @@ const page2 = await getApi().Products.getProducts([], undefined, { offset: 20, l
 interface IFilterParams {
   attributeMarker: string                 // attribute name
   conditionMarker: string                 // "eq", "neq", "mth", "lth", "in", "nin", "exs", "nexs"
+                                          // + with v1.0.161: "pat" (by pattern), "same" (exact value), "same_part" (exact part of value)
   conditionValue: number | string | null
 }
 
@@ -62,17 +63,17 @@ export const revalidate = 3600 // 1 hour
 export const dynamic = 'force-dynamic'
 ```
 
-> Complete rules for caching/streaming/parallelism: `.claude/rules/performance.md` + performance-* rule family.
+> Full rules for caching/streaming/parallelism: `.claude/rules/performance.md` + family of performance-* rules.
 
 ## user.state — Storage for Arbitrary User Data
 
-`user.state` — an object of arbitrary shape in `IUserEntity` for client data: cart, favorites, settings, viewing history.
+`user.state` — an object of arbitrary form in `IUserEntity` for client data: cart, favorites, settings, viewing history.
 
 **Critical Rules:**
 
 1. **Always spread** `{ ...user.state, newField }` — do not overwrite other fields.
 2. **`formIdentifier`** is taken from `user.formIdentifier` — do not hardcode.
-3. **Call from client** via `getApi()` after `reDefine()` — the token is managed by `saveFunction`.
+3. **Call from client** via `getApi()` after `reDefine()` — token is managed by `saveFunction`.
 4. **Before each write — fresh `getUser()`.** The cached object between read and write may be outdated (another code may have changed `cart`/`favorites`).
 
 ```typescript
@@ -95,12 +96,12 @@ export async function updateUserState(data: { cart?: Record<number, number>; fav
   if (isError(user)) return;
   await getApi().Users.updateUser({
     formIdentifier: user.formIdentifier,
-    state: { ...user.state, ...data }, // spread the current state
+    state: { ...user.state, ...data }, // spreading the current state
   });
 }
 ```
 
-**Typical state structure:**
+**Typical State Structure:**
 
 ```typescript
 user.state = {
@@ -133,7 +134,7 @@ useEffect(() => {
   if (!isAuth) return
   if (cartVersion === 0 && favoritesVersion === 0) return
   updateUserState({ cart: productsInCart, favorites: favoritesIds })
-  // DO NOT pass user as a parameter — updateUserState fetches fresh data itself
+  // DO NOT pass user as a parameter — updateUserState itself gets fresh data
 }, [isAuth, productsInCart, favoritesIds])
 ```
 
@@ -183,7 +184,7 @@ const { data: freshUser } = useGetMeQuery(undefined, {
 })
 ```
 
-> Complete rules (skip patterns, `keepUnusedDataFor` by resource type, `pollingInterval ≥ 30 s`, when **not** to use RTK Query, optimistic updates): `.claude/rules/performance-rtk.md`.
+> Full rules (skip patterns, `keepUnusedDataFor` by resource type, `pollingInterval ≥ 30 s`, when **not** to use RTK Query, optimistic updates): `.claude/rules/performance-rtk.md`.
 
 ## Parallel Requests
 

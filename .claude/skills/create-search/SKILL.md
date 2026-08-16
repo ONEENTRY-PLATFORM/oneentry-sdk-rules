@@ -14,13 +14,16 @@ Argument: what to search for — `products` (products), `pages` (pages), `all` (
    - `products` — by name: `searchProduct(query, locale)`; by meaning (semantic): `getProductsByVectorSearch({ queryText: query }, locale)` — not by substring, optional fields body: `vectorDistanceThreshold`, `maxHits`, `debug`. **From v1.0.158 returns `IProductsResponse` (`{ items, total, totalFound? }`), not an array** — take `res.items ?? []`. The availability of semantic search depends on the OneEntry project settings — in case of an error, the method will return `IError` (the skill handles it as `[]`)
    - `pages` — `searchPage(name, url?, langCode?)` — locale is the THIRD argument (the second is the url filter)
    - `blocks` — `searchBlock(name)`
-   - multiple at once — parallel requests via `Promise.all`
+   - `all` (one search string for the entire site) — **`Search.globalSearch(query, types?, visibility?, offset?, limit?)`** (SDK ≥ 1.0.161): one request by names **and attribute values** at once for 18 types of entities. The response is grouped: `{ query, groups: [{ type, items, hasMore }] }`. For a public site, pass `visibility: 'visible'`; `offset`/`limit` are allowed **only** together with exactly one type in `types` (otherwise, the API responds with `400`)
+   - multiple at once — either `Search.globalSearch` in one request or parallel requests via `Promise.all`
+
+   > `globalSearch` returns **match context**, not entities: `{ id, title?, matchKind, matchedField, fragment?, langCode? }`, without `attributeValues` and prices. For cards, collect `id` and load more — `getProductsByIds(ids.join(','))`. `id` can be a string (`workflows`, `attributes`) — do not blindly convert to a number. In SDK ≤ 1.0.160, the `Search` module does not exist: there `searchProduct` + `searchPage` via `Promise.all`.
 
 2. **Where is it displayed?**
    - Dropdown list directly in the search bar — the most common case
    - Separate results page
 
-3. **Is there a layout?** — if yes, copy it exactly
+3. **Is there a layout?** — if yes, copy exactly
 
 ---
 
@@ -28,7 +31,7 @@ Argument: what to search for — `products` (products), `pages` (pages), `all` (
 
 > If `src/app/actions/products.ts` / `src/app/actions/pages.ts` already exists — read and supplement, do not duplicate.
 
-> ⚠️ **`traficLimit` changes the result format (types clarified in v1.0.157).** `searchProduct` is declared as `IProductsEntity[] | IProductSearchResult[] | IError`, `searchPage` — as `IPagesEntity[] | IPageSearchResult[] | IError`. When `traficLimit: true` in the SDK config, it returns a short card (`{ id, title, pageId }` / `{ id, title }`) **without** `attributeValues`, `localizeInfos`, `blocks` — a component reading `localizeInfos.title` will show emptiness. The skill below is calculated for the default (`traficLimit` is off). If it is enabled in the project — either take the name from the `title` of the short card or load entities by id (`getProductsByIds`).
+> ⚠️ **`traficLimit` changes the result format (types clarified in v1.0.157).** `searchProduct` is declared as `IProductsEntity[] | IProductSearchResult[] | IError`, `searchPage` — as `IPagesEntity[] | IPageSearchResult[] | IError`. When `traficLimit: true` in the SDK config, a short card is returned (`{ id, title, pageId }` / `{ id, title }`) **without** `attributeValues`, `localizeInfos`, `blocks` — a component reading `localizeInfos.title` will show emptiness. The skill below is calculated for the default (`traficLimit` is off). If it is enabled in the project — either take the name from the `title` of the short card or load entities by id (`getProductsByIds`).
 
 ```typescript
 // src/app/actions/search.ts
@@ -45,7 +48,7 @@ export async function searchProducts(
 ): Promise<IProductsEntity[]> {
   const result = await getApi().Products.searchProduct(query, locale);
   if (isError(result)) return [];
-  // with traficLimit:true here will come short cards IProductSearchResult[]
+  // with traficLimit:true, short cards IProductSearchResult[] will come here
   return result as IProductsEntity[];
 }
 
@@ -73,7 +76,7 @@ export async function searchAll(query: string, locale: string = 'en_US') {
 
 ## Step 3: Create a component
 
-### Key Principles
+### Key principles
 
 - `'use client'` — the search is interactive
 - **Debounce 300ms** via `setTimeout` in `useEffect` — do not call Server Action on every character
@@ -233,7 +236,7 @@ export default async function SearchPage({
 5. For products: product.localizeInfos?.title
 6. For pages: page.localizeInfos?.title || page.localizeInfos?.menuTitle
 7. Server Action returns [] on error — does not crash
-8. With traficLimit: true (SDK config) searchProduct/searchPage return short cards IProductSearchResult/IPageSearchResult — { id, title(, pageId) } without localizeInfos and attributeValues. Type allows this from v1.0.157; check project config before reading localizeInfos
+8. When traficLimit: true (SDK config) searchProduct/searchPage return short cards IProductSearchResult/IPageSearchResult — { id, title(, pageId) } without localizeInfos and attributeValues. Type allows this from v1.0.157; check project config before reading localizeInfos
 ```
 
 ---
@@ -241,7 +244,7 @@ export default async function SearchPage({
 ## Step 5: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> For Playwright setup — first `/setup-playwright`.
+> To set up Playwright — first `/setup-playwright`.
 
 ### 5.1 Add `data-testid` to the component
 
@@ -288,11 +291,11 @@ export default async function SearchPage({
 
 **Algorithm (perform step by step, do not ask in one list):**
 
-1. **Path of the page where SearchBar is displayed** — ask: "On which page is the search bar displayed? (usually in Navbar on all pages — `/` or main catalog will do)". If silent → use `/` by default and inform: "Using `/` — SearchBar is expected in Navbar, available everywhere".
+1. **Path of the page where SearchBar is present** — ask: "On which page is the search bar displayed? (usually in Navbar on all pages — `/` or main catalog will do)". If silent → use `/` by default and inform: "Using `/` — SearchBar is expected in Navbar, available everywhere".
 2. **Test search query that will GUARANTEED find products** — choose yourself via `/inspect-api`:
-   - Get products: `getApi().Products.getProducts([], locale, { limit: 1 })` (the first argument is an array of filters, `limit` — in the query object as the third; `locale` — project language code, e.g. `'en_US'`, can be omitted). Take the first word from `items[0].localizeInfos?.title` (a fragment of 3+ characters). For example `title="Cosmo Sneakers"` → `SEARCH_HIT_QUERY=Cosmo`.
-   - Inform: "For the test 'there are results' I use the query `{query}` — a fragment of the title of the first product in the catalog".
-   - If there are no products or the SDK is unavailable — leave it empty, the test `test.skip`.
+   - Get products: `getApi().Products.getProducts([], locale, { limit: 1 })` (the first argument — an array of filters, `limit` — in the query object as the third; `locale` — project language code, e.g. `'en_US'`, can be omitted). Take the first word from `items[0].localizeInfos?.title` (a fragment of 3+ characters). For example `title="Cosmo Sneakers"` → `SEARCH_HIT_QUERY=Cosmo`.
+   - Inform: "For the test 'there are results' I use the query `{query}` — fragment of the title of the first product in the catalog".
+   - If there are no products or SDK is unavailable — leave it empty, test `test.skip`.
 3. **Test empty query** (which has no results) — generate yourself: `zzzz-nonexistent-{rand}`. Do not save in `.env.local`, hardcode in the spec.
 4. **Path of the separate results page** (if created) — ask: "Should I create a separate results page `/search?q=...`? If yes — what path?". If silent → check via Glob (`src/app/**/search/**/page.tsx`). If not found → corresponding tests `test.skip`.
 
@@ -327,7 +330,7 @@ test.describe('Site Search', () => {
   });
 
   test('input shows results after debounce', async ({ page }) => {
-    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY is not set');
+    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY not set');
 
     await page.getByTestId('search-input').fill(SEARCH_HIT_QUERY);
     // Debounce 300ms + network request — wait up to 5s
@@ -351,7 +354,7 @@ test.describe('Site Search', () => {
   });
 
   test('clearing input closes dropdown', async ({ page }) => {
-    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY is not set');
+    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY not set');
 
     const input = page.getByTestId('search-input');
     await input.fill(SEARCH_HIT_QUERY);
@@ -362,7 +365,7 @@ test.describe('Site Search', () => {
   });
 
   test('Escape closes dropdown', async ({ page }) => {
-    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY is not set');
+    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY not set');
 
     await page.getByTestId('search-input').fill(SEARCH_HIT_QUERY);
     await expect(page.getByTestId('search-dropdown')).toBeVisible({ timeout: 5_000 });
@@ -372,20 +375,20 @@ test.describe('Site Search', () => {
   });
 
   test('clicking on a result closes dropdown and clears input', async ({ page }) => {
-    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY is not set');
+    test.skip(!SEARCH_HIT_QUERY, 'E2E_SEARCH_HIT_QUERY not set');
 
     await page.getByTestId('search-input').fill(SEARCH_HIT_QUERY);
     await expect(page.getByTestId('search-dropdown')).toBeVisible({ timeout: 5_000 });
 
     await page.getByTestId('search-result-item').first().click();
-    // After navigation dropdown should not be visible
+    // After navigation, dropdown should not be visible
     await expect(page.getByTestId('search-dropdown')).not.toBeVisible();
   });
 });
 
 // If a separate results page `/search?q=...` is created
 test.describe('Search results page', () => {
-  test.skip(!SEARCH_RESULTS_PATH || !SEARCH_HIT_QUERY, 'E2E_SEARCH_RESULTS_PATH or E2E_SEARCH_HIT_QUERY is not set');
+  test.skip(!SEARCH_RESULTS_PATH || !SEARCH_HIT_QUERY, 'E2E_SEARCH_RESULTS_PATH or E2E_SEARCH_HIT_QUERY not set');
 
   test('page shows results for query from URL', async ({ page }) => {
     await page.goto(`${SEARCH_RESULTS_PATH}?q=${encodeURIComponent(SEARCH_HIT_QUERY)}`);

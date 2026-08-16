@@ -27,9 +27,9 @@ import type {
 (result as IAuthEntity).refreshToken
 ```
 
-## Where to import types from the OneEntry SDK
+## Where to import SDK OneEntry types from
 
-**From v1.0.159 all public types are exported from the root of the package** — every interface of each module, including `base/utils`. Deep paths are no longer needed:
+**From v1.0.160 all public types are exported from the root of the package** — every interface of each module, including `base/utils`. Deep paths are no longer needed:
 
 ```ts
 // ✅ canonical form
@@ -42,9 +42,11 @@ import type { IProductsEntity } from 'oneentry/types'
 import type { IProductsEntity } from 'oneentry/dist/products/productsInterfaces'
 ```
 
-Why this is safe: `import type` is erased by the compiler, runtime from `oneentry` does not get into the bundle. Deep paths are not removed and do not break anything — but they are tied to the internal layout of `dist/`, so in existing code replace them with root imports when you edit the file. For SDK ≤ 1.0.158, root imports of types are not available — deep paths remain.
+Why this is safe: `import type` is erased by the compiler, runtime from `oneentry` does not get into the bundle. Deep paths are not removed and do not break anything — but they are tied to the internal layout of `dist/`, so in existing code replace them with root import when editing the file. In SDK ≤ 1.0.158, root import of types is not available — deep paths remain.
 
-**What comes from where** — names have not changed, only the path has changed:
+> ⚠️ **Use ≥ 1.0.160, not 1.0.159.** Functionally, this is the same release, but tarball 1.0.159 is built from an outdated directory: added files (`dist/base/lazySchema.js`, `dist/web-socket/lazySocket.js`, `dist/types.js`, root stubs `types.js`/`types.d.ts`, and the entire ESM build) did not make it into the package, and `require('oneentry')` fails with `Cannot find module '../base/lazySchema'`. In 1.0.160, the `exports` map was added: `oneentry` and `oneentry/types` resolve under `node`, `node16` (CJS and ESM) and `bundler`, the ESM build is loaded by Node itself and carries its own `.d.ts`. If your project's `package.json` has `"oneentry": "1.0.159"` — this is an installation bug, not a version choice.
+
+**What is where** — names have not changed, only the path has:
 
 | Required type | SDK Module |
 | --- | --- |
@@ -92,9 +94,9 @@ A common mistake: inside a Server Action (`'use server'`), a developer writes a 
 Reasons:
 
 - SDK types (`IFormAttribute`, `IProductsEntity`, `IOrderByMarkerEntity`, …) — are already regular object interfaces (strings / numbers / booleans / nested records). They serialize across the Server Action boundary without issues. A DTO layer is not needed.
-- Duplicating fields silently loses everything that is not copied (`validators`, `initialValue`, `listTitles`, `settings`, `isVisible`, `additionalFields`, index signatures). The next feature that needs one of these fields will have to carry it through your DTO — or revert to `as any`.
+- Duplicating fields silently loses everything that was not copied (`validators`, `initialValue`, `listTitles`, `settings`, `isVisible`, `additionalFields`, index signatures). The next feature that needs one of these fields will have to carry it through your DTO — or revert to `as any`.
 - When the SDK adds a field, the DTO does not see it. When the SDK renames a field, the DTO still compiles. Both bugs remain silent.
-- Calculating view fields (`title`, `placeholder`) on the server is dead weight: the client already has `localizeInfos.title` and `additionalFields.placeholder.value`. It's better to fetch them with small helpers at the place of use.
+- Calculating view fields (`title`, `placeholder`) on the server is dead weight: the client already has `localizeInfos.title` and `additionalFields.placeholder.value`. It’s better to extract them with small helpers at the point of use.
 
 ```ts
 // ❌ INCORRECT — invented DTO, flattening IFormAttribute
@@ -113,7 +115,7 @@ export async function getFormByMarker(marker: string) {
   }
 }
 
-// ✅ CORRECT — return the SDK type as is, helpers live on the client
+// ✅ CORRECT — return SDK type as is, helpers live on the client
 'use server'
 import type { IFormsEntity, IFormAttribute } from 'oneentry'
 export async function getFormByMarker(marker: string) {
@@ -125,16 +127,16 @@ export async function getFormByMarker(marker: string) {
   }
 }
 
-// Client helpers — output view fields from the SDK type, do not do preliminary flattening on the server
+// Client helpers — extract view fields from SDK type, do not pre-flatten on the server
 const titleFor       = (f: IFormAttribute) => f.localizeInfos?.title ?? f.marker
 const placeholderFor = (f: IFormAttribute) => (f.additionalFields?.placeholder?.value as string | undefined) ?? ''
 ```
 
-**Rule:** if you feel tempted to write `type FooField = { …trimmed subset of IFoo… }` — stop. Import `IFoo` and move any view-specific things (labels, placeholders, css) into small helpers next to the place of use. A new local type is justified only if the form truly diverges from the SDK (for example, merging two entities or adding a front-end flag like `isSelected`).
+**Rule:** if you feel tempted to write `type FooField = { …trimmed subset of IFoo… }` — stop. Import `IFoo` and move any view-specific things (labels, placeholders, css) into small helpers near the place of use. A new local type is justified only if the form truly diverges from the SDK (for example, merging two entities or adding a front-end flag like `isSelected`).
 
 ### The rule applies to any SDK entity, not just form fields
 
-The same mistake, different entities. Flattening `IAuthProvidersEntity` into `{ identifier, title, systemCodeTlsSec }` in a Server Action, retyping `product.attributeValues` as `Record<string, { value?: unknown }>`, casting `user.formData` into `Array<{ marker: string; value: unknown }>` — all of these are the same anti-pattern.
+The same mistake, different entities. Flattening `IAuthProvidersEntity` into `{ identifier, title, systemCodeTlsSec }` in a Server Action, retyping `product.attributeValues` as `Record<string, { value?: unknown }>`, casting `user.formData` to `Array<{ marker: string; value: unknown }>` — all of these are the same anti-pattern.
 
 ```ts
 // ❌ Provider DTO — loses config (oauthAuthUrl, accessTokenTtlSec, …), userGroupIdentifier, isActive
@@ -150,7 +152,7 @@ return { providers: providers as IAuthProvidersEntity[] }
 // ❌ Retyping attributeValues — duplicates IAttributeValues
 const attrs = (product.attributeValues || {}) as Record<string, { value?: unknown; type?: string }>
 
-// ✅ Use IAttributeValues / IAttributeValue from the SDK
+// ✅ Use IAttributeValues / IAttributeValue from SDK
 import type { IAttributeValues } from 'oneentry'
 const attrs: IAttributeValues = product.attributeValues || {}
 
@@ -170,7 +172,7 @@ for (const item of user.formData as FormDataType[]) {
 
 ### Narrowing `unknown` at the access point — allowed
 
-If the SDK intentionally types a field as `unknown` (for example, `IAttributeValue.value`, because the specific form depends on `type` and admin settings), local narrow-casting at the reading point — **is not** a DTO duplicate:
+If the SDK consciously types a field as `unknown` (for example, `IAttributeValue.value`, because the specific form depends on `type` and admin settings), local narrow-casting at the reading point — **is not** a DTO duplicate:
 
 ```ts
 // OK — narrowing from unknown to the form we actually read; limited to one helper
@@ -180,7 +182,7 @@ const pic = attrsOf(product).pic?.value as FileValue | FileValue[] | undefined
 const list = attrsOf(product).color?.value as Array<{ title?: string; extended?: { value?: string } }> | undefined
 ```
 
-The difference: on the SDK side — `unknown`, so you are not redefining what the SDK has already described — you are choosing a view over an intentionally wrapped payload. Keep such narrows minimal (only those fields that are actually used) and at the access point, not as an exported top-level type.
+The difference: on the SDK side — `unknown`, so you are not redefining what the SDK has already described — you are choosing a view over the intentionally-wrapped payload. Keep such narrows minimal (only those fields that are actually used) and at the access point, not as an exported top-level type.
 
 ## Declaring unused variables and imports is prohibited
 

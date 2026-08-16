@@ -10,13 +10,13 @@ This file is the core context: only what is always needed. Reference materials (
 
 OneEntry is a headless CMS for e-commerce and content projects. The `oneentry` SDK provides access to catalogs and categories, orders and payments, authentication and profiles, multilingual content, forms, menus, and pages.
 
-The SDK is isomorphic: it works on both the server and the client. Public methods are read-only; programmatic content writing goes through the internal admin API (`admin-api.md`).
+The SDK is isomorphic: it works on both the server and the client. Public methods are read-only; programmatic content writing is done through the internal admin API (`admin-api.md`).
 
 ## Start of Each Session — Mandatory Checklist
 
 ### 🚨 BEFORE writing any code
 
-1. Read this file **in full** (do not stop halfway)
+1. Read this file **completely** (do not stop halfway)
 2. `ls .claude/skills/` — check available skills
 3. `ls .claude/rules/` — view the list of rules; read not all at once, but according to the "Rules Map" below
 4. Read `eslint.config.mjs` — write code only in accordance with the linter
@@ -24,10 +24,10 @@ The SDK is isomorphic: it works on both the server and the client. Public method
 
 ### Two Mandatory Questions (once per session)
 
-Ask them at the beginning of your work and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
+Ask them at the beginning of work and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
 
-1. **"Is it necessary to save tokens?"** — **economy**: do not run linter/build, do not write comments; **full**: JSDoc + lint + build after writing. Save as `feedback_token_mode.md`
-2. **"Is it necessary to write E2E tests with Playwright?"** — **yes**: run `/setup-playwright`, write a test in `e2e/` for each new component, add `data-testid`; **no**: do not create `e2e/`. Save as `feedback_playwright.md`
+1. **“Is it necessary to save tokens?”** — **save**: do not run linter/build, do not write comments; **full**: JSDoc + lint + build after writing. Save as `feedback_token_mode.md`
+2. **“Is it necessary to write E2E tests with Playwright?”** — **yes**: run `/setup-playwright`, write tests in `e2e/` for each new component, add `data-testid`; **no**: do not create `e2/`. Save as `feedback_playwright.md`
 
 ```markdown
 ---
@@ -45,9 +45,9 @@ The file already exists — **do not ask**.
 
 ### Mandatory Code Requirements
 
-- **No `any`** — import types from the package root: `import type { IPagesEntity } from 'oneentry'` (SDK ≥ 1.0.159; see `typescript.md`). Exception — fields that the SDK itself declares as `any` (`ILocalizeInfo`, `IError`)
+- **No `any`** — import types from the package root: `import type { IPagesEntity } from 'oneentry'` (SDK ≥ 1.0.160; see `typescript.md`). Exception — fields that the SDK itself declares as `any` (`ILocalizeInfo`, `IError`)
 - **Linter** — code must pass without errors and without post-factum auto-formatting (`next/core-web-vitals` + `next/typescript`)
-- **Imports** — only used ones
+- **Imports** — only those that are used
 - **`<img>`** → `next/image`, **`<a>`** → `next/link`
 - **Temporary files** (inspection, debugging scripts) — **only** in `.claude/temp/`, this folder survives sessions
 - **Structure of `src/components/`** — never flat: organize into groups (`layout/`, `product/`, `catalog/`, `cart/`, `favorites/`, `search/`, `user/`, `ui/` — primitives without business logic). If it doesn't fit — create a new group
@@ -57,7 +57,7 @@ The file already exists — **do not ask**.
 - **Tokens**: `localStorage`, key `'refresh-token'`; rotation is handled automatically by `saveFunction` (`tokens.md`)
 - **`src/lib/oneentry.ts`**: the only file with `getApi`, `reDefine`, `hasActiveSession`, `syncTokens`, `isError`, `getLang`, `getImageUrl` — do not duplicate `isError` in other files
 - **User Authentication**: user-auth methods (Orders, Users, Payments, Events, Subscriptions) are called from the Client Component via `getApi()` after `reDefine(refreshToken, langCode)` — the SDK itself performs proactive refresh and token rotation
-- **AuthProvider.auth/signUp/generateCode**: only from Client Component (fingerprint); server call — only with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155)
+- **AuthProvider.auth/signUp/generateCode**: only from the Client Component (fingerprint); server call — only with passing `deviceMetadata` of the browser (SDK ≥ 1.0.155)
 - **`next.config.ts`**: `remotePatterns` with `*.oneentry.cloud` for `next/image`
 
 ## Context Map — what to load and when
@@ -150,7 +150,7 @@ A keyword from the prompt found → **first the skill, then the code**. Multiple
 | `jsdoc.md` | projects with strict JSDoc standard |
 | `admin-api.md`, `admin-ui.md` | scripts for writing to admin (`scripts/**`) |
 
-## Main rule: check types and markers BEFORE the code
+## Main Rule: Check Types and Markers BEFORE Code
 
 Applies to **every** subtask.
 
@@ -167,7 +167,7 @@ Import types: `import type { IPagesEntity } from 'oneentry'`. Method signatures 
 
 ### 2. Markers — from API via `/inspect-api`, not from memory
 
-Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). If there is no `.env.local` — ask for the URL and token.
+Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). If there is no `.env.local` — request the URL and token.
 
 **🚨 Existing code is NOT the source of truth:**
 
@@ -175,10 +175,10 @@ Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` �
 // ❌ If you see it in the code — DO NOT repeat without verification:
 const inStock = product.statusIdentifier === 'in_stock'
 const stockQty = attrs.units_product?.value
-// Before using these markers — confirm via `/inspect-api`.
+// Confirm these markers through `/inspect-api` before use.
 ```
 
-### 3. Entities must exist in OneEntry before connecting
+### 3. Entities must exist in OneEntry before connection
 
 If asked "add form X" / "connect product Y" — first confirm existence via API (`Forms.getAllForms()`, `Pages.getRootPages()`, `Products.getProducts()`, `AttributesSets.getAttributes()`).
 
@@ -186,7 +186,7 @@ If not found → respond: **“First create [name] in OneEntry Admin Panel, then
 
 ### 4. SDK binding immediately, without static stub
 
-If the user provided the layout of a component that should work with the SDK — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
+The user provided the layout of the component that should work with the SDK — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
 
 ### 5. Forms — ALWAYS dynamic
 
@@ -206,25 +206,25 @@ In Next.js 15+ `params` — is `Promise<{locale: string}>`, need to `await param
 | **integer / float / real** | `attrs.marker?.value` — number or `null` (not `0`!) |
 | **spam** (reCAPTCHA) | Render `<FormReCaptcha>`, NOT `<input>` |
 
-The file `value` depends only on **the number of files**, not on the module (Products/Pages/Blocks/Orders — the same). Stable access: `const v = attrs.marker?.value; const f = Array.isArray(v) ? v[0] : v;`. If you don't know the type — `console.log(attrs.marker)`. Full table: `attribute-values.md`.
+The file `value` depends only on the **number of files**, not on the module (Products/Pages/Blocks/Orders — the same). Stable access: `const v = attrs.marker?.value; const f = Array.isArray(v) ? v[0] : v;`. If you don't know the type — `console.log(attrs.marker)`. Full table: `attribute-values.md`.
 
 ### 8. "Add to Cart" button — by default, without question
 
-For the card / catalog / product page `AddToCartButton` is added automatically. The cart is not implemented — first `/create-cart-manager`. The "Add to Favorites" button (`FavoriteButton`) — **only on request**.
+For card / catalog / product page, `AddToCartButton` is added automatically. If the cart is not implemented — first `/create-cart-manager`. The "Add to Favorites" button (`FavoriteButton`) — **only on request**.
 
-### 9. `isError` + singleton SDK + exact types
+### 9. `isError` + singleton SDK + precise types
 
-Check every API call through type guard `isError`. One instance of SDK in `src/lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** a new `defineOneEntry()`.
+Check each API call through type guard `isError`. One instance of SDK in `src/lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** new `defineOneEntry()`.
 
 ### 10. Server Action — thin proxy
 
 Do not create intermediate types and do not map API responses to custom objects. Only `filter` and `sort` are allowed; everything else — in the component. Breakdown with examples: `common-mistakes.md`.
 
-## 📋 Composite prompt = step-by-step execution
+## 📋 Composite Prompt = Step-by-Step Execution
 
 “Do X + add Y + create Z” — this is **not** a single pass. Real case: skipping the flag `isCheckCode: true` in the auth flow due to “general pass”.
 
-**Step 1. Decomposition in TodoWrite:** for each subtask define the required skill (see “Context Map”) and relevant rules.
+**Step 1. Decomposition in TodoWrite:** for each subtask, define the required skill (see “Context Map”) and relevant rules.
 
 **Step 2. Execution mode:**
 
@@ -233,17 +233,18 @@ Do not create intermediate types and do not map API responses to custom objects.
 
 **Step 3. Checklist after each subtask:** have all rules been applied, have all API fields been processed, have all flags (`isCheckCode`, `systemCodeTlsSec`, …) been considered.
 
-❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in one message without a checklist in between.
+❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in one message without a checklist between them.
 
-## When to stop and ask the user
+## When to Stop and Ask the User
 
-- **Don’t know the marker** → `/inspect-api`; no Bash — ask.
+- **Don't know the marker** → `/inspect-api`; no Bash — ask.
 - **403 Forbidden** → check: is `AuthProvider.auth/signUp/generateCode` called via Server Action? Move to Client Component (fingerprint). Or check group permissions in the admin panel.
 - **No layout** → “Is there an example of layout/design?”
-- **Don’t understand the data source** → “Where should the data for [component] come from?”
+- **Don't understand the data source** → “Where should the data for [component] come from?”
 - **Multiple solution options** → “X or Y, which do you prefer?”
+- **You are outputting images, but the data has `previewLink`** (file uploaded with a configured preview template) → “Include `placeholder="blur"` from built-in LQIP — everywhere, only on hero/main photo, or nowhere?” If silent → only on LCP image (`.claude/rules/performance-images.md`).
 
-## API permissions for the "Guests" group
+## API Permissions for the "Guests" Group
 
 By default, the "Guests" group has a limit of **10 objects** per entity. Before requests:
 
@@ -251,11 +252,11 @@ By default, the "Guests" group has a limit of **10 objects** per entity. Before 
 2. For each entity (Pages, Products, Forms, …): **Read: Yes, with restriction → without restrictions**
 3. Without this, `getPages()`, `getProducts()`, etc. will return a maximum of 10 records.
 
-Error `403 "Permission data not found. Provide the permission for requested url"` = route not granted to the group — skill `/admin-grant-permissions`. Programmatic content writing (public SDK — read-only) — internal admin API: `admin-api.md`, skills `/admin-fill-content` and `/admin-upload-images`; web UI of the admin panel — `admin-ui.md`.
+Error `403 “Permission data not found. Provide the permission for requested url”` = route not granted to the group — skill `/admin-grant-permissions`. Programmatic content writing (public SDK — read-only) — internal admin API: `admin-api.md`, skills `/admin-fill-content` and `/admin-upload-images`; web UI of the admin panel — `admin-ui.md`.
 
 ## Miscellaneous
 
-- **Pages — from CMS** (`getPageByUrl` + `getBlocksByPageUrl`), not hardcoded. The main one is usually `'home'`. Skill: `/create-page`.
+- **Pages — from CMS** (`getPageByUrl` + `getBlocksByPageUrl`), not hardcoded. The main is usually `'home'`. Skill: `/create-page`.
 - **Exactly copy the user's layout** (Tailwind/JSX) — change only hardcoded data to API data.
 - **Linter:** write code according to the project's linter config. Do not fix someone else's linting/formatting — this is the user's job.
 - **Pagination, loading states, markers instead of IDs** — recommended by default.
