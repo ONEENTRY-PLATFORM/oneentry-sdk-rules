@@ -12,11 +12,11 @@ if (isError(product)) return
 console.log(product.attributeValues.title)
 ```
 
-> Detailed error-handling — section **Error Handling**.
+> Detailed error handling — section **Error Handling**.
 
 ## Creating SDK Instance in Component
 
-`defineOneEntry()` in the component = new instance on every render. Use singleton via `getApi()`. Full pattern — section **SDK Initialization**.
+`defineOneEntry()` in a component = new instance on every render. Use singleton via `getApi()`. Full pattern — section **SDK Initialization**.
 
 ## Guessing Menu Markers and Filtering by Titles
 
@@ -27,13 +27,13 @@ const quickLinks = menu.pages.filter(p =>
   ['Shop', 'Contact us'].includes(p.localizeInfos?.title)
 )
 
-// ✅ Ask for marker and get the required menu directly
+// ✅ Ask for marker and get the desired menu directly
 const quickLinksMenu = await getApi().Menus.getMenusByMarker('quick_links', 'en_US')
 ```
 
 ## Creating Intermediate Types and Mapping API to Custom Objects
 
-**NEVER** create an intermediate `type`/`interface` to wrap API data and do not map them in Server Actions. The component works directly with what the API returned.
+**NEVER** create an intermediate `type`/`interface` to wrap API data and map them in Server Actions. The component works directly with what the API returned.
 
 ```typescript
 // ❌ Custom type, mapping — losing title/extended from listTitles, duplicating validators
@@ -59,12 +59,14 @@ return {
 
 // In the component — directly:
 field.localizeInfos?.title
-field.validators?.requiredValidator?.strict
-field.validators?.stringInspectionValidator?.stringMax
+'requiredValidator' in (field.validators ?? {})        // required — by the presence of the key, strict may not be set
+Number(field.validators?.stringInspectionValidator?.stringMax) || undefined  // numbers come as strings, 0 = not set
 field.listTitles   // full objects with title, value, extended
 ```
 
-**Rule:** Server Action — thin proxy. The only permissible operations: `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
+Analysis of all validators (asterisk for required field, email, mask, `customErrorText`) — `.claude/rules/forms.md`, section "Field Validators".
+
+**Rule:** Server Action — thin proxy. The only allowed operations: `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
 
 ## Inventing API Fields and Creating Unnecessary Transformations
 
@@ -86,15 +88,15 @@ const rootItems = Array.isArray(pages) ? pages : [pages]
 
 ## Logging Out on Any Error on Account Pages
 
-On 401 — retry with the current token from localStorage (another operation might have updated it). Log out ONLY on confirmed 401/403 after retry.
+On 401 — retry with the current token from localStorage (another operation may have updated it). Log out ONLY on confirmed 401/403 after retry.
 
 **Never do `localStorage.removeItem('refresh-token')`** on form/data loading error — this destroys the fresh token just written by another operation.
 
-⚠️ Key — **with a hyphen**: `'refresh-token'`. Under it writes `saveFunction` SDK. `'refreshToken'` — a common hallucination: `getItem` will return `null`, and retry will go without a token. Details — `.claude/rules/tokens.md`.
+⚠️ Key — **with a hyphen**: `'refresh-token'`. This is written by `saveFunction` SDK. `'refreshToken'` — a common hallucination: `getItem` will return `null`, and retry will go without a token. Details — `.claude/rules/tokens.md`.
 
-> Complete patterns: `/create-profile`, `/create-orders-list`.
+> Full patterns: `/create-profile`, `/create-orders-list`.
 
-## Showing Preloader on State Change (Not Only on Loading)
+## Showing Preloader on State Change (Not Just on Loading)
 
 When adding/removing from favorites/cart, the entire list reloads with a loader.
 
@@ -104,7 +106,7 @@ When adding/removing from favorites/cart, the entire list reloads with a loader.
 
 ## Calling setState Synchronously Inside useEffect
 
-Synchronous `setState`/`dispatch` in the body of `useEffect` causes cascading re-renders.
+Synchronous `setState`/`dispatch` in the body of `useEffect` triggers cascading re-renders.
 
 ```typescript
 // ❌ Synchronous setState / dispatch
@@ -134,13 +136,13 @@ const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 - Do not call `setState`/`dispatch` synchronously in the body of `useEffect`.
 - Initial value — in `useState(initialValue)` or via `useMemo`.
 - For "is the component mounted" — `useSyncExternalStore`, not `useEffect + setMounted`.
-- Asynchronous calls (fetch, dispatch after `await`) — are permissible.
+- Asynchronous calls (fetch, dispatch after `await`) — are allowed.
 
-## Common AI Hallucinations
+## Frequent AI Hallucinations
 
 ### Hardcoding OAuth Provider URL or Skipping Redirect
 
-`config.oauthAuthUrl` from `getAuthProviderByMarker` contains the base URL. Do not hardcode — take from the config. `oauth(marker, body)` accepts `body: IOauthData`, where `code` is one of the required fields (`client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri`); `code` is available only after the redirect.
+`config.oauthAuthUrl` from `getAuthProviderByMarker` contains the base URL. Do not hardcode — take from the config. `oauth(marker, body)` accepts `body: IOauthData`, where `code` is one of the required fields (`client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri`); `code` is only available after redirect.
 
 ```typescript
 // ❌ Hardcoded URL
@@ -163,11 +165,11 @@ window.location.href = `${baseUrl}?client_id=...&redirect_uri=...`
 
 ### Rendering Captcha as a Regular Input
 
-The captcha type in OneEntry is **`'spam'`**, not `'captcha'`. This is an invisible reCAPTCHA v3 — render `<FormReCaptcha>`, not `<input>`. The full pattern of a dynamic form — skill **`/create-form`**.
+The captcha type in OneEntry is **`'spam'`**, not `'captcha'`. This is an invisible reCAPTCHA v3 — render `<FormReCaptcha>`, not `<input>`. Full pattern for dynamic form — skill **`/create-form`**.
 
 ### Using `getProductsByPageUrl` for the Entire Catalog
 
-`getProductsByPageUrl` returns **only products of a specific catalog_page**. For all products in the project — `getProducts`.
+`getProductsByPageUrl` returns **only products from a specific catalog_page**. For all products in the project — `getProducts`.
 
 ```typescript
 // ✅ Entire catalog
@@ -184,8 +186,8 @@ In Next.js 15+ `params` — Promise, `await params` is mandatory. Do not hardcod
 
 ### Hardcoding Filter Data (Colors, Price Range)
 
-Get from the API. The full pattern of the catalog with filters — skill **`/create-product-list`**.
+Get from the API. Full pattern for catalog with filters — skill **`/create-product-list`**.
 
 ### Passing `filters` and `gridKey` as Server Props in ShopView
 
-`ShopView` MUST read `activeFilters` and `gridKey` from `useSearchParams`, otherwise `loadMore` ignores the filters. The full pattern — skill **`/create-product-list`**.
+`ShopView` MUST read `activeFilters` and `gridKey` from `useSearchParams`, otherwise `loadMore` ignores filters. Full pattern — skill **`/create-product-list`**.

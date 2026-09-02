@@ -29,7 +29,7 @@ export async function getUserProfile(locale: string = 'en_US'): Promise<{
   }>;
 } | { error: string; statusCode?: number }> {
   try {
-    // getUser does NOT throw when isShell=true (default) — error comes in IError-envelope,
+    // getUser does NOT throw when isShell=true (default) — the error comes in an IError-envelope,
     // check via isError, otherwise 401/403 will not pop up (see .claude/rules/tokens.md)
     const user = await getApi().Users.getUser(locale);
     if (isError(user)) {
@@ -68,12 +68,12 @@ export async function updateUserProfile(
   authData?: Array<{ marker: string; value: string }>,
 ): Promise<{ success: boolean } | { error: string; statusCode?: number }> {
   try {
-    // getUser does NOT throw when isShell=true (default) — check envelope
+    // getUser does NOT throw when isShell=true (default) — check the envelope
     const user = await getApi().Users.getUser();
     if (isError(user)) return { error: user.message, statusCode: user.statusCode };
 
     // updateUser returns boolean | IError and also does NOT throw — check the result strictly,
-    // otherwise you'll show "saved" on failure (401, validation error)
+    // otherwise you will show "saved" on failure (401, validation error)
     const result = await getApi().Users.updateUser({
       formIdentifier: user.formIdentifier,
       formData,
@@ -93,25 +93,25 @@ export async function updateUserProfile(
 
 ---
 
-### ⚠️ The contract `updateUser.authData` has been verified with the live API error-by-error
+### ⚠️ The `updateUser.authData` contract has been verified against the live API error-by-error
 
-The validator `Users.updateUser` is strict and its messages can be misleading:
+The `Users.updateUser` validator is strict and its messages can be misleading:
 
-| What was sent | API Response |
+| What was sent | API response |
 | --- | --- |
-| key `authData` omitted | ✅ 200 — data saved, password untouched |
+| `authData` key omitted | ✅ 200 — data saved, password unchanged |
 | `authData: []` (empty array) | ❌ `400 Login or password values are missed` |
 | one element — password | ✅ 200 — password changed |
 | one element — login (email) | ❌ `400 Login or password values are missed` |
 | two elements (login + password) | ❌ `400 "authData" must contain less than or equal to 1 items` |
-| element with field `type` | ❌ `400 "authData[0].type" is not allowed` |
+| element with `type` field | ❌ `400 "authData[0].type" is not allowed` |
 
 Consequences:
 
-- If the password is not changing — do **not** pass the key `authData` at all (pattern `...(authData.length ? { authData } : {})` from Step 1), rather than sending `[]`.
+- If the password is not changing — do **not** pass the `authData` key at all (use the pattern `...(authData.length ? { authData } : {})` from Step 1), instead of sending `[]`.
 - The only acceptable element is **the password**: `{ marker, value }` without `type` (type `IAuthData`, NOT `IAuthFormData` from registration — do not copy the `authData` structure from SignUp forms).
-- **Changing the login identifier via `updateUser` is not allowed** — render the field with `isLogin: true` as read-only, without creating false expectations.
-- The message "Login or password values are missed" comes for both `[]` and a single login — **do not** conclude from it that "password is required on every save": this is not true.
+- **You cannot change the login identifier via `updateUser`** — render the field with `isLogin: true` as read-only, without creating false expectations.
+- The message "Login or password values are missed" comes for both `[]` and a single login — **do not** conclude from it that "the password is required for every save": this is not true.
 
 ---
 
@@ -120,7 +120,7 @@ Consequences:
 ### Key principles
 
 - `'use client'` — the page uses `localStorage` and `useParams`
-- `useParams()` for `locale` — NOT `params` as Promise (this is a Client Component!)
+- `useParams()` for `locale` — NOT `params` as a Promise (this is a Client Component!)
 - **Auth errors:** The SDK itself performs refresh and retry on 401 (proactively + reactively, single-flight, SDK ≥ 1.0.152) — manual retry is not needed. The application's task is to clear `'refresh-token'` and log out on IError-envelope with `statusCode` 401/403 (see .claude/rules/tokens.md)
 - **Field separation:** fields with `isPassword: true` → `authData` (only if filled),
   others → `formData`. Do not rely on the marker name — use the flag
@@ -129,7 +129,7 @@ Consequences:
 
 ### Input type definition
 
-The type `password` is determined by the `isPassword` flag. For email/phone — by the flags `isLogin` / `isNotificationEmail` / `isNotificationPhoneSMS` / `isNotificationPhonePush`; the marker name is the last fallback.
+The `password` type is determined by the `isPassword` flag. For email/phone — by the flags `isLogin` / `isNotificationEmail` / `isNotificationPhoneSMS` / `isNotificationPhonePush`; the marker name is the last fallback.
 
 ```typescript
 type FieldFlags = {
@@ -140,8 +140,10 @@ type FieldFlags = {
   isNotificationPhonePush?: boolean | null;
 };
 
-function getInputType(attr: FieldFlags & { marker: string }): string {
+function getInputType(attr: FieldFlags & { marker: string; validators?: Record<string, unknown> }): string {
   if (attr.isPassword === true) return 'password';
+  // emailInspectionValidator — direct indication from the admin panel that the field is checked as email
+  if (attr.validators && 'emailInspectionValidator' in attr.validators) return 'email';
   if (attr.isNotificationEmail === true || attr.isLogin === true) return 'email';
   if (attr.isNotificationPhoneSMS === true || attr.isNotificationPhonePush === true) return 'tel';
   // Last fallback — by marker name
@@ -295,11 +297,19 @@ export default function ProfilePage() {
           const inputType = getInputType(attr);
           const label = attr.localizeInfos?.title || attr.marker;
           const isPassword = attr.isPassword === true;
+          // Requiredness — based on the presence of requiredValidator (strict may not be set),
+          // length — from stringInspectionValidator (numbers come as strings, 0/'' = not set).
+          // Full breakdown — .claude/rules/forms.md, section "Field Validators"
+          const v = (attr.validators ?? {}) as Record<string, any>;
+          const isRequired = 'requiredValidator' in v && !isPassword;
+          const len = (x: unknown) => (Number(x) > 0 ? Number(x) : undefined);
+          const size = v.stringInspectionValidator;
 
           return (
             <div key={attr.marker}>
               <label htmlFor={attr.marker}>
                 {label}
+                {isRequired && <span aria-hidden="true"> *</span>}
                 {isPassword && ' (leave blank to keep)'}
               </label>
               <input
@@ -309,6 +319,10 @@ export default function ProfilePage() {
                 onChange={(e) =>
                   setFormValues((prev) => ({ ...prev, [attr.marker]: e.target.value }))
                 }
+                required={isRequired && v.requiredValidator?.strict === true}
+                aria-required={isRequired || undefined}
+                minLength={len(size?.stringLength) ?? len(size?.stringMin)}
+                maxLength={len(size?.stringLength) ?? len(size?.stringMax)}
                 autoComplete={isPassword ? 'new-password' : attr.marker}
                 // login cannot be changed via updateUser — read-only (see authData contract)
                 readOnly={attr.isLogin === true}
@@ -340,7 +354,7 @@ function getInputType(attr: IFormAttribute): string {
 
 ---
 
-## Step 3: Remind key rules
+## Step 3: Recall key rules
 
 > Token handling rules: `.claude/rules/tokens.md`
 
@@ -408,14 +422,14 @@ return (
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Path to the profile page** — ask: "Where is the profile page located? (e.g. `/profile`, `/account`, `/en_US/profile`)".
+1. **Profile page path** — ask: "Where is the profile page located? (e.g. `/profile`, `/account`, `/en_US/profile`)".
    - Silent → find it yourself via Glob (`src/app/**/profile/**/page.tsx`, `src/app/**/account/**/page.tsx`). Report: "Found the profile page at `{path}` — using it. If incorrect, please provide the actual path".
-2. **Path to the login page** (needed for redirect check) — ask if not mentioned. Silent → find it yourself via Glob (`src/app/**/login/**`, `src/app/**/auth/**`). Report the solution.
+2. **Login page path** (needed for redirect check) — ask if not mentioned. Silent → find it yourself via Glob (`src/app/**/login/**`, `src/app/**/auth/**`). Report the solution.
 3. **Test credentials** (existing authorized OneEntry user) — **mandatory for most profile tests**:
-   - Ask: "Please provide the email and password of an existing test user — checks for loading and editing the profile will be performed on it. If skipped — only the test 'unauthorized user sees placeholder' will work".
+   - Ask: "Please provide the email and password of an existing test user — checks for loading and editing the profile will be conducted on it. If skipped — only the test 'unauthorized user sees placeholder' will work".
    - If the user provides values → **add** `E2E_TEST_EMAIL` and `E2E_TEST_PASSWORD` to `.env.local` (via Edit/Write). If `.env.local` is not in `.gitignore` — add it yourself.
    - If the user is silent/refuses → leave the variables empty. Report: "Credentials not set — profile editing tests will be `test.skip`. Add values to `.env.local` when there is a test user".
-4. **Marker for the field to edit** — choose yourself: take the first non-password attribute from `user.formIdentifier` of the form via the already running `/inspect-api forms` from Step 1 (e.g. `name`, `first_name`). Report: "For the edit test, using field `{marker}` — the first non-password field of the profile form".
+4. **Field marker for editing** — choose yourself: take the first non-password attribute from `user.formIdentifier` of the form via the already running `/inspect-api forms` from Step 1 (e.g. `name`, `first_name`). Report: "For the editing test, using field `{marker}` — the first non-password field of the profile form".
 
 **Example `.env.local`:**
 
@@ -497,7 +511,7 @@ test.describe('Profile Page', () => {
       });
     });
 
-    test('isPassword fields — empty string is not sent (do not break account)', async ({ page }) => {
+    test('isPassword fields — empty string is not sent (do not break the account)', async ({ page }) => {
       await page.goto(PROFILE_PATH);
       await page.getByTestId('profile-form').waitFor();
 
@@ -524,12 +538,12 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_PROFILE_PATH, E2E_LOGIN_PATH, E2E_PROFILE_EDIT_FIELD, E2E_TEST_EMAIL/PASSWORD)
 
 Decisions made automatically:
-- Profile path: {PROFILE_PATH} — {user-provided / found via Glob in src/app/**/profile/**}
-- Login path: {LOGIN_PATH} — {user-provided / found via Glob}
-- Field for edit test: {EDIT_FIELD} — first non-password field of the profile form (from /inspect-api forms)
-- Test credentials: {provided by user / left empty — the "Authorized user" block will be test.skip. Reason: user did not provide a test user}
+- Profile path: {PROFILE_PATH} — {user provided / found via Glob in src/app/**/profile/**}
+- Login path: {LOGIN_PATH} — {user provided / found via Glob}
+- Field for editing test: {EDIT_FIELD} — first non-password field of the profile form (from /inspect-api forms)
+- Test credentials: {provided by user / left empty — block "Authorized user" will be test.skip. Reason: user did not provide a test user}
 
 Run: npm run test:e2e -- profile.spec.ts
 ```
 
-If credentials are not set — editing tests are skipped (`test.skip`), leaving only the redirect test for unauthorized users.
+If credentials are not set — editing tests are skipped (`test.skip`), only the unauthorized user redirect test remains.

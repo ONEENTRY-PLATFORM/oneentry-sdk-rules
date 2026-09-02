@@ -2,7 +2,7 @@
 name: create-form
 description: Create dynamic form from OneEntry Forms API
 ---
-# Create a Dynamic Form from OneEntry Forms API
+# Create a dynamic form from OneEntry Forms API
 
 Argument: `marker` (form marker in OneEntry)
 
@@ -18,7 +18,7 @@ If the marker is not provided:
 
 Look at the `identifier` field — this is the marker for `getFormByMarker()`.
 
-Or directly through the API:
+Or directly via the API:
 
 ```typescript
 const res = await getApi().Forms.getAllForms();
@@ -28,6 +28,8 @@ if (isError(res)) { /* handle error: res.message, res.statusCode */ }
 
 **⚠️ DO NOT guess the marker** (`contact`, `feedback`, etc.).
 
+**⚠️ Check `form.type` — this skill is only for forms of type `data`.** `postFormsData` responds with `404 Form has incorrect type: sign_in_up` (or `order`) — registration is done via `/create-auth`, order processing via `/create-checkout`.
+
 ---
 
 ## Step 2: Clarify with the user
@@ -35,7 +37,7 @@ if (isError(res)) { /* handle error: res.message, res.statusCode */ }
 1. **Where is the data sent?**
    - To OneEntry via `postFormsData` — standard scenario
    - To another endpoint — different logic needed
-2. **Is captcha needed?** — the form may contain a field of type `spam` (reCAPTCHA v3)
+2. **Is captcha required?** — the form may contain a field of type `spam` (reCAPTCHA v3)
 3. **Where is the form displayed?** (page, modal, drawer?)
 4. **Is there a layout?** — if yes, copy it exactly
 
@@ -45,7 +47,7 @@ if (isError(res)) { /* handle error: res.message, res.statusCode */ }
 
 ### src/app/actions/forms.ts
 
-> If the file already exists — read and supplement it, do not duplicate.
+> If the file already exists — read and supplement, do not duplicate.
 
 ```typescript
 // src/app/actions/forms.ts
@@ -54,13 +56,15 @@ if (isError(res)) { /* handle error: res.message, res.statusCode */ }
 import { getApi, isError } from '@/lib/oneentry';
 import type { IFormsEntity, IFormAttribute } from 'oneentry';
 
-// ⚠️ Validators return message as string[] — markers of fields with errors
-// To show custom messages, build a map from form attributes
+// ⚠️ The server validates fields in order and returns ONLY the first error — as a string
+//    of the form: formData's marker 'first_nme' value is missing or incorrect
+// ⚠️ The error text from the admin panel does not come in the response: substitute it yourself by marker.
+//    It is located in customErrorText (NOT errorMessage) inside the specific validator
 function buildValidatorErrorMap(attributes: IFormAttribute[]): Record<string, string> {
   const map: Record<string, string> = {};
   for (const attr of attributes) {
     const msg = Object.values(attr.validators || {})
-      .map((v: any) => v?.errorMessage)
+      .map((v: any) => v?.customErrorText)
       .find(Boolean);
     if (msg) map[attr.marker] = msg as string;
   }
@@ -69,10 +73,15 @@ function buildValidatorErrorMap(attributes: IFormAttribute[]): Record<string, st
 
 function mapErrors(message: string | string[], validatorErrors: Record<string, string>): string {
   const msgs = Array.isArray(message) ? message : [message];
-  return msgs.map(m => validatorErrors[m] || m).join('; ');
+  return msgs
+    .map(m => {
+      const marker = /marker '([^']+)'/.exec(m)?.[1] ?? m;
+      return validatorErrors[marker] || m;
+    })
+    .join('; ');
 }
 
-// Getting the form structure — returning attributes as is from API (IFormAttribute[])
+// Getting the form structure — returning attributes as is from the API (IFormAttribute[])
 export async function getFormByMarker(marker: string, locale = 'en_US') {
   const form = await getApi().Forms.getFormByMarker(marker, locale);
   if (isError(form)) return { error: String(form.message), statusCode: form.statusCode };
@@ -116,7 +125,7 @@ export async function submitForm(
 
 ## Step 4: Create the form component
 
-### Key Principles
+### Key principles
 
 - Fields are rendered **dynamically** by `field.type` — do not hardcode `<input>`
 - The `spam` field is an **invisible captcha** (reCAPTCHA v3), render `<FormReCaptcha>`, NOT `<input>`
@@ -124,11 +133,12 @@ export async function submitForm(
   - ⚠️ **If the form has a `spam` field — use `/create-captcha`**: this is a verified
     end-to-end recipe (siteKey from `settings.captcha.key`, `value` of the spam field — object
     `{ event: { token, siteKey } }`, `status: ''`, mandatory module config). The captcha blocks
-    below are aligned with it, but `/create-captcha` is the source of truth.
+    below are adjusted to it, but `/create-captcha` is the source of truth.
+- Field checks (mandatory, length, email, regex, mask, default value) — **only from `field.validators`**, do not hardcode anything. A mandatory field is marked with an asterisk next to the label; the indicator is **the presence of the key** `requiredValidator`, not `strict === true` (the admin can set a validator without `strict`). Full breakdown — `.claude/rules/forms.md`, section "Field Validators"
 - `formData` for submission — `{ marker, type, value }`, only non-empty values (`type` is mandatory: the SDK filters button fields and triggers upload file/image/groupOfImages)
-- Fields `file`/`image`/`groupOfImages` — in `value` only `File[]`, never a string: string value crashes `postFormsData` entirely (TypeError), not just skips the upload
+- Fields `file`/`image`/`groupOfImages` — in `value` only `File[]`, never a string: string value drops `postFormsData` entirely (TypeError), not just skips the upload
 
-### Field Types Table → HTML
+### Field types → HTML table
 
 | `field.type`                | Render                                            |
 |-----------------------------|---------------------------------------------------|
@@ -143,9 +153,9 @@ export async function submitForm(
 | `file`, `image`             | `<input type="file">` — uncontrolled, in state `File[]` |
 | `groupOfImages`             | `<input type="file" multiple>` — uncontrolled, in state `File[]` |
 | `spam`                      | `<FormReCaptcha>` — NOT `<input>`!                 |
-| `button`                    | DO NOT render input: skip (the SDK filters button fields during submission) |
-| `textWithHeader`            | decorative header/text, NOT input                 |
-| `entity`, `timeInterval`    | skip — do not render as text input                |
+| `button`                    | NOT input: skip (SDK filters during submission) |
+| `textWithHeader`            | decorative header/text, NOT input                |
+| `entity`, `timeInterval`    | skip — do not render as text input               |
 
 #### src/components/DynamicForm.tsx
 
@@ -206,7 +216,7 @@ export function DynamicForm({ marker, locale = 'en_US', onSuccess }: DynamicForm
     const mapValue = (f: any, v: string | File[]) => {
       if (Array.isArray(v)) return v; // File[] (file/image/groupOfImages) — the SDK will upload files itself
       if (['date', 'dateTime', 'time'].includes(f.type)) {
-        // ITimeDateValue; formattedValue — string by formatString mask
+        // ITimeDateValue; formattedValue — string by mask formatString
         return { fullDate: new Date(v).toISOString(), formattedValue: v, formatString: 'DD-MM-YYYY HH:mm' };
       }
       if (f.type === 'text') {
@@ -292,8 +302,17 @@ function renderField(
   const placeholder = field.additionalFields?.placeholder?.value || '';
   const raw = values[field.marker];
   const value = typeof raw === 'string' ? raw : ''; // File[] is stored only for file/image/groupOfImages
-  const required = !!field.validators?.requiredValidator?.strict;
+  const rules = fieldRules(field);       // see helper below
+  const required = rules.required;       // asterisk + aria-required — by the presence of a validator
   const onChange = (val: string | File[]) => setValues(prev => ({ ...prev, [field.marker]: val }));
+
+  // Field label with asterisk for mandatory (the symbol is decorative — the requirement is voiced by aria-required)
+  const Label = () => (
+    <label htmlFor={field.marker}>
+      {label}
+      {required && <span className="required-mark" aria-hidden="true"> *</span>}
+    </label>
+  );
 
   // ⚠️ spam = reCAPTCHA v3, NOT input! Full verified recipe — /create-captcha
   if (field.type === 'spam') {
@@ -318,12 +337,15 @@ function renderField(
   if (field.type === 'text') {
     return (
       <>
-        <label htmlFor={field.marker}>{label}</label>
+        <Label />
         <textarea
           id={field.marker}
           value={value}
           placeholder={placeholder}
-          required={required}
+          required={rules.strict}
+          aria-required={required || undefined}
+          minLength={rules.minLength}
+          maxLength={rules.maxLength}
           onChange={(e) => onChange(e.target.value)}
         />
       </>
@@ -331,11 +353,11 @@ function renderField(
   }
 
   if (field.type === 'list') {
-    // listTitles — top-level field of IFormAttribute (IListTitle[]: { title, value, position?, extended? }), NOT in localizeInfos
+    // listTitles — field of TOP level IFormAttribute (IListTitle[]: { title, value, position?, extended? }), NOT in localizeInfos
     const options = field.listTitles || [];
     return (
       <>
-        <label htmlFor={field.marker}>{label}</label>
+        <Label />
         <select
           id={field.marker}
           value={value}
@@ -352,9 +374,13 @@ function renderField(
 
   if (field.type === 'radioButton') {
     const options = field.listTitles || [];
+    // group of options is signed through fieldset/legend — asterisk goes in legend, not in each option
     return (
-      <>
-        <span>{label}</span>
+      <fieldset aria-required={required || undefined}>
+        <legend>
+          {label}
+          {required && <span className="required-mark" aria-hidden="true"> *</span>}
+        </legend>
         {options.map((opt: any) => (
           <label key={opt.value}>
             <input
@@ -367,29 +393,30 @@ function renderField(
             {opt.title}
           </label>
         ))}
-      </>
+      </fieldset>
     );
   }
 
-  // file / image / groupOfImages: uncontrolled input WITHOUT value prop, in state we store File[].
+  // file / image / groupOfImages: uncontrolled input WITHOUT passing value, in state we put File[].
   // Array.from is mandatory: raw FileList is not serialized across the Server Action boundary,
-  // while an array of File is serialized, and the SDK will upload files itself (the Array.isArray branch in postFormsData)
+  // while an array of File is serialized, and the SDK will upload files itself (branch Array.isArray in postFormsData)
   if (['file', 'image', 'groupOfImages'].includes(field.type)) {
     return (
       <>
-        <label htmlFor={field.marker}>{label}</label>
+        <Label />
         <input
           id={field.marker}
           type="file"
           multiple={field.type === 'groupOfImages'}
-          required={required}
+          required={rules.strict}
+          aria-required={required || undefined}
           onChange={(e) => onChange(e.target.files ? Array.from(e.target.files) : [])}
         />
       </>
     );
   }
 
-  // button: DO NOT render input — if desired, take localizeInfos.title as text for the submit button;
+  // button: DO NOT render input — if desired, take localizeInfos.title as the text for the submit button;
   // do not include in formData (the SDK filters button fields in postFormsData anyway)
   if (field.type === 'button') return null;
 
@@ -411,24 +438,55 @@ function renderField(
 
   return (
     <>
-      <label htmlFor={field.marker}>{label}</label>
+      <Label />
       <input
         id={field.marker}
-        type={inputType[field.type] || 'text'}
+        // email is determined by the validator, NOT by the field marker (its type is a regular string)
+        type={rules.isEmail ? 'email' : inputType[field.type] || 'text'}
         value={value}
         placeholder={placeholder}
-        required={required}
+        required={rules.strict}
+        aria-required={required || undefined}
+        minLength={rules.minLength}
+        maxLength={rules.maxLength}
+        pattern={rules.pattern}
         onChange={(e) => onChange(e.target.value)}
       />
     </>
   );
 }
+
+// Field rules from validators → input props.
+// ⚠️ Numbers come as strings, "not set" — this is 0 or ''; requiredValidator can be without strict.
+// Breakdown of all validators (mask, trim, defaultValue, files) — .claude/rules/forms.md
+function fieldRules(field: any) {
+  const v = (field.validators ?? {}) as Record<string, any>;
+  const positive = (x: unknown) => {
+    const n = Number(x);
+    return Number.isFinite(n) && n > 0 ? n : undefined;
+  };
+  const size = v.stringInspectionValidator;
+  const exact = positive(size?.stringLength);
+
+  return {
+    required: 'requiredValidator' in v,            // asterisk and aria-required
+    strict: v.requiredValidator?.strict === true,  // strict HTML blocking of submit
+    isEmail: 'emailInspectionValidator' in v,      // true OR { customErrorText } — check the key
+    minLength: exact ?? positive(size?.stringMin),
+    maxLength: exact ?? positive(size?.stringMax),
+    pattern: v.regExpValidator?.patternValue as string | undefined,
+    defaultValue: v.defaultValueValidator?.fieldDefaultValue as string | undefined,
+    trim: v.trimValidator === true,
+  };
+}
 ```
 
-### FormReCaptcha Component (if captcha is needed)
+> The default value (`defaultValue`) should be placed in the initial state of the field when loading the form — it will not be sent in `placeholder`. When `trim: true`, trim the value before checking length and before submission. Display the legend `* — mandatory fields` once above the form.
+
+### FormReCaptcha component (if captcha is needed)
 
 > Copy this component to `src/components/FormReCaptcha.tsx` if the form contains a `spam` field.
-> ⚠️ For a complete, verified captcha wrapper (reading config, form `value`, module config,
+> ⚠️ For complete, verified captcha wrapping (reading config, form `value`, module config,
 > submission, headless caveat) follow `/create-captcha` — here is just the basic component.
 
 ```tsx
@@ -514,7 +572,9 @@ export function FormReCaptcha({
 4. Forms API requires Server Action — cannot be called from 'use client' directly
 5. Sort fields by field.position before rendering
 6. submitForm via FormData.postFormsData, not via Forms API
-7. Form marker — get via /inspect-api forms, DO NOT guess
+7. Form marker — obtain via /inspect-api forms, DO NOT guess
+8. Mandatory, length, email, mask — from field.validators. An asterisk for mandatory
+   fields is placed by the presence of requiredValidator (not by strict), error text — customErrorText
 ```
 
 ---
@@ -549,11 +609,11 @@ For selector stability — add `data-testid` when generating `DynamicForm.tsx`:
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (execute step by step, do not ask in one list):**
+**Algorithm (perform step by step, do not ask in one list):**
 
-1. **Form marker** — use the marker that the user provided as an argument `/create-form <marker>`. If it is not there — take it from the results of `/inspect-api forms` (Step 1) and inform: "Using marker `{identifier}` from `/inspect-api forms`. If another is needed — say so".
-2. **Path to the page with the form** — ask: "On which URL in the application is the form rendered? (for example `/contact`, `/feedback`)".
-   - If the user is silent → find it yourself through Grep for `<DynamicForm` / `marker="{marker}"` in `src/app/**`. Inform: "Found the form at `{path}` — using it. If incorrect, say so".
+1. **Form marker** — use the marker that the user passed as an argument `/create-form <marker>`. If it is not there — take it from the results of `/inspect-api forms` (Step 1) and inform: "Using marker `{identifier}` from `/inspect-api forms`. If another is needed — say so".
+2. **Page path with the form** — ask: "On which URL in the application is the form rendered? (for example `/contact`, `/feedback`)".
+   - If the user is silent → find it yourself via Grep for `<DynamicForm` / `marker="{marker}"` in `src/app/**`. Inform: "Found the form at `{path}` — using it. If incorrect, say so".
 3. **Test values for fields** — read `form.attributes` from `/inspect-api forms` (already called in Step 1). For each field, generate a valid value yourself:
    - `string` / `text` → `'E2E Test value'`
    - `integer` / `number` → `'42'`
@@ -561,7 +621,7 @@ For selector stability — add `data-testid` when generating `DynamicForm.tsx`:
    - `date` → today's date in `YYYY-MM-DD` format
    - `list` / `radioButton` → first value from `listTitles`
    - `file` → skip the file upload test (`test.skip` with explanation: "file fields require a real file — skipping")
-4. **Presence of the `spam` field** — check by `form.attributes`. If there is `spam` → add `E2E_SKIP_CAPTCHA=1` to `.env.local` and in the test `test.skip` block "successful submission" with explanation: "reCAPTCHA v3 Enterprise does not pass in headless browser without special configuration".
+4. **Presence of `spam` field** — check by `form.attributes`. If `spam` exists → add `E2E_SKIP_CAPTCHA=1` to `.env.local` and in the test `test.skip` block "successful submission" with explanation: "reCAPTCHA v3 Enterprise does not pass in headless browser without special setup".
 
 **Example of filling in `.env.local` (do it yourself, do not ask the user to copy):**
 
@@ -574,7 +634,7 @@ E2E_SKIP_CAPTCHA=1
 
 ### 6.3 Create `e2e/form.spec.ts`
 
-> ⚠️ Tests work with the real form from OneEntry Forms API — fields are loaded dynamically. Test values are generated by field type.
+> ⚠️ Tests work with the real form from OneEntry Forms API — fields are loaded dynamically. Test values are generated based on the field type.
 
 ```typescript
 import { test, expect, Page } from '@playwright/test';
@@ -610,7 +670,7 @@ async function fillFieldsWithValidValues(page: Page) {
     } else if (marker.toLowerCase().includes('email')) {
       await input.fill('e2e@example.com');
     } else if (type === 'file') {
-      // Skip file fields — a real file is required
+      // Skip file fields — requires a real file
       continue;
     } else {
       await input.fill(`E2E ${marker}`);
@@ -661,11 +721,11 @@ Before completing the task — explicitly inform:
 ✅ .env.local updated (E2E_FORM_PATH, E2E_SKIP_CAPTCHA if spam field is present)
 
 Decisions made automatically (if applicable):
-- Form marker: {marker} — {provided by user / taken from /inspect-api forms}
-- Path to the form: {FORM_PATH} — {provided by user / found through Grep for <DynamicForm}
+- Form marker: {marker} — {user provided / taken from /inspect-api forms}
+- Path to the form: {FORM_PATH} — {user provided / found via Grep for <DynamicForm}
 - Test values for fields generated automatically by field.type
-- Spam field (reCAPTCHA): {present → successful submission test skipped via test.skip, reason: v3 Enterprise does not pass in headless / not present → test works fully}
-- File fields: {present → upload test skipped, reason: a real file is required / not present → no skip needed}
+- Spam field (reCAPTCHA): {exists → successful submission test skipped via test.skip, reason: v3 Enterprise does not pass in headless / does not exist → test works fully}
+- File fields: {exists → upload test skipped, reason: requires a real file / does not exist → no skip needed}
 
 Run: npm run test:e2e -- form.spec.ts
 ```

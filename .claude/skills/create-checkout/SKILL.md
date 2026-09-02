@@ -4,7 +4,7 @@ description: Create checkout page with OneEntry
 ---
 # Create OneEntry Checkout Page
 
-Creates a Server Action to obtain delivery form data and a complete order checkout cycle.
+Creates a Server Action to obtain delivery form data and the full checkout cycle.
 
 ---
 
@@ -20,7 +20,7 @@ import { defineOneEntry } from 'oneentry';
 // URL and TOKEN from .env.local
 const api = defineOneEntry(URL, { token: TOKEN });
 const storages = await api.Orders.getAllOrdersStorage();
-// The SDK normalizes the data: see identifier and formIdentifier
+// SDK normalizes the data: see identifier and formIdentifier
 console.log(JSON.stringify(storages, null, 2));
 ```
 
@@ -38,7 +38,7 @@ File: `src/lib/checkout.ts`
 ```typescript
 import { getApi, isError } from '@/lib/oneentry';
 // ⚠️ SDK ≥ 1.0.156: timeInterval slots are resolved on the window through expandTimeIntervals
-// (the computed field timeIntervals from the SDK has been removed — see Step 3).
+// (the computed field timeIntervals from SDK has been removed — see Step 3).
 import { expandTimeIntervals } from 'oneentry';
 
 // The window in which we show delivery slots (today → +90 days). Adjust for your UI.
@@ -72,7 +72,7 @@ export async function getCheckoutData(locale: string) {
     localizeInfos: attr.localizeInfos,
     position: attr.position,
     // for timeInterval: we expand the form schedules (localizeInfos.intervals[]) on the window.
-    // ⚠️ SDK ≥ 1.0.156: the ready field timeIntervals no longer exists — we calculate it through expandTimeIntervals.
+    // ⚠️ SDK ≥ 1.0.156: the ready field timeIntervals no longer exists — we calculate through expandTimeIntervals.
     // The form schedules are already typed, so we pass them directly.
     timeIntervals: attr.type === 'timeInterval'
       ? (attr.localizeInfos?.intervals ?? []).flatMap((schedule: any) =>
@@ -121,7 +121,7 @@ export async function createOrder(
   // Send text fields with type: 'string', timeInterval — with type: 'timeInterval'.
   formData: { marker: string; type: string; value: unknown }[],
   // products — { productId, quantity } (IOrderProductData), NOT { id, quantity }.
-  // If the cart stores the product id — map { productId: item.id, quantity: item.quantity }.
+  // If the cart stores product id — map { productId: item.id, quantity: item.quantity }.
   // signedPrice — optional price fixation (see below).
   products: { productId: number; quantity: number; signedPrice?: string }[],
 ) {
@@ -150,7 +150,7 @@ export async function createOrder(
 
 ### (Optional) Price fixation at checkout (SDK ≥ 1.0.154)
 
-To ensure that the price in the order matches the one shown in the cart — just before `createOrder` re-request the products with `signPrice` (the marker of the order storage, the same `storageMarker` as the first argument of `createOrder`) and pass `signedPrice` in the positions:
+To ensure the price in the order matches the one shown in the cart — just before `createOrder` re-query the products with `signPrice` (the marker of the order storage, the same `storageMarker` as the first argument of `createOrder`) and pass `signedPrice` in the items:
 
 ```typescript
 // locale — the same as in getCheckoutData; storageMarker — the marker of the order storage
@@ -176,14 +176,11 @@ The `timeInterval` field in the form = **a list of available delivery slots** (n
 
 **Structure of slots:**
 
-> ⚠️ **SDK ≥ 1.0.156:** the computed field `timeIntervals` from the SDK has been removed. The form slots
-> are obtained by expanding schedules `attr.localizeInfos.intervals[]` through
-> `expandTimeIntervals(schedule, { from, to })` on the required window (`attr.value` in the form attributes
-> is absent). In `getCheckoutData` (Step 2) they are already collected in the `timeIntervals` field
-> in this way. `expandTimeIntervals` is a pure function: it does not mutate input and does not make requests.
+> ⚠️ **SDK ≥ 1.0.156:** the computed field `timeIntervals` from SDK has been removed. You get the form slots by expanding the schedules `attr.localizeInfos.intervals[]` through
+> `expandTimeIntervals(schedule, { from, to })` on the required window (`attr.value` in the form attributes is absent). In `getCheckoutData` (Step 2) they are already collected in the `timeIntervals` field in this way. `expandTimeIntervals` is a pure function: it does not mutate the input and does not make requests.
 
 ```typescript
-// The result of expandTimeIntervals is an array of pairs [startISO, endISO] in UTC
+// the result of expandTimeIntervals is an array of pairs [startISO, endISO] in UTC
 [
   ["2026-03-15T09:00:00.000Z", "2026-03-15T10:00:00.000Z"],
   ["2026-03-15T11:00:00.000Z", "2026-03-15T12:00:00.000Z"],
@@ -231,7 +228,7 @@ function formatSlotTime(startISO: string): string {
 }
 ```
 
-**Usage in the component:**
+**Usage in component:**
 
 ```typescript
 const timeIntervalAttr = formAttributes.find((a) => a.type === 'timeInterval');
@@ -271,7 +268,7 @@ formData.push({
 
 ## Step 4: Auth-init in the checkout component
 
-In the Client Component that calls `getCheckoutData`/`createOrder`, a useRef guard + hasActiveSession are mandatory:
+In the Client Component that calls `getCheckoutData`/`createOrder`, a useRef guard + hasActiveSession is mandatory:
 
 ```tsx
 'use client';
@@ -303,20 +300,20 @@ export default function CheckoutPage() {
 
 ---
 
-## Step 5: Reminder of key rules
+## Step 5: Recall key rules
 
-> Rules for working with tokens: `.claude/rules/tokens.md`
+> Token handling rules: `.claude/rules/tokens.md`
 
 ```md
 ✅ Checkout flow created. Key rules:
 
 1. getCheckoutData/createOrder — call from Client Component after reDefine()
 2. Delivery form: formIdentifier is taken from storage, NOT hardcoded
-3. timeInterval slots of the form (SDK ≥ 1.0.156) = expandTimeIntervals(schedule, { from, to }) from localizeInfos.intervals[], NOT attr.value and NOT the removed field timeIntervals; format [[startISO, endISO], ...]
+3. timeInterval slots of the form (SDK ≥ 1.0.156) = expandTimeIntervals(schedule, { from, to }) by localizeInfos.intervals[], NOT attr.value and NOT the removed field timeIntervals; format [[startISO, endISO], ...]
 4. createSession is called through the same getApi() as createOrder
 5. paymentAccountIdentifier — taken from storage.paymentAccountIdentifiers; if there are 0 — fallback to Payments.getAccounts() (isVisible && isUsed); if 2+ — must show selection to the user (radio/select); if 1 — autopick
 6. useRef guard + hasActiveSession are mandatory in the component with auth-init
-7. (optional) Price fixation: getProductsByIds(ids, locale, { signPrice: storageMarker }) → pass product.signedPrice in the products positions for createOrder — the price in the order will match the one shown in the cart
+7. (optional) Price fixation: getProductsByIds(ids, locale, { signPrice: storageMarker }) → pass product.signedPrice in the products for createOrder — the price in the order will match the one shown in the cart
 ```
 
 ---
@@ -324,7 +321,7 @@ export default function CheckoutPage() {
 ## Step 6: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> For Playwright setup — first `/setup-playwright`.
+> To set up Playwright — first `/setup-playwright`.
 
 ### 6.1 Add `data-testid` to components
 
@@ -335,13 +332,17 @@ For selector stability — add `data-testid` when generating the `CheckoutPage`:
   {/* Dynamic fields from getFormByMarker(storage.formIdentifier) */}
   {formAttributes.map((attr) => (
     <div key={attr.marker}>
-      <label htmlFor={attr.marker}>{attr.localizeInfos?.title}</label>
+      {/* requirement — from order form validators, not hardcoded (.claude/rules/forms.md) */}
+      <label htmlFor={attr.marker}>
+        {attr.localizeInfos?.title}
+        {'requiredValidator' in (attr.validators ?? {}) && <span aria-hidden="true"> *</span>}
+      </label>
       <input
         id={attr.marker}
         data-testid={`checkout-field-${attr.marker}`}
         name={attr.marker}
         // type depends on attr.type
-        required
+        required={attr.validators?.requiredValidator?.strict === true}
       />
     </div>
   ))}
@@ -392,15 +393,15 @@ For selector stability — add `data-testid` when generating the `CheckoutPage`:
 
 **Algorithm (execute step by step, do not ask in one list):**
 
-1. **Path to the checkout page** — ask: "What is the path to the checkout page? (for example `/checkout`, `/cart/checkout`)".
-   - Silent → Glob (`src/app/**/checkout/**/page.tsx`). Inform: "Found checkout at `{path}` — using it".
-2. **Path to the catalog** (to add a product to the cart before checkout) — ask: "Path to the page with the product list, from where to click 'Add to Cart'? (for example `/shop`)".
+1. **Path of the checkout page** — ask: "What is the path of the checkout page? (e.g. `/checkout`, `/cart/checkout`)".
+   - Silent → Glob (`src/app/**/checkout/**/page.tsx`). Inform: "Found checkout in `{path}` — using it".
+2. **Path of the catalog** (to add a product to the cart before checkout) — ask: "Path to the page with the product list, from where to click 'Add to Cart'? (e.g. `/shop`)".
    - Silent → Glob (`src/app/**/shop/**/page.tsx`, `src/app/**/products/**/page.tsx`).
-3. **Test credentials** (checkout requires authorization through reDefine) — ask: "Provide the email and password of an existing OneEntry user. Needed to pass the full checkout flow. If skipped — most tests will become `test.skip`, only the check of rendering the form on an unmounted session will remain".
+3. **Test credentials** (checkout requires authorization through reDefine) — ask: "Provide the email and password of an existing OneEntry user. Needed to pass the full checkout flow. If skipped — most tests will become `test.skip`, only the form rendering check on an unmounted session will remain".
    - If the user provided values → **add** `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` to `.env.local`.
    - If silent → leave empty, inform: "Credentials not set — tests with authorized checkout will be skipped. Add `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` when a test user is available".
-4. **Presence of timeInterval in the form** — check yourself through already known form data (in Step 1/2 obtained `getCheckoutData` or through `/inspect-api forms`): if among `formAttributes` there is `type === 'timeInterval'` → the slot selection test is included; otherwise, it is commented out. Inform: "The delivery form {has/does not have} the timeInterval field — the slot selection test {is included/is disabled}".
-5. **Number of payment methods** — check yourself: `storages[0].paymentAccountIdentifiers.length` (already available after Step 1). If `< 2` → the payment method selection test is commented out (the UI does not render radio with one method). Inform.
+4. **Presence of timeInterval in the form** — check yourself through already known form data (in Step 1/2 obtained `getCheckoutData` or through `/inspect-api forms`): if among `formAttributes` there is `type === 'timeInterval'` → the slot selection test is included; otherwise commented out. Inform: "The delivery form {has/does not have} the timeInterval field — the slot selection test {is included/is disabled}".
+5. **Number of payment methods** — check yourself: `storages[0].paymentAccountIdentifiers.length` (already available after Step 1). If `< 2` → the payment method selection test is commented out (UI does not render radio with one method). Inform.
 6. **Fill in `.env.local`** (yourself):
 
 ```bash
@@ -519,9 +520,9 @@ Before completing the task — explicitly inform:
 Decisions made automatically:
 - Checkout path: {CHECKOUT_PATH} — {user-specified / found through Glob}
 - Catalog path: {SHOP_PATH} — {user-specified / found}
-- Test credentials: {set / empty → corresponding tests test.skip}
-- timeInterval test: {enabled — the form has a timeInterval field / commented out — no field}
-- Payment selection test: {enabled — {N} payment methods / commented out — only {N} method}
+- Test credentials: {provided / empty → corresponding tests test.skip}
+- TimeInterval test: {enabled — the form has a timeInterval field / commented out — no field}
+- Payment selection test: {enabled — {N} payment methods / commented out — only {N} payment method}
 
 Run: npm run test:e2e -- checkout.spec.ts
 ```
