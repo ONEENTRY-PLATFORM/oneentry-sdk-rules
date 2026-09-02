@@ -14,7 +14,7 @@ const categoryPage = await getApi().Pages.getPageByUrl('shop/category/ship_desig
 // ✅ CORRECT - passing only the page marker
 const categoryPage = await getApi().Pages.getPageByUrl('ship_designer', locale)
 
-// The same for Products
+// Same for Products
 const products = await getApi().Products.getProductsByPageUrl('ship_designer', [], locale)
 // NOT 'shop/category/ship_designer'!
 ```
@@ -33,11 +33,24 @@ const menuEN = await getApi().Menus.getMenusByMarker('main', 'en_US')
 
 ## Navigation Menu with Hierarchy
 
-To create a navigation menu with submenu support and URL prefixes, use the skill **`/create-menu`** — it will correctly handle the hierarchy through `parentId`, normalize `pages`, and build the URL.
+To create a navigation menu with support for submenus and URL prefixes, use the skill **`/create-menu`** — it will correctly handle the hierarchy through `parentId`, normalize `pages`, and build the URL.
 
 ## Working with Blocks and Attributes
 
 > Table of `attributeValues` types and access examples: `.claude/rules/attribute-values.md` (loaded when working with `*.tsx` components).
+
+### What is a Block
+
+**A block is a reusable entity.** The idea is that the same content is displayed in multiple places and edited in one: footer, promotional banner, contact block, promo strip. In the admin panel, a block has a **Linked pages** tab — a tree of pages and categories with checkboxes indicating where it is displayed; a page has a mirrored **Blocks** tab.
+
+From here comes the selection rule in design: content belonging to a single page (its title, cover, description) is **page attributes**; content that appears on multiple pages and should change at once is a **block**. A banner defined by the attributes of each page will need to be edited as many times as there are pages.
+
+Two ways to get a block on display:
+
+- `Pages.getBlocksByPageUrl(pageUrl, locale)` — all blocks linked to the page, in `position` order;
+- `Blocks.getBlockByMarker(marker, locale)` — a specific block by marker when it is global and not tied to a page (footer, header, global banner).
+
+> **An empty personal block is the norm, not an error.** Recommended blocks in the admin panel have an Audience Filter: rules for "who to show" based on profile attributes (age, city, subscription), combined through AND. A visitor outside the segment will return an empty list from the block — the section should be hidden entirely, not rendered as an empty grid. The second reason for emptiness is the absence of `UserActivity` tracking: without it, "recently viewed," personal recommendations, and "buy again" do not populate.
 
 ### Working with Blocks
 
@@ -51,7 +64,7 @@ const attrs = block.attributeValues || {}
 // Extracting attributes
 const title = attrs.title?.value || block.localizeInfos?.title || ''
 const description = attrs.description?.value || ''
-// image: with SDK ≥ 1.0.157, a single file in blocks comes as an OBJECT (previously — as an array),
+// image: with SDK ≥ 1.0.157, a single file in blocks comes as an OBJECT (previously — an array),
 // multiple files — as an array. Handle both forms:
 const rawBg = attrs.bg?.value
 const bgImage = (Array.isArray(rawBg) ? rawBg[0] : rawBg)?.downloadLink || ''
@@ -59,7 +72,7 @@ const bgImage = (Array.isArray(rawBg) ? rawBg[0] : rawBg)?.downloadLink || ''
 // Filtering page blocks
 const blocks = await getApi().Pages.getBlocksByPageUrl('home')
 if (!isError(blocks)) {
-  // Exclude certain blocks by identifier
+  // Exclude specific blocks by identifier
   const filteredBlocks = blocks.filter(
     (block: any) => block.identifier !== 'home_badges'
   )

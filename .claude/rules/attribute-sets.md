@@ -14,7 +14,7 @@ AttributesSets methods return **schema/metadata**, not the attribute values of e
 - **Attribute** (`IAttributesSetsEntity` = `{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`): `getAttributesByMarker(setMarker)` → array of attributes of the set; `getSingleAttributeByMarkerSet(setMarker, attrMarker)` → one attribute.
 - **Set** (`IAttributeSetsEntity` = `{ id, identifier, title, schema, type: { id, type }, position }`): `getAttributeSetByMarker(setMarker)` → one set object; `getAttributes()` → `IAttributesSetsResponse` (`{ total, items: IAttributeSetsEntity[] }`) — paginated list of sets.
 
-> `getAttributesByMarker` returns **attributes** (`IAttributesSetsEntity[]`) — as declared in v1.0.158; until 1.0.157 inclusive, the d.ts had `IAttributeSetsEntity[]` (set object), and the declared type could not be trusted. The type names differ by one letter — check by fields, not by name.
+> `getAttributesByMarker` returns **attributes** (`IAttributesSetsEntity[]`) — as declared in v1.0.158; until 1.0.157 inclusive, `IAttributeSetsEntity[]` (set object) was in d.ts, and the declared type could not be trusted. Type names differ by one letter — check by fields, not by name.
 
 ```ts
 // ❌ INCORRECT — attributeSet does not contain actual values of products/pages
@@ -26,13 +26,15 @@ const product = await getApi().Products.getProductById(id)
 const price = product.attributeValues.price?.value // actual value
 ```
 
-**Exception:** `timeInterval` — if the "Receive values" option is enabled in the admin panel, the `value` field will contain raw schedule data. Expand the ready slots `[[startISO, endISO], ...]` using `expandAttributeTimeIntervals(attr, { from, to })` (SDK ≥ 1.0.156; the computed field `timeIntervals` from the response has been removed). See `.claude/rules/attribute-values.md`.
+**Exception:** `timeInterval` — if the "Receive values" option is enabled in the admin panel, the `value` field will contain raw schedule data. Expand ready slots `[[startISO, endISO], ...]` using `expandAttributeTimeIntervals(attr, { from, to })` (SDK ≥ 1.0.156; the computed field `timeIntervals` from the response has been removed). See `.claude/rules/attribute-values.md`.
 
 ---
 
-## `initialValue` — Default Value and UI String Dictionary
+## `initialValue` — default value and UI string dictionary
 
 `value` in the schema is always empty, but **`initialValue` is not**: this is the designated place for the UI text dictionary, editable by the content manager (admin panel → **Settings → Attributes → &lt;set&gt;**). Why exactly the `initialValue` of the set, and not the value of the block — `.claude/rules/admin-api.md`, section "UI Text Dictionary".
+
+⚠️ **The dictionary is created in a `system` type set.** Such a set is not tied to any record, so the dictionary lives independently. A `forBlocks`/`forPages` type set would have to be attached to a specific block or page — this creates an unnecessary carrier record with a different lifecycle, and values are edited through its editor. One `system` set = one screen or subsystem (`header`, `footer`, `checkout_cart`, `form_messages`).
 
 **The form of `initialValue` depends on how you read it.** This is the main source of silent losses: half of the dictionary silently becomes empty.
 
@@ -54,63 +56,63 @@ type AttrItem = {
 export function readInitialValue(item: AttrItem | undefined, lang: Lang): string | null {
   const iv = item?.initialValue
   if (!iv || typeof iv !== 'object') return null
-  // 1) language-keyed — set schema form
+  // 1) language-keyed — form of the set schema
   const langKeyed = (iv as Partial<Record<Lang, { value?: string | null }>>)[lang]
   if (langKeyed && typeof langKeyed.value === 'string') return langKeyed.value
-  // 2) flat — getAttributesByMarker form
+  // 2) flat — form of getAttributesByMarker
   const flat = (iv as { value?: string | null }).value
   return typeof flat === 'string' ? flat : null
 }
 ```
 
-> ⚠️ `langCode` in `getAttributesByMarker` **is required** in a multilingual route: without it, the SDK initialization language is taken, and all locales will receive one language. The cache key must also include the locale — see `.claude/rules/localization.md`.
+> ⚠️ `langCode` in `getAttributesByMarker` **is mandatory** in a multilingual route: without it, the SDK initialization language is taken, and all locales will receive one language. The cache key must also include the locale — see `.claude/rules/localization.md`.
 
-### Scaling: Many Dictionaries
+### Scaling: multiple dictionaries
 
-One set = one screen (`system_header`, `system_cart`, `system_checkout`, …). Then:
+One `system` type set = one screen (`system_header`, `system_cart`, `system_checkout`, …). Then:
 
 - sets are loaded **in parallel** via `Promise.all`, not sequentially;
-- the wrapper is React `cache()` (deduplication within a single request) **plus** process-wide TTL cache: `cache()` lives only within the HTTP request, while UI signatures change once a month, and without TTL each Server Action pulls all sets again (200–500 ms per page with signatures);
-- **do not cache empty results.** A OneEntry network failure recorded in the cache for the entire TTL resets signatures across the entire site. Cache only non-empty schema — an empty one will fail to fallback and be re-requested;
-- the TTL cache must have a ceiling on the number of entries (`Map` + eviction of the first key), otherwise a typo in the marker in a loop grows it endlessly in a long-lived Node process;
-- provide the tree via a Context provider, with each key having a **constant fallback** in the code: the marker may not be present in the admin panel (then create an entry in `MISMATCH-LOG.md`, see `.claude/rules/mismatch-log.md`).
+- the wrapper is React `cache()` (deduplication within a single request) **plus** process-wide TTL cache: `cache()` lives only within the HTTP request, while UI labels change once a month, and without TTL each Server Action pulls all sets again (200–500 ms per page with labels);
+- **do not cache empty results.** A OneEntry network failure recorded in the cache for the entire TTL resets labels across the entire site. Cache only non-empty schema — an empty one will fail on fallback and be re-requested;
+- the TTL cache must have a ceiling on the number of records (`Map` + eviction of the first key), otherwise a typo in the marker in a loop grows it endlessly in a long-lived Node process;
+- distribute in the tree via Context provider, with each key having a **constant fallback** in the code: the marker may not be present in the admin panel (then create an entry in `MISMATCH-LOG.md`, see `.claude/rules/mismatch-log.md`).
 
 ---
 
-## Structure of the Attribute Object (Schema)
+## Structure of the attribute object (schema)
 
 ```ts
 {
   type: "string" | "text" | "image" | "list" | ..., // attribute type
-  value: null,            // always empty in the schema (v1.0.157: null instead of the previous {});
+  value: null,            // always empty in schema (v1.0.157: null instead of the previous {});
                           // exception — timeInterval with Receive values enabled
-  marker: "product_name", // unique identifier — used in the attributeValues entity
+  marker: "product_name", // unique identifier — used in attributeValues of the entity
   position: 1,            // display order
   listTitles: [...],      // options for radioButton and list
   validators: {...},      // validation rules
-  localizeInfos: { title: "Product Name" }, // human-readable title
+  localizeInfos: { title: "Product Name" }, // human-readable name
   additionalFields: {...} // nested attributes (Record, key = marker; array only with rawData)
 }
 ```
 
-**Fields of the schema element `IAttributeSchemaItem`, declared with v1.0.158** (all optional — the API does not return them for every field):
+**Fields of the schema element `IAttributeSchemaItem`, declared since v1.0.158** (all optional — the API does not return them for every field):
 
 | Field | What it provides |
 | --- | --- |
 | `position` | order of the field within the set — sort the form by it, not by the order of object keys |
 | `listTitles` (`IListTitle[]`) | options for `list` / `radioButton` / `entity`, along with `extended` and values of related entities |
-| `listType` | for `entity` — how the list of options is organized (e.g. `"nested"`) |
-| `moduleIdentifier` | for `entity` — from which module related entities are taken (e.g. `"catalog"`) |
+| `listType` | for `entity` — how the list of options is organized (e.g., `"nested"`) |
+| `moduleIdentifier` | for `entity` — from which module related entities are taken (e.g., `"catalog"`) |
 | `parentId` | id of the parent field, `null` for top-level fields |
 | `splitParts` (`number[] \| boolean`) | for fields with a divisible price — ids of fields it is split into; `false` if the field is not divisible |
 
-⚠️ There, `initialValue` and `isPrice` have become **optional**: the API does not return them for some fields (`isPrice` only comes with product sets). Read using `?.`, absence is not an error.
+⚠️ There, `initialValue` and `isPrice` have become **optional**: the API does not return them for some fields (`isPrice` only comes with product sets). Read through `?.`, absence is not an error.
 
 ---
 
-## listTitles — Options (radioButton, list)
+## listTitles — options (radioButton, list)
 
-Use `listTitles` to display filter options or forms:
+Use `listTitles` to display filter or form options:
 
 ```ts
 const attrs = await getApi().AttributesSets.getAttributesByMarker('products')
@@ -128,13 +130,13 @@ const swatches = options.map((opt: any) => ({
 }))
 ```
 
-**Important:** `value` in listTitles — option identifier; type `number | string`, and for `entity` attributes — object `IListTitleEntityValue` (`{ id, depth, parentId, position, isPinned }`). For `radioButton` / `list` this is usually a string-ID, and it is stored in `attributeValues` of the entity when selected.
+**Important:** `value` in listTitles — option identifier; type `number | string`, and for `entity` attributes — object `IListTitleEntityValue` (`{ id, depth, parentId, position, isPinned }`). For `radioButton` / `list`, this is usually a string-ID, and it is stored in `attributeValues` of the entity upon selection.
 
 ---
 
-## additionalFields — Nested Attributes
+## additionalFields — nested attributes
 
-`additionalFields` is configured in the admin panel for the attribute. The **raw** API returns it as an array, but the SDK normalizes it to `Record<marker, field>` **in all contexts** — both in `attributeValues` of entities (Products, Pages, Blocks), and in the schema from `getAttributesByMarker` / `getSingleAttributeByMarkerSet`, and in form attributes. The array remains only with `rawData: true` in the config.
+`additionalFields` is configured in the admin panel on the attribute. The **raw** API returns it as an array, but the SDK normalizes it into `Record<marker, field>` **in all contexts** — both in `attributeValues` of entities (Products, Pages, Blocks), and in the schema from `getAttributesByMarker` / `getSingleAttributeByMarkerSet`, and in form attributes. The array remains only with `rawData: true` in the config.
 
 ```ts
 // RAW API (rawData: true) — array:
@@ -153,7 +155,7 @@ attr.additionalFields
 
 ---
 
-## validators — Structure
+## validators — structure
 
 ```ts
 // requiredValidator — required field
@@ -202,4 +204,12 @@ attrs['2nd_price']?.value
 | Get a single attribute by marker                | `getSingleAttributeByMarkerSet(setMarker, attrMarker)` |
 | Get all attribute sets                          | `getAttributes()`                                      |
 
-**DO NOT use AttributesSets to get values of products/pages.** For that, use `Products.getProducts()`, `Pages.getPageByUrl()` etc. — they have `attributeValues` with real data.
+**DO NOT use AttributesSets to get values of products/pages.** For that, use `Products.getProducts()`, `Pages.getPageByUrl()`, etc. — they have `attributeValues` with real data.
+
+⚠️ **The order of arguments in `getSingleAttributeByMarkerSet(setMarker, attributeMarker, langCode?)` — the set first.** Both parameters are `string`, so swapping them compiles and responds with `404 Attribute not found`, which reads as "no such attribute", not "invalid call". Until v1.0.163, the `IAttributesSets` interface declared them in reverse order — code written according to the declaration built the path `/{attributeMarker}/attributes/{setMarker}` and always received 404; in 1.0.163 the declaration was aligned with the implementation (path `/{setMarker}/attributes/{attributeMarker}`).
+
+⚠️ **The set is created for the entity type.** In the admin panel, they are categorized by types: `forPages`, `forBlocks`, `forProducts`, `forForms`, `forUsers`, and `system`. A `forBlocks` set cannot be assigned to a product, and a `forForms` set cannot be assigned to a page. The `system` type is not tied to anything and serves as a storage for settings and UI dictionaries (`header`, `footer`, `checkout_cart`, `form_messages` — one set per screen); such sets are read through `getAttributesByMarker` for `initialValue`.
+
+⚠️ **A set that is already in use is partially locked** — the interface shows "Editing is not available as this attribute set is being used". The composition of fields is thought out before records appear on the set; changing the schema retroactively may not always be possible.
+
+⚠️ **`multiselect` for attributes of type `list`** (declared in `IAttributeSchemaItem` since v1.0.162, in `IFormAttribute` — since v1.0.164): `true` — multiple values are selected from `listTitles`, `false` — one. The flag affects both the control in the UI and the value form; do not assume `list` is always multiple.

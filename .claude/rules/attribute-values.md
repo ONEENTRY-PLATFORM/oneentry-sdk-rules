@@ -7,6 +7,32 @@ paths:
 ---
 # Working with attributeValues — OneEntry Rules
 
+## SDK Helpers (≥ 1.0.163) — first they, then manual parsing
+
+Starting from v1.0.163, the package exports value parsing that was previously written in each project. **Read files with them, not manually:**
+
+```typescript
+import {
+  getAttributeFile, getAttributeFiles, getAdditionalFields,
+  isFileAttribute, isStringAttribute, isNumberAttribute, isListAttribute,
+} from 'oneentry'
+
+const cover = getAttributeFile(product.attributeValues.img)     // IAttributeFile | null — first file
+const gallery = getAttributeFiles(page.attributeValues.photos)  // IAttributeFile[] — all files
+const blurDataURL = cover?.previewLink?.default?.[0]            // ready base64-LQIP
+const extra = getAdditionalFields(product.attributeValues.price) // Record<marker, IAttributeValue>
+```
+
+- `getAttributeFiles` collapses **both** forms of `value` (a single object for one file and an array for multiple) into one list — branching `Array.isArray(v) ? v[0] : v` is no longer needed; it returns `[]` for non-file types.
+- `getAttributeFile` — the first file, for covers and previews.
+- `getAdditionalFields` removes what the API returns as **an empty array** when there are no nested fields (which is why `additionalFields` is typed as `Record<string, IAttributeValue> | unknown[]` and each field read was a type error).
+- `IAttributeFile` is now exported from the root of the package — do not redeclare it manually.
+- `ITypedAttributeValue` — a discriminated union by `type`, narrows `value` in `switch`; types outside the union (`entity`, `date`, custom) remain as `IAttributeValue`.
+
+Manual parsing below is needed for types that helpers do not cover (`text`, `list`, `entity`, `timeInterval`), and for understanding the forms of values.
+
+> ⚠️ An unfilled file attribute is returned by the API as `value: ""`. Starting from v1.0.164, an empty string is considered an empty value — before that, the validator wrote `Attribute of type "image" carries an unexpected file shape` for each such product.
+
 ## Accessing Attributes
 
 ```typescript
@@ -33,41 +59,55 @@ const allImages = Object.values(attrs)
 
 ## Value Types (critically important!)
 
-| Type                                   | Access to value                                            |
+| Type                                   | Accessing value                                            |
 |---------------------------------------|-----------------------------------------------------------|
 | `string`                              | `attrs.marker?.value` (string) or `null` if not filled   |
 | `integer`, `float`, `real`            | `attrs.marker?.value` — **number** or `null` (v1.0.157, see section below) |
-| `text`                                | array **or** object — unwrap (see section)                |
-| `textWithHeader`                      | like `text`: unwrap → `header`, `htmlValue`              |
+| `text`                                | array **or** object — unwrap it (see section)            |
+| `textWithHeader`                      | **repeater**: array of pairs `{ header, htmlValue, plainValue }` — render all elements, not just the first |
 | `image`                               | 1 file → object, 2+ → array of objects — see section below |
 | `file`                                | 1 file → object, 2+ → array (like `image`, v1.0.157)     |
-| `groupOfImages`                       | `attrs.marker?.value?.[0]?.downloadLink` (always an array) |
+| `groupOfImages`                       | `attrs.marker?.value?.[0]?.downloadLink` (always an array)  |
 | `date`, `dateTime`, `time`            | `attrs.marker?.value?.fullDate` or `value.formattedValue`|
 | `list`                                | `attrs.marker?.value` (array of ids or objects with extended) |
 | `radioButton`                         | `attrs.marker?.value` (string-id)                         |
 | `entity`                              | `attrs.marker?.value` (array of markers)                  |
 | `timeInterval`                        | `attrs.marker?.value` → array of groups (raw schedule); slots — via `expandAttributeTimeIntervals(attr, { from, to })` |
 | `spam`                                | captcha — render `<FormReCaptcha>`, NOT `<input>`         |
+| `button`                              | `attrs.marker?.value` — selected option of the switch (in the admin panel, this is a button for selecting one value) |
+| `json`                                | structure as is; **there is no type `json` in the union `AttributeType`** (SDK 1.0.164) — when reading, narrow the type yourself |
 
-## ⚠️ Normalization of SDK values ≥ 1.0.157 — unified across all modules
+## What Each Type Means — to Understand What Will Come
+
+The attribute type is chosen by the content manager in the admin panel (19 types), and the choice affects the value form. Three pairs that are most often confused when reading:
+
+- **`date` / `dateTime` / `time`** — all three return `{ fullDate, formattedValue, formatString }`, differing in `formatString`: `DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`. `date` — publication date, expiration date, event date (time is not significant); `dateTime` — moment on the timeline: start of broadcast, end of promotion, deadline (timers are built on it); `time` — recurring time without a date (“delivery from 9:00”). For calculations, take `fullDate` (ISO), for output — `formattedValue`.
+- **`text` / `textWithHeader`** — `text` is one block of formatted text (in the admin panel — editor with HTML/Markdown/Plain), `textWithHeader` — **repeater**: the editor adds as many pairs “header → body” as needed, so FAQs, characteristics, accordions, and steps come in one attribute-array. When reading it, always iterate through the entire array.
+- **`image` / `groupOfImages` / `file`** — the `image` widget in the admin panel is limited to **one** file, `groupOfImages` — a collection (always an array), `file` — a document (PDF, instruction), it has `contentType` and no ready previews.
+
+The rest briefly: `string` — short string (title, SKU, link, HEX); `integer` — integer (stock, year, capacity); `float`/`real` — fractional, and it is the numeric attribute with the flag `isPrice` that forms `product.price`; `radioButton` — one option from the reference, `list` — one or several (depends on `multiselect`), an option may have `extended` with the value of another attribute (HEX, icon); `entity` — a link to another record (related products, master services); `timeInterval` — a schedule rule, not a moment; `spam` — a requirement to render a captcha; `button` — a switch for one value; `json` — arbitrary structure for the developer.
+
+> For `groupOfImages` files, the content manager fills in **Alt** and **Title** — take them from the file data, do not generate alt from the product name.
+
+## ⚠️ Normalization of Values SDK ≥ 1.0.157 — Unified Across All Modules
 
 Starting from v1.0.157, normalization (`_normalizeAttr`) is applied to **every** attribute of **every** response: `attributeValues` of entities, `attributes` of forms, form-data fields, nested `additionalFields`, attributes in sets. Previously, some rules only worked in products/menus/forms/attribute-sets, so the same attribute came in different forms from different modules.
 
 | What is normalized          | Rule (v1.0.157)                                                   |
-| -------------------------- | -------------------------------------------------------------------- |
-| `image`, `file`            | exactly 1 file → `value` = file object; 2+ files → array            |
-| `groupOfImages`            | always an array (collection by definition, does not unwrap)         |
-| `integer`, `float`, `real` | `value` is converted to `number`; non-number → `null`               |
-| Empty attribute (any type) | `value === null` (previously `{}` for text, `0` for numeric)       |
-| Form fields                  | `attributes` of forms are sorted by `position` (like `attributeValues`) |
+| -------------------------- | ------------------------------------------------------------------ |
+| `image`, `file`            | exactly 1 file → `value` = file object; 2+ files → array          |
+| `groupOfImages`            | always an array (collection by definition, does not unfold)        |
+| `integer`, `float`, `real` | `value` is converted to `number`; non-number → `null`             |
+| Empty attribute (any type) | `value === null` (previously `{}` for text types, `0` for numeric) |
+| Form fields                  | `attributes` of the form are sorted by `position` (like `attributeValues`) |
 
-**Breaking for existing code:** `value[0]` of a single `image`/`file` is now `undefined` in blocks, pages, users, orders, admins, discounts, templates, `Products.getProductsEmptyPage`, `Products.getProductBlockById`. Remove the index or unwrap universally (`Array.isArray(v) ? v[0] : v` — safe even with multiple files). Code that read the object from products/menus is unaffected.
+**Breaking for existing code:** `value[0]` for a single `image`/`file` is now `undefined` in blocks, pages, users, orders, admins, discounts, templates, `Products.getProductsEmptyPage`, `Products.getProductBlockById`. Remove the index or unwrap universally (`Array.isArray(v) ? v[0] : v` — safe even with multiple files). Code that read the object from products/menus will not be affected.
 
-**Breaking for emptiness checks:** an unfilled `integer`/`float` no longer comes as `0` — it comes as `null`. Checks like `if (attrs.qty?.value === 0)` and `value || 0` change meaning: use `attrs.qty?.value ?? 0`, and check "not filled" via `== null`.
+**Breaking for emptiness checks:** an unfilled `integer`/`float` no longer comes as `0` — it comes as `null`. Checks like `if (attrs.qty?.value === 0)` and `value || 0` change meaning: use `attrs.qty?.value ?? 0`, and check “not filled” via `== null`.
 
 ## ⚠️ image, groupOfImages — FIRST CHECK the actual structure via API
 
-**ALWAYS run `/inspect-api` before the first use of an image attribute:**
+**ALWAYS before the first use of an image attribute, run `/inspect-api` or:**
 
 ```javascript
 // .claude/temp/check-image.mjs
@@ -100,7 +140,7 @@ The SDK (`_normalizeAttr`, v1.0.157) unwraps a **single-element** array `image`/
 - exactly one file → **object** (`value.downloadLink`);
 - two or more → **array of objects** (`value[0].downloadLink`).
 
-> The type of entity (Products / Pages / Blocks / Orders / Users) and the method of retrieval (top-level method or nested response) no longer affect anything. Until 1.0.157, unwrapping only worked in products, menus, forms, forms-data, attribute-sets, integration-collections, and `Pages.searchPage`, so the same attribute came either as an object or an array. (An even older table "Products=OBJECT / Pages=ARRAY / Blocks=ARRAY" described a false correlation.)
+> The entity type (Products / Pages / Blocks / Orders / Users) and the way of obtaining (top-level method or nested response) no longer affect anything. Until 1.0.157, unwrapping only worked in products, menus, forms, forms-data, attribute-sets, integration-collections, and `Pages.searchPage`, so the same attribute came either as an object or as an array. (An even older table “Products=OBJECT / Pages=ARRAY / Blocks=ARRAY” described a false correlation.)
 
 ```typescript
 // ✅ Universally — unwrap both object (1 file) and array (2+):
@@ -121,22 +161,24 @@ const url = img?.downloadLink;                    // full-size image
 //   { default: [ "data:image/webp;base64,…" /* LQIP */, "https://…preview.default.jpeg" ] }
 const preset  = img?.defaultPreview || 'default';
 const blur    = img?.previewLink?.[preset]?.[0];  // ready base64 → blurDataURL (fetch not needed)
-// ⚠️ previewLink is only present for files with a configured preview template, and including
+// ⚠️ previewLink is only available for files with a configured preview template, and including
 // placeholder="blur" — is a question for the user: `.claude/rules/performance-images.md`
 const preview = img?.previewLink?.[preset]?.[1];  // URL of compressed preview
 ```
 
-> ⚠️ How many files are actually in the attribute is known only to the project content. Check via `/inspect-api` or `console.log(attrs.marker?.value)` + `Array.isArray(...)`, and in the code write a form resilient to both cases: the content manager may add a second file and turn the object into an array.
+> ⚠️ How many files are actually in the attribute is known only to the project content. Check via `/inspect-api` or `console.log(attrs.marker?.value)` + `Array.isArray(...)`, and in the code, write a form resilient to both cases: the content manager may add a second file and turn the object into an array.
 
 ### One helper for the entire project — `getImageUrl` / `getImageUrls`
 
-`Array.isArray(v) ? v[0] : v` should not spread across components: it repeats at every image output location and breaks in its own way everywhere. Keep **one** pair of functions in `src/lib/oneentry.ts` (where `getApi`/`isError` are) and import only it.
+> In SDK ≥ 1.0.163, the parsing of the `value` form is done by `getAttributeFile` / `getAttributeFiles` from the package (see the beginning of the rule) — your helper is only needed as a thin wrapper around them for two things that are not in the SDK: fallback to `previewLink` (in order products and form-data records, only it comes, and **as a string**) and discarding records without a link. Inside, call `getAttributeFiles(attr)` instead of manual `Array.isArray`.
 
-Three nuances not present in the naive version:
+`Array.isArray(v) ? v[0] : v` should not spread across components: it repeats in every image output place and breaks in its own way in each. Keep **one** pair of functions in `src/lib/oneentry.ts` (where `getApi`/`isError` are) and import only it.
+
+Three nuances that are not in the naive version:
 
 1. **Accept both the attribute and its `value`** — callers constantly confuse `attrs.pic` and `attrs.pic.value`; unwrap `{ value: … }` if it came.
-2. **Fallback to `previewLink`.** In order products (`Orders`) and form-data records, only it comes, without `downloadLink` — without the fallback, the order image is empty. Consider both forms of `previewLink`: string (orders, form-data) and object of presets (image attributes of entities, see above).
-3. **Discard entries without a link** — otherwise, empty tiles from broken files appear in the gallery.
+1. **Fallback to `previewLink`.** In order products (`Orders`) and form-data records, only it comes, without `downloadLink` — without fallback, the order image is empty. Consider both forms of `previewLink`: string (orders, form-data) and object of presets (image attributes of entities, see above).
+1. **Discard records without a link** — otherwise, empty tiles from broken files appear in the gallery.
 
 ```typescript
 // src/lib/oneentry.ts
@@ -164,7 +206,7 @@ export function getImageUrl(value: unknown): string {
   return typeof url === 'string' ? url : ''
 }
 
-/** All URLs of the attribute in the order of storage — for galleries and groupOfImages. */
+/** All URLs of the attribute in storage order — for galleries and groupOfImages. */
 export function getImageUrls(value: unknown): string[] {
   if (!value) return []
   const unwrapped = !Array.isArray(value) && typeof value === 'object' && 'value' in value
@@ -196,7 +238,7 @@ const urls = gallery.map((img: any) => img.downloadLink)
 
 ## ⚠️ text — ARRAY OR object with three formats
 
-The API returns `text` as an **array of blocks** `[{ htmlValue, plainValue, mdValue }]`, while the SDK
+The API returns `text` **as an array of blocks** `[{ htmlValue, plainValue, mdValue }]`, while the SDK
 (unlike `image` and `file`) does NOT unwrap a single-element array —
 `_normalizeAttrValue` only unpacks file types. Therefore, direct
 `value?.htmlValue` on real data returns `undefined`. Unwrap universally:
@@ -219,7 +261,7 @@ const html = attrs.description?.value?.htmlValue
 > Confirmed by a live test (`npm run validate:live`, test `attribute-shapes`)
 > on a real project: all `text` attributes came as an array.
 
-## textWithHeader — header + body (same array wrapper)
+## textWithHeader — header + body (the same array wrapper)
 
 ```typescript
 const rawSpecs = attrs.specs?.value;
@@ -263,9 +305,9 @@ const selectedTags = attrs.tags?.value || []  // ["1", "3", "5"]
 const related = attrs.relatedProducts?.value || []  // ["mouse", "cable"]
 ```
 
-## json — this type of attribute DOES NOT EXIST
+## json — this attribute type DOES NOT EXIST
 
-In `AttributeType` SDK v1.0.157, the type `json` does not exist (union: `string`, `text`, `textWithHeader`, `integer`, `real`, `float`, `date`, `dateTime`, `time`, `file`, `image`, `groupOfImages`, `list`, `radioButton`, `entity`, `button`, `spam`, `timeInterval`). If the project stores JSON — it is a regular `string`/`text` attribute that you parse manually:
+In `AttributeType` SDK v1.0.157, there is no type `json` (union: `string`, `text`, `textWithHeader`, `integer`, `real`, `float`, `date`, `dateTime`, `time`, `file`, `image`, `groupOfImages`, `list`, `radioButton`, `entity`, `button`, `spam`, `timeInterval`). If the project stores JSON — it is a regular `string`/`text` attribute, which you parse manually:
 
 ```typescript
 const data = JSON.parse(attrs.customData?.value || '{}')  // customData — type string
@@ -274,9 +316,9 @@ const width = data.dimensions?.width
 
 ## timeInterval
 
-> ⚠️ **SDK ≥ 1.0.156:** the computed field `timeIntervals` NO LONGER gets added to the attribute
+> ⚠️ **SDK ≥ 1.0.156:** the computed field `timeIntervals` NO LONGER adds to the attribute
 > (previously, the SDK placed slots in `value[].values[].timeIntervals`). Now slots are resolved
-> **on demand** in the window `{ from, to }` that you choose, via
+> **on demand** in the window `{ from, to }`, which you choose, via
 > `expandAttributeTimeIntervals`. Raw schedule data (`dates`/`range`, `times`/`intervals`,
 > `inEveryWeek`, `inEveryMonth`) still lies in `value` — only the ready field has been removed.
 
@@ -295,13 +337,13 @@ const intervals = expandAttributeTimeIntervals(attrs.workingHours, {
 const start = intervals[0]?.[0]
 const end   = intervals[0]?.[1]
 
-// Need access to the raw schedule without casting — use type-guard:
+// Need access to raw schedule without casting — use type-guard:
 if (isTimeIntervalAttribute(attrs.workingHours)) {
   attrs.workingHours.value[0].values[0].dates // fully typed
 }
 ```
 
-**For the booking calendar** work with the flat list of `intervals` collected above:
+**For booking calendar** work with the flat list `intervals` collected above:
 
 ```typescript
 // Slots for the selected date (UTC comparison!)
@@ -325,12 +367,12 @@ const time = `${h}:${m === 0 ? '00' : m}`;   // "10:00"
 
 ### timeInterval as weekly working hours (not slots)
 
-If the attribute stores **working hours** (opening hours for footer/contact page), expand functions are not needed — render as "Mon: 10:00 – 22:00", not booking slots. Read raw groups of `value` directly:
+If the attribute stores **working hours** (opening hours for footer/contact page), expand functions are not needed — render as “Mon: 10:00 – 22:00”, not booking slots. Read raw groups `value` directly:
 
 - each entry `values[]` of the group = **one day of the week**: `dates[0]` — anchor date (midnight **UTC**, `inEveryWeek: true`) → day of the week = `new Date(dates[0]).getUTCDay()`;
 - `times` — array of pairs `[{hours, minutes}, {hours, minutes}]` (opening/closing; multiple pairs = shifts — join with a comma);
-- read hours/day **in UTC** (`getUTCDay`, values of pairs as they are) — not in local timezone;
-- silently skip everything unparseable: a partially filled attribute degrades to existing days, a day without pairs = "Closed", empty parsing — hide the section entirely (normal degradation with an empty CMS).
+- read hours/day **in UTC** (`getUTCDay`, values of the pair as is) — not in local timezone;
+- silently skip everything unparseable: a partially filled attribute degrades to existing days, a day without pairs = “Closed”, empty parsing — hide the section entirely (normal degradation in an empty CMS).
 
 ```typescript
 // value → [{ day: 'Monday', hours: '10:00 – 22:00' }, …], Mon-first order: [1,2,3,4,5,6,0]
@@ -345,7 +387,7 @@ for (const group of attrs.opening_time?.value ?? []) {
 
 ## additionalFields — nested attributes
 
-`additionalFields` — arbitrary nested attributes that can be attached to **any** attribute in the admin panel. The content is fully defined by the developer/administrator. The only limitation is that the types of nested fields are taken from the standard set of OneEntry types (`string`, `integer`, `float`, `text`, `image`, `groupOfImages`, `date`, `list`, etc.).
+`additionalFields` — arbitrary nested attributes that can be attached to **any** attribute in the admin panel. The content is fully defined by the developer/administrator. The only limitation is that the types of nested fields come from the standard set of OneEntry types (`string`, `integer`, `float`, `text`, `image`, `groupOfImages`, `date`, `list`, etc.).
 
 It appears in two contexts:
 
@@ -354,7 +396,7 @@ It appears in two contexts:
 
 ### SDK Normalization
 
-The SDK automatically transforms `additionalFields` from an **array** (as returned by the API) into a **Record**, key — `marker` of the field.
+The SDK automatically transforms `additionalFields` from **an array** (as returned by the API) into a **Record**, key — the marker of the field.
 
 ```typescript
 // RAW API (rawData: true in config):
@@ -374,7 +416,7 @@ The SDK automatically transforms `additionalFields` from an **array** (as return
 // If additionalFields is not set → {}
 ```
 
-### Full structure of a record
+### Full Structure of a Record
 
 ```typescript
 // Each record in additionalFields:
@@ -391,7 +433,7 @@ The SDK automatically transforms `additionalFields` from an **array** (as return
 
 ### Accessing Values
 
-> ⚠️ **Markers and meaning of `additionalFields` are defined in the admin panel** — they are unique for each project and attribute. Always check the actual structure via `/inspect-api` or `console.log` before use. Do not guess markers.
+> ⚠️ **Markers and the meaning of `additionalFields` are defined in the admin panel** — they are unique for each project and attribute. Always check the actual structure via `/inspect-api` or `console.log` before use. Do not guess markers.
 
 ```typescript
 const attrs = entity.attributeValues || {}
@@ -404,9 +446,9 @@ console.log(attrs.someMarker?.additionalFields)
 // Step 2 — access by known marker:
 const fieldAValue = attrs.someMarker?.additionalFields?.fieldA?.value
 
-// Step 3 — structure of value depends on type of nested field (same rules as for main attributes):
+// Step 3 — the structure of value depends on the type of the nested field (the same rules as for main attributes):
 // type "string"  → value — string
-// type "text"    → unwrap array → htmlValue / plainValue (see text section)
+// type "text"    → unwrap the array → htmlValue / plainValue (see text section)
 // type "image"   → 1 file: value.downloadLink; 2+: value[0].downloadLink
 // type "integer" → value — number or null (not 0!)
 // ... etc.
@@ -448,7 +490,7 @@ const iconAttr    = Object.values(attrs).find((a: any) => a?.isIcon === true)
 The aggregated rating of the entity (Products and others) is formed by OneEntry based on reviews (FormData) and is available in the **top-level field of the entity** `entity.rating?.value` (type `IRating`), and **not** in `attributeValues.rating`.
 
 ```typescript
-// ✅ CORRECT — final rating from top-level field
+// ✅ CORRECT — final rating from the top-level field
 const ratingVal = product.rating?.value;  // number | null
 if (ratingVal != null) {
   // show star + value
@@ -456,23 +498,23 @@ if (ratingVal != null) {
   // "Rating not yet formed" — no reviews yet
 }
 
-// ❌ INCORRECT — this is a "phantom" attribute, often remains in the schema
+// ❌ INCORRECT — this is a phantom attribute, often remains in the schema
 // from the old implementation (before real reviews were connected).
 // Returns a hardcoded value, does not reflect real reviews.
 const ratingVal = attrs.rating?.value;
 ```
 
-**Link with reviews:** the values of `rating` are recalculated on the OneEntry side from FormData reviews (see skill `/create-reviews`). Inside a single review (FormData record), the rating field is already a marker of the form schema (e.g., `review_rating` or `rating`), this is **another** field.
+**Link with reviews:** the values of `rating` are recalculated on the OneEntry side from FormData reviews (see skill `/create-reviews`). Inside a single review (FormData record), the rating field is already the marker of the form schema (for example, `review_rating` or `rating`), this is **another** field.
 
-| Context                              | Where it is located                                  |
-|---------------------------------------|-----------------------------------------------------|
-| Final rating of the entity (aggregate)   | `entity.rating?.value` (top-level)                  |
+| Context                              | Where it lies                                  |
+|---------------------------------------|------------------------------------------------|
+| Final rating of the entity (aggregate)   | `entity.rating?.value` (top-level)             |
 | Rating inside a single review (FormData) | `formData.find(f => f.marker === '<rating-marker>')?.value` |
-| ❌ `attrs.rating?.value`              | DO NOT use — phantom attribute                      |
+| ❌ `attrs.rating?.value`              | DO NOT use — phantom attribute                  |
 
-> If `rating` is found in `attributeValues` — it is likely a remnant before real reviews were connected. It is not necessary to delete from the schema (may break existing data), but in new code use only `entity.rating`.
+> If `rating` is found in `attributeValues` — this is likely a remnant before real reviews were connected. It is not necessary to delete from the schema (it may break existing data), but in new code, use only `entity.rating`.
 
-## For page blocks — localizeInfos as fallback
+## For Page Blocks — localizeInfos as fallback
 
 ```typescript
 const attrs = block.attributeValues || {}

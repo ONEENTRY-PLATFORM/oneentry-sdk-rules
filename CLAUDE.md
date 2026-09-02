@@ -4,7 +4,7 @@ oneentry — OneEntry NPM package
 
 **SDK Documentation:** <https://js-sdk.oneentry.cloud/docs/index/>
 
-This file is the core context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
+This file is the core of the context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
 
 ## Project Context
 

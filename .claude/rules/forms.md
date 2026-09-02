@@ -21,6 +21,7 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
     {
       "type": "string",
       "marker": "first_name",
+      "multiselect": false,
       "position": 1,
       "isVisible": true,
       "listTitles": [],
@@ -41,18 +42,18 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 
 **Key Fields:**
 
-- `attributes: IFormAttribute[]` — form fields for rendering. With SDK ≥ 1.0.157 **already sorted by `position`** (previously the API returned them mixed, and sorting had to be done manually); custom sorting is not needed, but it doesn't hurt.
+- `attributes: IFormAttribute[]` — form fields for rendering. With SDK ≥ 1.0.157 **already sorted by `position`** (earlier, the API returned them mixed up and sorting had to be done manually); custom sorting is not needed, but it doesn't hurt either.
 - `localizeInfos: IFormLocalizeInfo` — form localization: `title`, as well as `titleForSite`, `successMessage`, `unsuccessMessage`, `urlAddress`, `database`, `script`.
 - `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`.
 - `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`.
 - `validators[name].errorMessage` — custom error text for the validator (set in the admin panel).
-- `additionalFields: Record<marker, IFormAttributeAdditionalField>` — SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others.
-- `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — type of the form (the typo `sing_in_up` — from the API, it is as it is). Based on it, choose behavior: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings.
+- `additionalFields: Record<marker, IFormAttributeAdditionalField>` — the SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others.
+- `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — form type (the typo `sing_in_up` — from the API, that's how it is). Use it to choose behavior: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings.
 - `moduleFormConfigs[].exceptionIds?: string[]` — list of excluded identifiers in the module config (for example, entities for which the form does not apply).
 
-> ⚠️ **`attributes` for an empty form.** The API returns `attributes: {}` (an empty object), not `[]`. **With v1.0.158, the SDK normalizes this in `_normalizeAttr`**, so `attributes` — is always `IFormAttribute[]`, and `form.attributes.map(...)` is safe on any form.
+> ⚠️ **`attributes` of an empty form.** The API returns `attributes: {}` (an empty object), not `[]`. **With v1.0.158 the SDK normalizes this in `_normalizeAttr`**, so `attributes` — is always `IFormAttribute[]`, and `form.attributes.map(...)` is safe on any form.
 >
-> On SDK ≤ 1.0.157, the object comes as is, and direct `.map`/`.filter`/`.sort` fails with `not a function`. If the project can work on an old SDK — normalize it:
+> On SDK ≤ 1.0.157 the object comes as is, and direct `.map`/`.filter`/`.sort` fails with `not a function`. If the project may work on an old SDK — normalize:
 >
 > ```ts
 > const attrs: IFormAttribute[] = Array.isArray(form.attributes)
@@ -60,9 +61,9 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 >   : Object.values(form.attributes ?? {})
 > ```
 >
-> Regardless of the version: an empty form — a valid state of the project at the filling stage, the UI must degrade (empty field list) and not crash.
+> Regardless of the version: an empty form is a valid state of the project at the filling stage, the UI must degrade (empty field list), not crash.
 
-**Types for Form Fields — import from the root of the package** (`oneentry`, SDK ≥ 1.0.160):
+**Types for form fields — import from the root of the package** (`oneentry`, SDK ≥ 1.0.160):
 
 ```ts
 import type {
@@ -73,19 +74,19 @@ import type {
 } from 'oneentry'
 ```
 
-> ⚠️ For form fields use `IFormAttribute`, not `IAttributesSetsEntity`. `IAttributesSetsEntity` — is a type for AttributesSets API (`getAttributes`, `getAttributeSetByMarker`), it has a different structure and lacks form-specific flags (`isLogin`, `isSignUp`, `isNotification*`).
+> ⚠️ For form fields use `IFormAttribute`, not `IAttributesSetsEntity`. `IAttributesSetsEntity` — is the type for AttributesSets API (`getAttributes`, `getAttributeSetByMarker`), it has a different structure and lacks form-specific flags (`isLogin`, `isSignUp`, `isNotification*`).
 
-**Using `localizeInfos` of the form:**
+**Using the form's `localizeInfos`:**
 
 ```tsx
-// Success/error message from form settings in the admin panel
+// Success/error message from the form settings in the admin panel
 if (result.success) {
   setMessage(form.localizeInfos?.successMessage || 'Submitted')
 } else {
   setMessage(form.localizeInfos?.unsuccessMessage || 'Submission failed')
 }
 
-// Form title for the site (different from internal title)
+// Form title for the site (different from the internal title)
 const heading = form.localizeInfos?.titleForSite || form.localizeInfos?.title
 ```
 
@@ -105,18 +106,18 @@ const hint = field.additionalFields?.hint?.value || ''
 {hint && <span className="hint">{hint}</span>}
 ```
 
-**Mapping Validator Errors:**
+**Mapping validator errors:**
 
 In case of an error `postFormsData` `IError.message` — an array of strings with field markers or messages. To display custom errors, build a map from the form:
 
 ```ts
 import type { IFormAttribute } from 'oneentry'
 
-// From form attributes we get custom validator errors
+// From the form attributes we get custom validator errors
 function buildValidatorErrors(attributes: IFormAttribute[]): Record<string, string> {
   const map: Record<string, string> = {}
   for (const attr of attributes) {
-    // Find the first validator with errorMessage
+    // Looking for the first validator with errorMessage
     const errorMessage = Object.values(attr.validators || {})
       .map((v: any) => v?.errorMessage)
       .find(Boolean)
@@ -143,7 +144,7 @@ const formModuleConfigId = formModuleConfig?.id ?? 0
 const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? ''
 ```
 
-**Special Types of Form Fields:**
+**Special types of form fields:**
 
 - `spam` — captcha (reCAPTCHA v3 Enterprise). DO NOT render as `<input>`, use `<FormReCaptcha>`.
   siteKey — in `spam.settings.captcha.key` (NOT in `validators`), value of the spam field — object
@@ -165,7 +166,7 @@ await getApi().FormData.postFormsData({
 })
 ```
 
-**All three identifiers are mandatory.** Get them from `getFormByMarker`:
+**All three identifiers are required.** Get them from `getFormByMarker`:
 
 ```ts
 const formModuleConfigId = form.moduleFormConfigs?.[0]?.id ?? 0
@@ -186,7 +187,7 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
 { marker: 'price', type: 'float', value: 2.256 }
 ```
 
-> **Sending vs Reading (v1.0.157).** You can send a number as a string — the body type has been expanded to `string | number | null` (`IBodyTypeStringNumberFloat.value`). However, **when reading** the response (`getFormsDataByMarker`, fields of the sent form), the number always comes as `number` — numerical normalization now applies to both form attributes and form-data fields that were previously skipped. An unfilled numeric field — `null`, not `0` and not `''`: comparisons like `value === '5'` and `if (!value)` should be reconsidered.
+> **Sending vs reading (v1.0.157).** You can send a number as a string — the body type has been extended to `string | number | null` (`IBodyTypeStringNumberFloat.value`). However, **when reading** the response (`getFormsDataByMarker`, fields of the sent form), the number always comes as `number` — numerical normalization is now applied to both form attributes and form-data fields, which were previously skipped. An unfilled numeric field is `null`, not `0` and not `''`: comparisons like `value === '5'` and `if (!value)` should be reconsidered.
 >
 > File fields in form-data follow the same rule as entity attributes: one file → object, multiple → array (`IBodyTypeFile.value: IFileValue | IFileValue[]`).
 
@@ -208,7 +209,7 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
 
 **⚠️ UI — NOT a regular `<input type="text">`**
 
-For `date` / `dateTime` / `time` fields, **always** render the corresponding native picker or library calendar. A regular text input is prohibited: the user will enter a string, it will not pass validation and will not be assembled into the correct `{ fullDate, formattedValue, formatString }`.
+For fields `date` / `dateTime` / `time` **always** render the corresponding native picker or library calendar. A regular text input is prohibited: the user will enter a string, it will not pass validation and will not be assembled into the correct `{ fullDate, formattedValue, formatString }`.
 
 | `attribute.type` | Native input | Alternative |
 | --- | --- | --- |
@@ -219,7 +220,7 @@ For `date` / `dateTime` / `time` fields, **always** render the corresponding nat
 **Rules for `formatString` from the schema** (defined in the admin panel via `additionalFields.formatString` or `validators`):
 
 - If a specific format is needed (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`) — take it from the attribute and use it when building `formattedValue`.
-- If the format is not specified — apply the default value for the type (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`).
+- If no format is specified — apply the default value for the type (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`).
 
 **Building value from native input:**
 
@@ -242,7 +243,7 @@ const d = new Date(); d.setUTCHours(h, m, 0, 0)
 const value = { fullDate: d.toISOString(), formattedValue: input, formatString: 'HH:mm' }
 ```
 
-**Dynamic Field Rendering in the Form (Pattern):**
+**Dynamic field rendering in the form (pattern):**
 
 ```tsx
 if (attr.type === 'date') {
@@ -292,6 +293,15 @@ if (attr.type === 'time') {
 { marker: 'color', type: 'radioButton', value: ['red'] }
 ```
 
+**What to use to draw `list` — determined by `attribute.multiselect`** (declared in types with v1.0.157 for the set schema and with v1.0.164 for `IFormAttribute`; data was coming earlier but read as `unknown` due to index signature):
+
+```tsx
+// ✅ multiple options from listTitles or one
+attr.multiselect ? <CheckboxGroup … /> : <RadioGroup … />
+```
+
+Ignoring the flag means putting a single choice where the question allows multiple answers (and vice versa).
+
 ### entity — numeric ids for pages, strings with prefix for products
 
 ```ts
@@ -314,7 +324,7 @@ if (attr.type === 'time') {
     ['2025-02-11T16:00:00.000Z', '2025-02-11T18:00:00.000Z']
   ]
 }
-// value — an array of arrays [startISO, endISO]
+// value — array of arrays [startISO, endISO]
 ```
 
 **Reading** available slots (SDK ≥ 1.0.156) — `expandTimeIntervals` by the field schedules:
@@ -326,7 +336,7 @@ const field = form.attributes.find((a) => a.marker === 'delivery_slot');
 const slots = (field?.localizeInfos.intervals ?? []).flatMap((schedule) =>
   expandTimeIntervals(schedule, { from: '2025-02-01', to: '2025-02-28' }),
 );
-// slots → [[startISO, endISO], ...] (UTC). The ready field timeIntervals is no longer available in the SDK.
+// slots → [[startISO, endISO], ...] (UTC). The ready field timeIntervals is no longer in the SDK.
 ```
 
 ### image, groupOfImages — File object
@@ -337,6 +347,10 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 { marker: 'photo', type: 'image', value: [file] }
 { marker: 'gallery', type: 'groupOfImages', value: [file1, file2] }
 ```
+
+⚠️ **`type` — `'groupOfImages'`, in plural.** Prior to v1.0.163, the type `IBodyTypeImageGroupOfImages` contained a typo `'groupOfImage'`, and the editor auto-completed it; the API rejects such a value: `400 formData's marker '…' type must be one of […]`.
+
+⚠️ **An already uploaded file is attached in the form `IImageValue` / `IFileValue`** (`{ filename, downloadLink, size, previewLink?, params? }`) — this is **not** what `FileUploading.upload` returns: it has `contentType`, which form-data rejects (the SDK cuts it out itself when uploading the file for you).
 
 ### file — two options depending on the source
 
@@ -362,11 +376,11 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 }
 ```
 
-> **Reading saved file field (v1.0.157):** in the response, one file comes as **an object**, not an array with one element; the array remains when there are two or more. The body type has been expanded: `IBodyTypeFile.value: IFileValue | IFileValue[]`. You can still send it as an array. Read it safely: `const files = v ? [v].flat() : []`.
+> **Reading saved file field (v1.0.157):** in the response, one file comes as **an object**, not an array of one element; the array remains for two or more. The body type has been extended: `IBodyTypeFile.value: IFileValue | IFileValue[]`. You can still send it as an array. Read it reliably: `const files = v ? [v].flat() : []`.
 
 ---
 
-## Full Flow: Get Form → Send Data
+## Full flow: get form → send data
 
 ```ts
 // src/app/actions/forms.ts
@@ -383,12 +397,12 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
   const formModuleConfig = form.moduleFormConfigs?.[0]
 
-  // With v1.0.158 attributes are always an array; this branch is needed only for SDK ≤ 1.0.157
+  // With v1.0.158 attributes are always an array; the branch is needed only for SDK ≤ 1.0.157
   const attrs: IFormAttribute[] = Array.isArray(form.attributes)
     ? form.attributes
     : Object.values(form.attributes ?? {})
 
-  // Take type from the form attributes — do not guess!
+  // Take type from the form's attributes — do not guess!
   const transformedFormData = attrs
     .filter((attr) => attr.marker in formValues)
     .map((attr) => ({
@@ -436,4 +450,4 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
 `result.formData.id` — id of the created record.
 
-> ⚠️ `fingerprint` — now `string | null`. For anonymous submissions and submissions via app-token (without user session), it comes as `null`. Do not rely on its presence — check for `null` before use.
+> ⚠️ `fingerprint` — now `string | null`. For anonymous submissions and submissions via app-token (without user session) it comes as `null`. Do not rely on its presence — check for `null` before use.

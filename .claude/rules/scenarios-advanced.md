@@ -60,24 +60,41 @@ export async function getFormSubmissions(marker: string) {
 
 **Accessing Fields:** `Object.fromEntries(submission.formData.map(f => [f.marker, f.value]))`.
 
-**Updating Status / Deleting** (`updateFormsDataByid`, `updateFormsDataStatusByid`, `deleteFormsDataByid`):
+⚠️ **`formData` comes wrapped in language — do not read `formData[langCode]`.** The raw API response looks like `formData: { "en_US": [ … ] }`, but the SDK unwraps it and returns an **array** for the requested `langCode`. Code written based on the response from curl or the admin panel will receive `undefined` and render an empty list without any error.
 
-**⚠️ Require user authorization** — call from Client Component after `reDefine(refreshToken)`, NOT through app-token (unlike `getFormsDataByMarker`, which works with app-token).
+**Typed selection filter (v1.0.163)** — `body: IFormsDataFilter`:
+
+```typescript
+await getApi().FormData.getFormsDataByMarker('review', 12, {
+  entityIdentifier: 'blog',      // to which entity the records relate
+  parentId: 10,                  // responses to a specific record
+  status: ['approved'],          // ONLY an array and only from the set below
+  dateFrom: '2025-01-01',
+});
+```
+
+- **API silently ignores unknown field:** `statuses` instead of `status` will return all records, including unmoderated ones — the filter "works," but moderation is not applied.
+- `status` — an array of `sent | moderation | approved | banned | deleted` (`FormDataStatus`); string or other value → `400 each value in status must be a valid enum value`.
+- The field `entityparentIdentifier` does not exist: for responses to a record — `parentId`.
+
+**Updating status / deletion** (`updateFormsDataByid`, `updateFormsDataStatusByid`, `deleteFormsDataByid`):
+
+**⚠️ Requires user authorization** — call from Client Component after `reDefine(refreshToken)`, NOT through app-token (unlike `getFormsDataByMarker`, which works with app-token).
 
 ```typescript
 await getApi().FormData.updateFormsDataStatusByid(id, { statusIdentifier: 'processed' });
 await getApi().FormData.deleteFormsDataByid(id);
 ```
 
-**Reviews with Hierarchy** (`isExtended: 1`, `entityIdentifier`, `replayTo`) — skill **`/create-reviews`**.
+**Reviews with hierarchy** (`isExtended: 1`, `entityIdentifier`, `replayTo`) — skill **`/create-reviews`**.
 
-**⚠️ Reviews in OneEntry are implemented through FormData** — use the skill **`/create-reviews`**.
+**⚠️ Reviews in OneEntry are implemented through FormData** — use skill **`/create-reviews`**.
 
 ## IntegrationCollections — Custom Collections
 
-IntegrationCollections are arbitrary data tables in OneEntry (FAQs, directories, arbitrary content). Full CRUD access is available without authorization.
+IntegrationCollections — arbitrary data tables in OneEntry (FAQ, directories, arbitrary content). Full CRUD is available without authorization.
 
-**⚠️ Collection Marker:** obtain it via `/inspect-api` or `getICollections()` — do not guess.
+**⚠️ Collection marker:** obtain through `/inspect-api` or `getICollections()` — do not guess.
 
 ```typescript
 // Reading rows
@@ -128,12 +145,12 @@ await getApi().IntegrationCollections.deleteICollectionRowByMarkerAndId('faq', i
 }
 ```
 
-**Marker Validation** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT a boolean. ⚠️ Semantics — "marker **is free**": `true` = no collection with that marker exists (can create), `false` = marker is occupied (the same semantics confirmed by live testing at the twin endpoint `ProductStatuses.validateMarker`):
+**Marker Check** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT boolean. ⚠️ Semantics — "marker **is free**": `true` = no collection with that marker exists (can be created), `false` = marker is occupied (the same semantics confirmed by a live test at the twin endpoint `ProductStatuses.validateMarker`):
 
 ```typescript
 const { valid } = await getApi().IntegrationCollections.validateICollectionMarker('faq');
 if (!valid) {
-  /* marker occupied — collection faq exists */
+  /* marker is occupied — the faq collection exists */
 }
 
 // Existence check — more reliable by list:
@@ -141,17 +158,17 @@ const cols = await getApi().IntegrationCollections.getICollections(locale);
 const exists = cols.some((c) => c.identifier === 'faq');
 ```
 
-## Category Navigation
+## Navigation by Categories
 
 **⚠️ IMPORTANT:** `getRootPages()` and `getPages()` do NOT return `catalog_page` (product catalogs).
 Pages have a `type` field (`PageType`): `common_page`, `error_page`, `catalog_page`, `external_page`.
-To obtain a catalog, use `getPageByUrl()` — it finds pages of any type.
+To get a catalog, use `getPageByUrl()` — it finds pages of any type.
 `getChildPagesByParentUrl()` also returns `catalog_page` child pages.
 
 ```typescript
 // ❌ INCORRECT - catalog_page will not be in the results of getRootPages/getPages
 const rootPages = await getApi().Pages.getRootPages()
-// shop, category, and other catalog_page will NOT be here!
+// shop, category, and other catalog_page WILL NOT be here!
 
 // ✅ CORRECT - getPageByUrl finds pages of ANY type
 const shop = await getApi().Pages.getPageByUrl('shop', 'en_US')

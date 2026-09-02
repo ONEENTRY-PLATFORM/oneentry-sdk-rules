@@ -40,7 +40,7 @@ CLAUDE.md                          ← main instructions: SDK init, error handli
   skills/<name>/SKILL.md           ← step-by-step recipes for a specific feature
 ```
 
-**Rules** cover the parts of the SDK that are easy to get wrong: reading `attributeValues` by type, forms and form data, authentication and token refresh, orders and payments, product statuses, localization, Server Actions, Next.js pages, and a performance family (images, bundle, streaming, RTK Query, popups, GSAP).
+**Rules** cover the parts of the SDK that are easy to get wrong: reading `attributeValues` by type, forms and form data, authentication and token refresh, orders and payments, product statuses, localization, Server Actions, Next.js pages, and a performance family (images, bundle, streaming, RTK Query, popups, GSAP). Separately — designing the content structure: what to create as a page, a block or an attribute, and which attribute type fits the task.
 
 **Skills** are end-to-end recipes: project and SDK setup, inspecting a live project's API, pages and menus, product list / card / page, cart, favorites, filters, search, checkout and orders, profile, auth and Google OAuth, forms, captcha, reviews, subscriptions, Playwright tests.
 
