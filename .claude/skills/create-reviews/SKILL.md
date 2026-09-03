@@ -2,7 +2,7 @@
 name: create-reviews
 description: Create reviews section using FormData
 ---
-# Create a reviews section (FormData)
+# Create a review section (FormData)
 
 Arguments: page/product for reviews, whether responses to reviews are needed.
 
@@ -14,7 +14,7 @@ Arguments: page/product for reviews, whether responses to reviews are needed.
 /inspect-api forms
 ```
 
-Find the reviews form. The `identifier` field is the form marker.
+Find the review form. The `identifier` field is the form marker.
 
 `formModuleConfigId` is **not** `form.id`, but `form.moduleFormConfigs[0].id`. When the user recreates the form in the admin panel, this id may change. Therefore, in the code:
 
@@ -27,14 +27,14 @@ const DEFAULT_MODULE_CONFIG_ID = 2; // ← check your project through /inspect-a
 const formModuleConfigId = form.moduleFormConfigs?.[0]?.id ?? DEFAULT_MODULE_CONFIG_ID;
 ```
 
-`moduleFormConfigs[0]` is `IFormConfig`: take the review settings from it, do not hardcode:
+`moduleFormConfigs[0]` is `IFormConfig`: take review settings from it, do not hardcode:
 
 - **Rating scale** — `config.maxRatingScale ?? 5` (field `number | null`); star step — `config.allowHalfRatings`. Do not hardcode “/5”.
-- **Moderation** — if `config.isModerate === true` (the field is only in the products/pages variant of the config), DO NOT send the review with `status: 'approved'`: send it for moderation and warn the user that the review will appear after verification. Leave the selection for display by `'approved'`.
+- **Moderation** — if `config.isModerate === true` (the field is only in products/pages variant of the config), DO NOT send the review with `status: 'approved'`: send it for moderation and warn the user that the review will appear after verification. Leave the selection for display by `'approved'`.
 - **Multiple configs** — in the response `Forms.getFormByMarker`, the `formIdentifier` field is NOT present: distinguish by `moduleIdentifier`/`entityIdentifiers`, prefer `isRating === true` (field `boolean | null`, can be `null`), fallback — `[0]`.
-- **Without extra requests** — if the product is already loaded (`getProductById`/`getProducts`), the configs are right on it: `product.moduleFormConfigs` (in this case, there is `formIdentifier` — choose the review config by `formIdentifier === FORM_MARKER`), its `id` is the ready `formModuleConfigId`. There is also `formDataCount` (total count of config records) and `entityFormDataCount` (counter by entity marker, key — for example `"catalog"`) — this is NOT a per-product review counter: check the actual keys through `/inspect-api` before using instead of `total` from `getFormsDataByMarker`.
+- **Without extra request** — if the product is already loaded (`getProductById`/`getProducts`), configs are right on it: `product.moduleFormConfigs` (in this case, there is `formIdentifier` — choose the review config by `formIdentifier === FORM_MARKER`), its `id` is the ready `formModuleConfigId`. There is also `formDataCount` (total counter of config entries) and `entityFormDataCount` (counter by entity marker, key — for example `"catalog"`) — this is NOT a per-product review counter: check the actual keys through `/inspect-api` before using instead of `total` from `getFormsDataByMarker`.
 
-**⚠️ DO NOT guess the marker.** If unsure — `/inspect-api forms`. See also `.claude/rules/mismatch-log.md` — if the form is not yet in the admin panel, create item C.1 with a table of fields.
+**⚠️ DO NOT guess the marker.** If unsure — `/inspect-api forms`. See also `.claude/rules/mismatch-log.md` — if the form is not yet in the admin panel, create item C.1 with the field table.
 
 ---
 
@@ -203,12 +203,12 @@ const replyMap: Record<number, any[]> = data.reduce((acc: any, r: any) => {
 
 // Review fields from formData
 const rating = review.formData.find((f: any) => f.marker === 'rating')?.value;
-// ⚠️ rating is stored as a string: '5', convert through Number(rating)
+// ⚠️ rating is stored as a string: '5', convert using Number(rating)
 
 // Metadata
 review.parentId         // null = review, number = reply
 review.time             // date
-review.userIdentifier   // user's email
+review.userIdentifier   // user email
 review.entityIdentifier // product ID
 
 // Average rating
@@ -313,17 +313,35 @@ export function ReviewsList({
 
 ---
 
-## Step 5: Remind key rules
+## Pitfalls of the review form configuration (battle-tested)
+
+Five things break reviews even after the code is written correctly. All are in the form module configuration (`moduleFormConfigs[0]`) and in group rights.
+
+1. **`isRating: true` = one vote per entity.** In rating mode, the API holds the rule “one rating from a user for one entity”: a second review responds with `400 You have already rated this entity`. This is suitable for “rating a product”, but not for a review feed — if the entity in the config is one for the entire section (for example, the `reviews` page), then one visitor can leave exactly one review for the entire salon. Then the mode is turned off (`isRating: false`), and the rating remains a regular field (`real`), the average is calculated on the front end. `allowRerating` allows re-rating, but overwrites the previous one — this is not a “second review”.
+
+2. **`moduleEntityIdentifier` cannot be used as “id of the entity being reviewed”.** The API checks it against the entity from the form configuration and responds with `400 We couldn't find out correspondent entityId for provided moduleEntityIdentifier` for foreign values. If the review is written about a specialist/employee (admin) who is not among the module entities, the identifier is placed **in a separate form field** (`review_master`), and `moduleEntityIdentifier` is taken from the config as usual. Filtering by this field then happens on the front end.
+
+3. **Premoderation overwrites the sent `status`.** With `isModerate: true`, the record always goes into `moderation`, no matter what the client sends — “uploaded reviews with approved status” does not work. Approval is a separate pass: `PUT /api/content/form-data/:id/update-status` (or in the admin panel), and the storefront reads `getFormsDataByMarker(..., { status: ['approved'] })`. The status filter accepts only `sent | moderation | approved | banned | deleted`.
+
+4. **`isAnonymous: false` requires a user session.** A guest receives `400 This form doesn't allow anonymous users sending data. You must authorize.` — in the UI, this means that the submit button for unauthorized users should lead to the login form, not to submission. When authorizing from the script, the field markers are taken **from the provider form** (`reg` → `email_reg`/`password_reg`), not from the provider type (`email`/`password` gives `400 Login or password values are missed`).
+
+5. **Public reading of records by marker is closed by group rights** (`addRule: false` → `403`), and this right is one for all forms of the project: enabling it for reviews opens the `contact_us` records as well. Enable together with `viewOnlyUserData: true` for private forms — details in the `forms` rule.
+
+It is cheapest to check all this with a trial: send one record with a script (SDK + login of a test user), read it through the admin API and delete it — before writing the UI.
+
+---
+
+## Step 5: Recall key rules
 
 ```
-✅ Reviews created. Key rules:
+✅ Reviews are created. Key rules:
 
 1. formMarker and formModuleConfigId — from /inspect-api forms or Forms.getAllForms(), DO NOT guess
 2. isNested: 1 — mandatory for parent-child structure (reviews + replies)
 3. entityIdentifier in body — filter by product
 4. replayTo: null → review, replayTo: String(id) → reply
    ⚠️ Typo in SDK: the field is called replayTo, not replyTo
-5. rating inside the review (FormData) is stored as a string ('5') — convert through Number()
+5. rating inside the review (FormData) is stored as a string ('5') — convert using Number()
 6. parentId === null → review, parentId !== null → reply
 7. FormData.postFormsData requires Server Action
 8. Field markers (rating, text, etc.) — depend on the form schema in OneEntry
@@ -336,7 +354,7 @@ export function ReviewsList({
 ## Step 6: Playwright E2E tests
 
 > Runs only if the user confirmed writing tests at the beginning of the session or requested writing a test later (see `feedback_playwright.md`).
-> To set up Playwright — first `/setup-playwright`.
+> For Playwright setup — first `/setup-playwright`.
 
 ### 6.1 Add `data-testid` to components
 
@@ -377,19 +395,19 @@ return (
 
 ### 6.2 Gather test parameters and fill in `.env.local`
 
-**Algorithm (perform step by step, do not ask in one list):**
+**Algorithm (execute step by step, do not ask in one list):**
 
-1. **ID of the test product with reviews** — choose it yourself through `/inspect-api`:
+1. **ID of the test product with reviews** — choose yourself through `/inspect-api`:
    - Get products: `api.Products.getProducts([], LANG, { limit: 5 })` (in the script `/inspect-api`, `api` and `LANG` are already defined; the first argument is an array of filters `IFilterParams[]`, limit — in query). Take `items[0].id`.
-   - Report: "For the test, I use product `id={productId}` («{title}») — the first in the catalog".
+   - Report: "For the test, I am using product `id={productId}` («{title}») — the first in the catalog".
    - Check if it has reviews: `getFormsDataByMarker(formMarker, formModuleConfigId, { entityIdentifier: productId }, 1)`. If `total > 0` — include the test for displaying reviews, otherwise — `test.skip` for it.
 2. **Path of the product page** — ask: "What is the path of the product page with reviews? (for example `/product/[id]`, `/en_US/shop/product/[id]`)". If silent → find through Glob (`src/app/**/product/**/page.tsx`, `src/app/**/shop/**/product/**`). Substitute `{id}` as a template.
-3. **Markers of the review form fields** — determine yourself from the already obtained form schema (`/inspect-api forms`):
+3. **Field markers of the review form** — determine yourself from the already obtained form schema (`/inspect-api forms`):
    - Rating field: the first attribute with a marker including `rating` (or with type=`radioButton` + `listTitles` from 5 elements). Report: "Using `{marker}` as the rating field".
    - Review text field: the first `string`/`text` attribute, not-captcha, not-rating. Report: "Using `{marker}` as the review text field".
 4. **Test credentials** — if the form requires authorization (`form.moduleFormConfigs?.[0]?.isAnonymous === false` — anonymous submission is prohibited; field `boolean | null`, when `null`/`true` authorization is not needed; check through `/inspect-api forms`):
    - Ask: "The review form requires authorization. Provide email/password of the test user OneEntry. I will skip — the review submission test will be `test.skip`".
-   - If provided → add `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` to `.env.local` (through Edit/Write).
+   - If provided → add `E2E_TEST_EMAIL`/`E2E_TEST_PASSWORD` to `.env.local` (via Edit/Write).
    - If silent → leave empty, the corresponding test will be `test.skip`.
 
 **Example `.env.local`:**
@@ -434,9 +452,9 @@ async function signIn(page: Page) {
 }
 
 test.describe('Product reviews', () => {
-  test.skip(!PRODUCT_ID, 'E2E_REVIEW_PRODUCT_ID is not set');
+  test.skip(!PRODUCT_ID, 'E2E_REVIEW_PRODUCT_ID not set');
 
-  test('the list of reviews renders (or shows empty-state)', async ({ page }) => {
+  test('the list of reviews is rendered (or empty-state is shown)', async ({ page }) => {
     await page.goto(productPath);
     // Either there is a list, or empty-state — both are valid
     const hasList = await page.getByTestId('reviews-list').isVisible().catch(() => false);
@@ -454,7 +472,7 @@ test.describe('Product reviews', () => {
     await expect(items.first().getByTestId('review-body')).toBeVisible();
   });
 
-  test('the review form renders with fields from Forms API', async ({ page }) => {
+  test('the review form is rendered with fields from Forms API', async ({ page }) => {
     await page.goto(productPath);
     const form = page.getByTestId('review-form');
     const formVisible = await form.isVisible().catch(() => false);
@@ -465,7 +483,7 @@ test.describe('Product reviews', () => {
   });
 
   test.describe('Submitting a review (authorized)', () => {
-    test.skip(!TEST_EMAIL || !TEST_PASSWORD, 'E2E_TEST_EMAIL/PASSWORD are not set');
+    test.skip(!TEST_EMAIL || !TEST_PASSWORD, 'E2E_TEST_EMAIL/PASSWORD not set');
 
     test('validation: empty form — error or submit does not pass', async ({ page }) => {
       await signIn(page);
@@ -497,7 +515,7 @@ test.describe('Product reviews', () => {
         if (tag === 'input') await ratingField.first().fill('5');
       }
 
-      // Review text — with random suffix, to identify test records
+      // Review text — with random suffix, so that test records can be identified
       const rand = Math.random().toString(36).slice(2, 8);
       await page.getByTestId(`review-field-${TEXT_MARKER}`).fill(`E2E test review ${rand}`);
 
@@ -524,7 +542,7 @@ Decisions made automatically:
 - Review text marker: {TEXT_MARKER} — first string/text non-captcha attribute of the form
 - Test credentials: {user-specified / left empty — the "Submitting a review" block will be test.skip}
 
-⚠️ The submitted test review goes with the status 'approved' and remains in the database. The suffix "E2E test review <rand>" will help find and delete it manually in the admin panel.
+⚠️ The submitted test review remains in the database (with enabled pre-moderation — in status `moderation`, otherwise in the status set at submission). The suffix "E2E test review <rand>" will help find and delete it manually in the admin panel.
 
 Run: npm run test:e2e -- reviews.spec.ts
 ```
