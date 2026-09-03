@@ -1,6 +1,8 @@
 # Typical OneEntry Scenarios
 
-## E-commerce
+## Catalog and e-commerce
+
+> **Catalog (`Products`) — not just products.** It is a universal registry of homogeneous records: photos, articles, vacancies, objects, services. Price, article number, and status are optional fields; they are filled only in commercial projects. Display them based on their actual presence, and the "Add to Cart" button — only when the project is actually selling. What to create as a catalog and what as pages: `.claude/rules/content-model.md`.
 
 ```typescript
 // List of products
@@ -32,13 +34,13 @@ To create a product catalog, use the skill **`/create-product-list`** — it wil
 | Scenario | Method |
 | --- | --- |
 | **Entire catalog** (all products of the project) | `getProducts(filters, locale, query)` |
-| **Category products** (linked to the category page in OneEntry) | `getProductsByPageUrl(categoryUrl, filters, locale, query)` |
+| **Category products** (linked to a category page in OneEntry) | `getProductsByPageUrl(categoryUrl, filters, locale, query)` |
 
 ```typescript
 // ✅ Entire catalog
 const result = await getApi().Products.getProducts([], locale, { offset: 0, limit: 10 })
 
-// ✅ Products of a specific category (pageUrl — marker, not URL-route!)
+// ✅ Products of a specific category (pageUrl — marker, not URL route!)
 const result = await getApi().Products.getProductsByPageUrl('soft_toys', [], locale, { offset: 0, limit: 10 })
 ```
 
@@ -46,7 +48,7 @@ const result = await getApi().Products.getProductsByPageUrl('soft_toys', [], loc
 
 To create a single product page, use the skill **`/create-product-card`** — it will create a product page with `getProductById`, extracting attributes by type and marker, an image gallery, a price block, and a section for related products via `getRelatedProductsById`.
 
-To create a list of user orders, use the skill **`/create-orders-list`** — it will create a Client Component with loading through all storages (`getAllOrdersStorage` + `getAllOrdersByMarker`), direct `getApi()` calls from the client, and client-side pagination.
+To create a user orders list, use the skill **`/create-orders-list`** — it will create a Client Component with loading through all storages (`getAllOrdersStorage` + `getAllOrdersByMarker`), direct `getApi()` calls from the client, and client-side pagination.
 
 To create a checkout page, use the skill **`/create-checkout`** — it will create a form with fields from the Forms API (`getFormByMarker` by `formIdentifier` storage), handling the `timeInterval` type field (delivery slots), direct `getApi()` calls for `createOrder` + `createSession`, and redirecting to the payment page.
 
@@ -56,7 +58,7 @@ For the favorites list (Redux slice + persist, stores only product IDs), use the
 
 For the filter panel (price, color, availability + `FilterContext` + Apply/Reset), use the skill **`/create-filter-panel`**.
 
-To subscribe to changes in product price and availability, use the skill **`/create-subscription-events`** — `Events.subscribeByMarker` / `unsubscribeByMarker`.
+To subscribe to price and availability changes of a product, use the skill **`/create-subscription-events`** — `Events.subscribeByMarker` / `unsubscribeByMarker`.
 
 ## Authorization and Users
 
@@ -72,6 +74,6 @@ For the search bar, use the skill **`/create-search`** — debounce 300ms, Serve
 
 ## Creating Pages with Content from CMS
 
-To create Next.js pages with data from OneEntry, use the skill **`/create-page`** — it will create a page file with `getPageByUrl`, `getBlocksByPageUrl`, and correct handling of `isError`.
+To create Next.js pages with data from OneEntry, use the skill **`/create-page`** — it will create a page file with `getPageByUrl`, `getBlocksByPageUrl`, and proper handling of `isError`.
 
 Rules for working with pages, langCode, and `params` (Next.js 15+): `.claude/rules/nextjs-pages.md`.
