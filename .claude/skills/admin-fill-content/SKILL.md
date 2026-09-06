@@ -6,7 +6,7 @@ description: Programmatically fill OneEntry content (products, pages, blocks, ad
 
 Use this skill when you need to **massively create or fill** OneEntry entities (products, pages, blocks, admins, attribute sets) with a script, rather than manually in the admin panel. The public SDK for writing is not suitable (read-only) — the script replicates the auto-save requests of the admin panel itself.
 
-> ⚠️ **First, check if the MCP server of the platform is connected** (package `@oneentry/mcp-platform-server`, tools like `mcp__<server-name>__*` — it takes `ONEENTRY_CMS_LOGIN`/`ONEENTRY_CMS_PASSWORD` and can write to the admin API). If it exists — work through it: it manages the login and session itself, knows the write formats, and maintains an audit log. Your script for this skill is needed **when there is no platform MCP in the project** — or when the task goes beyond its tools (one-time mass upload, your own idempotency, md5 verification of files). The platform traps below are the same for both paths.
+> ⚠️ **First, check if the MCP server of the platform is connected** (package `@oneentry/mcp-platform-server`, tools like `mcp__<server-name>__*` — it takes `ONEENTRY_CMS_LOGIN`/`ONEENTRY_CMS_PASSWORD` and can write to the admin API). If it exists — work through it: it manages the login and session itself, knows the write formats, and maintains an audit log. You need your own script for this skill **when there is no platform MCP in the project** — or when the task goes beyond its tools (one-time bulk upload, your own idempotency, md5 verification of files). The platform traps below are the same for both paths.
 
 > Be sure to read the rule `admin-api` (endpoints, positional ids, write formats, gotchas). Images — a separate skill `/admin-upload-images`. Group permissions — `/admin-grant-permissions`.
 
@@ -89,7 +89,7 @@ const byMarker = Object.fromEntries(
 ```js
 const { api, close } = await login();
 const product = await (await api.get(`/api/admin/products/${id}`)).json();
-product.attributesSets.en_US.string_id1 = 'New Value';          // string — primitive
+product.attributesSets.en_US.string_id1 = 'New value';          // string — primitive
 product.attributesSets.en_US.text_id6 = [{                            // text — Jodit object
   htmlValue: '<p>Description…</p>', mdValue: '', plainValue: '',
   params: { editorMode: 'html', isImageCompressed: true },
@@ -99,7 +99,7 @@ if (!res.ok()) console.error(await res.text());
 await close();
 ```
 
-The same applies to `admins/{id}`, `pages/{id}`, `blocks/{id}`, `attributes-sets/{id}`. Full write formats for all types (`entity`, `list`, `timeInterval`, …) are in the `admin-api` rule. Key points:
+The same applies to `admins/{id}`, `pages/{id}`, `blocks/{id}`, `attributes-sets/{id}`. Full write formats for all types (`entity`, `list`, `timeInterval`, …) — in the `admin-api` rule. Key points:
 
 - entity → page: `[{title, value: {id, depth, isPinned: false, parentId, position, selected: true}}]`;
 - entity → product: `value.id` = string `"p-{pageId}-{productId}"`, `parentId = pageId`, `depth: 3`; find the product via `GET /api/admin/products/quick/search?name=X&langCode=en_US`;
@@ -109,12 +109,13 @@ Creation: `POST /api/admin/pages` / `POST /api/admin/blocks` (bodies — in the 
 
 ## Step 4 — Script Conventions
 
-- **Order of uploading — structure, then content**: page tree and categories → attribute sets → page values → products in their categories → files → forms with fields and validators → events/emails → second locale. Each step ends with reading what was written.
+- **Order of uploads — structure, then content**: page tree and categories → attribute sets → page values → products in their categories → files → forms with fields and validators → events/emails → second locale. Each step ends with reading what was written.
 - **Idempotency**: before PUT, compare the current value — a repeated run should not duplicate/overwrite. Not on `sku` (the product accepts it and does not store it) — on your attribute-marker.
-- **Do not lose locales**: write `attributesSets` by expanding existing ones (`{...entity.attributesSets, en_US: attrs}`), otherwise other locales are erased with a `200` response.
-- **Edit the schema according to the procedure** "snapshot to file → edit one attribute → PUT entirely → attribute-by-attribute verification" (rule `admin-api`): an error in the body erases the set along with the values of all referencing records.
+- **Do not lose locales**: write `attributesSets` by expanding existing ones (`{...entity.attributesSets, en_US: attrs}`), otherwise, other locales will be erased with a `200` response.
+- **Field markers — by meaning on the front end** (`hero_title`, `delivery_terms`, `gallery_main`), not `string_id1` / `text_id4` / `image_id6`: the script sets the `identifier` itself, and it will remain forever — the set with records is locked. Naming rules and labels for the editor — `attribute-sets` rule.
+- **Edit the schema by the procedure** "snapshot to file → edit one attribute → PUT entirely → attribute-by-attribute verification" (admin-api rule): an error in the body erases the set along with the values of all referencing records.
 - ❌ No `.catch(() => null)` — swallowed errors turn into silent data corruption.
-- Flags: `DRY_RUN=1` (show plan without writing), `ONLY="Name"` (one entity), `HEADLESS=0` (visible browser for login debugging).
+- Flags: `DRY_RUN=1` (show plan without writing), `ONLY="Name"` (one entity), `HEADLESS=0` (visible browser for debugging login).
 - Keep the dataset (what we are uploading) in the common module — one source of truth for all task scripts.
 
 ## Step 5 — Verification (Mandatory)
@@ -123,12 +124,12 @@ Creation: `POST /api/admin/pages` / `POST /api/admin/blocks` (bodies — in the 
 
 1. **Admin-GET immediately after PUT** — value in place, locales as many as there were (`Object.keys(attributesSets).length`).
 2. **Public SDK in a loop** — with the same request that the site reads, not the raw object schema: formats diverge. Pause ~5 seconds, up to ten attempts, comparison **by words, not by markup** (the platform normalizes HTML — the markup fingerprint will never match).
-3. **Second public read after a minute or two.** Confirmation can be false: the storefront returns the new value immediately after writing and rolls back to the old one shortly after. Why this happens and what to do if the value is not published (nudge with round number) — rule `admin-api`, section "Publishing to the storefront — by difference, not by state."
-4. ⚠️ **`product.price` — derived**: recalculated from the `isPrice` attribute asynchronously; GET immediately after PUT will return `0`/`null`, even though everything was written. Write both fields (upper `price` as a number + attribute as a string), check with a pause.
-5. Visual check on the front dev server.
+3. **Second public read after a minute or two.** Confirmation can be false: the storefront returns the new value immediately after writing and rolls back to the old one shortly after. Why this happens and what to do if the value is not published (nudge with round number) — `admin-api` rule, section "Publishing to the storefront — by difference, not by state."
+4. ⚠️ **`product.price` — derived**: recalculated from the `isPrice` attribute asynchronously; GET immediately after PUT will return `0`/`null`, although everything was written. Write both fields (top `price` as a number + attribute as a string), check with a pause.
+5. Visual check on the dev server of the front end.
 
 Check **all objects, not a sample**: "zero discrepancies on five pages" says nothing about the sixth.
 
 ## If the format is unknown — take a reference from the UI
 
-Do not invent the field format: fill one entity manually in the admin panel, take its admin-GET and use it as a reference; or intercept the PUT of the panel itself (Playwright `browser_network_requests`). Navigation through the UI — rule `admin-ui`.
+Do not invent the field format: fill one entity manually in the admin panel, take its admin-GET and use it as a reference; or intercept the PUT of the panel itself (Playwright `browser_network_requests`). Navigation through the UI — `admin-ui` rule.
