@@ -5,7 +5,8 @@ const {
   Admins, AttributesSets, AuthProvider, Blocks, Discounts, Events, FileUploading,
   Filters, Forms, FormData, GeneralTypes, IntegrationCollections, Locales, Menus,
   Orders, Pages, Payments, ProductStatuses, Products, Search, Sitemap,
-  Subscriptions, System, TemplatePreviews, Templates, UserActivity, Users, WS
+  Subscriptions, System, TemplatePreviews, Templates, UserActivity, UserGroups,
+  Users, WS
 } = defineOneEntry('your-url', { token: 'your-app-token' });
 ```
 
@@ -190,7 +191,12 @@ upload(file: File | Blob, fileQuery?: IUploadingQuery): IUploadingReturn[]
 delete(filename, fileQuery?): boolean
 createFileFromUrl(url, filename, mimeType?): Promise<File>
 getFile(id, type, entity, filename, template?): Response   // raw fetch Response — extract data via .blob()/.arrayBuffer()
+
+// Public search inside the content of files attached to records (v1.0.167)
+searchFileContent(query, langCode?, extensions?, ownerTables?, localeCodes?, onlyTruncated?, offset?, limit?): IFileSearchResponse
 ```
+
+> **`searchFileContent` (v1.0.167)** — the unit of the result is a **file, not a fragment**: one `snippet` per file even when the document matches on many pages, with `snippet.pageFrom` for paged formats. The match inside `snippet.text` is wrapped in the control characters `U+0002` / `U+0003`, **not HTML** — replace them with your own highlighting before rendering. `query` needs at least 3 characters (`400` otherwise), `limit` is capped at 50 (default 10). The result is narrowed by access: only files of visible records in sections enabled in project settings, personal sections only down to the caller's own records, the admins section never. A separate `403` means the feature is not in the project tariff. Not every stand has the endpoint yet — older builds answer `404`.
 
 > `IUploadingReturn` now contains `contentType: string` (MIME type of the uploaded file).
 
@@ -253,6 +259,7 @@ getAllOrdersStorage(langCode?, offset?, limit?): IOrdersEntity[]
 getAllOrdersByMarker(marker, langCode?, offset?, limit?): IOrdersByMarkerEntity
 getOrdersStorageByMarker(marker, langCode?): IOrdersEntity
 getOrderByMarkerAndId(marker, id, langCode?): IOrderByMarkerEntity
+getOrderById(id, langCode?): IOrderByMarkerEntity               // v1.0.167 — same order, no storage marker needed
 previewOrder(body: ICreateOrderPreview, langCode?): IOrderPreviewResponse
 createOrder(marker, body: IOrderData, langCode?): IBaseOrdersEntity
 updateOrderByMarkerAndId(marker, id, body: IOrderData, langCode?): IBaseOrdersEntity
@@ -299,7 +306,12 @@ getSessionByOrderId(id): ISessionEntity | ISessionEntity[]
 createSession(orderId, type: 'session'|'intent', automaticTaxEnabled?): ISessionEntity   // paymentUrl for redirect (+ clientSecret when 'intent')
 getAccounts(): IAccountsEntity[]
 getAccountById(id): IAccountsEntity
+
+// Payment progress of an order: stages and whether they are paid (v1.0.167)
+getPaymentStagesByOrderId(id): IPaymentProgress
 ```
+
+> **`getPaymentStagesByOrderId` (v1.0.167)** — an order can be paid in parts rather than in one payment. `partial` says which case it is, `completed` says whether anything is left to pay, and each entry of `stages` carries `marker`, `sessionId`, `productId`, `title`, `value` and a `status` of `'planned' | 'completed'`.
 
 ## Products
 
@@ -395,6 +407,26 @@ trackUserActivity(body: ITrackActivity): boolean           // works for user AND
 ```
 
 `ITrackActivity = { type: TUserActivityType, productId?, pageId?, categoryId?, query?, meta? }`. `TUserActivityType` = `'product_view' | 'page_view' | 'category_view' | 'search' | 'product_add_to_cart' | 'product_remove_from_cart' | 'product_add_to_wishlist' | 'product_remove_from_wishlist' | 'product_purchase' | 'product_rating'`. These events feed the recommendations Blocks (recently-viewed, personal-recommendations, trending).
+
+## UserGroups
+
+```ts
+getUserGroups(langCode?): IUserGroupEntity[]                       // flat list, nesting included
+getRootUserGroups(langCode?): IUserGroupEntity[]                   // only parentId === null
+getUserGroupById(id, langCode?): IUserGroupEntity
+getUserGroupByMarker(marker, langCode?): IUserGroupEntity
+getChildUserGroupsByMarker(marker, langCode?): IUserGroupEntity[]  // [] when the group has no children
+```
+
+New module in v1.0.167. Groups form a tree and decide what a visitor may see; they are created and nested in the admin panel, the SDK only reads them. Every project has at least the guest group.
+
+Three things that bite:
+
+- **`childrenCount` is a string**, not a number — the API sends `"0"`. Convert before comparing: `Number(group.childrenCount) > 0`.
+- **Walk the tree with `getChildUserGroupsByMarker`**, not through `parentId`. The parent link is in the object, but the children are what you read — same shape as `Menus`.
+- **A group carries no member data.** There is no member count and no user list here; membership lives on the user object.
+
+`IUserGroupEntity = { id, depth, parentId, localizeInfos, isVisible, childrenCount, identifier, isSync, attributeValues, version? }`. `version` is not sent by every project.
 
 ## Users ⚠️ require authorization
 
