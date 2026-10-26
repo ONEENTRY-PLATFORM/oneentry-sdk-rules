@@ -42,18 +42,18 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 
 **Key Fields:**
 
-- `attributes: IFormAttribute[]` — form fields for rendering. With SDK ≥ 1.0.157 **already sorted by `position`** (previously the API returned them mixed and you had to sort them yourself); custom sorting is not needed, but it doesn't hurt either.
+- `attributes: IFormAttribute[]` — form fields for rendering. With SDK ≥ 1.0.157 **already sorted by `position`** (previously the API returned them mixed up and you had to sort them yourself); custom sorting is not needed, but it doesn't hurt either.
 - `localizeInfos: IFormLocalizeInfo` — form localization: `title`, as well as `titleForSite`, `successMessage`, `unsuccessMessage`, `urlAddress`, `database`, `script`.
 - `moduleFormConfigs[0].id` — this is `formModuleConfigId` for `postFormsData`.
 - `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`.
 - `validators` — field validation rules set in the admin panel (`{}` — nothing is configured). Full breakdown — see the "Field Validators" section below; the error text is in `validators[name].customErrorText`.
-- `additionalFields: Record<marker, IFormAttributeAdditionalField>` — SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others.
+- `additionalFields: Record<marker, IFormAttributeAdditionalField>` — the SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others.
 - `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — form type (the typo `sing_in_up` — from the API, that's how it is). Based on this, choose the behavior: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings.
 - `moduleFormConfigs[].exceptionIds?: string[]` — list of excluded identifiers in the module config (for example, entities for which the form does not apply).
 
-> ⚠️ **`attributes` of an empty form.** The API returns `attributes: {}` (an empty object), not `[]`. **With v1.0.158 the SDK normalizes this in `_normalizeAttr`**, so `attributes` — always `IFormAttribute[]`, and `form.attributes.map(...)` is safe on any form.
+> ⚠️ **`attributes` in an empty form.** The API returns `attributes: {}` (an empty object), not `[]`. **With v1.0.158 the SDK normalizes this in `_normalizeAttr`**, so `attributes` is always `IFormAttribute[]`, and `form.attributes.map(...)` is safe on any form.
 >
-> On SDK ≤ 1.0.157 the object comes as is, and direct `.map`/`.filter`/`.sort` fails with `not a function`. If the project can work on an old SDK — normalize:
+> On SDK ≤ 1.0.157 the object comes as is, and direct `.map`/`.filter`/`.sort` fails with `not a function`. If the project can work on an old SDK — normalize it:
 >
 > ```ts
 > const attrs: IFormAttribute[] = Array.isArray(form.attributes)
@@ -61,7 +61,7 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 >   : Object.values(form.attributes ?? {})
 > ```
 >
-> Regardless of the version: an empty form — a valid state of the project at the filling stage, the UI must degrade (empty field list), not crash.
+> Regardless of the version: an empty form is a valid state of the project at the filling stage, the UI must degrade (empty field list) and not crash.
 
 **Field Types for Forms — import from the root of the package** (`oneentry`, SDK ≥ 1.0.160):
 
@@ -74,12 +74,12 @@ import type {
 } from 'oneentry'
 ```
 
-> ⚠️ For form fields use `IFormAttribute`, not `IAttributesSetsEntity`. `IAttributesSetsEntity` — this is the type for AttributesSets API (`getAttributes`, `getAttributeSetByMarker`), it has a different structure and does not have form-specific flags (`isLogin`, `isSignUp`, `isNotification*`).
+> ⚠️ For form fields use `IFormAttribute`, not `IAttributesSetsEntity`. `IAttributesSetsEntity` is the type for AttributesSets API (`getAttributes`, `getAttributeSetByMarker`), it has a different structure and lacks form-specific flags (`isLogin`, `isSignUp`, `isNotification*`).
 
 **Using `localizeInfos` of the form:**
 
 ```tsx
-// Success/error message from the form settings in the admin panel
+// Success/error message from form settings in the admin panel
 if (result.success) {
   setMessage(form.localizeInfos?.successMessage || 'Submitted')
 } else {
@@ -90,7 +90,7 @@ if (result.success) {
 const heading = form.localizeInfos?.titleForSite || form.localizeInfos?.title
 ```
 
-**Using `additionalFields` when rendering a field:**
+**Using `additionalFields` when rendering the field:**
 
 ```tsx
 // ✅ Always use placeholder from additionalFields — do not hardcode!
@@ -110,17 +110,19 @@ const hint = field.additionalFields?.hint?.value || ''
 
 ## Field Validators
 
-`validators` — an object "validator name → its settings", assembled by the content manager in the admin panel (**Attributes → field → Validation rules**). An empty `{}` — no rules. This is the only source of truth about whether the field is required, what its format is, and what the length of the value is: **none of this can be hardcoded in the component** — the admin will enable validation, but the form will not know about it.
+`validators` — an object "validator name → its settings", assembled by the content manager in the admin panel (**Attributes → field → Validation rules**). An empty `{}` means no rules. This is the only source of truth about whether a field is required, what its format is, and what length the value should be: **none of this should be hardcoded in the component** — the admin will enable validation, but the form won't know about it.
 
-The set of validators is extensible (the `IAttributeValidators` type has an index signature) — ignore unfamiliar keys, do not crash on them: the server-side check will pass anyway.
+**With v1.0.170 all eighteen validators accepted by the platform are declared in the `IAttributeValidators` type, and there is no more index signature** — which means a typo in the name is now a compilation error, not `400 schema contains unknown validator name(s)` at runtime. The full names are: `requiredValidator`, `trimValidator`, `stringInspectionValidator`, `urlInspectionValidator`, `emailInspectionValidator`, `checkForNumberValidator`, `roundingNumberValidator`, `booleanValidator`, `comparisonValidator`, `regExpValidator`, `fieldMaskValidator`, `checkForAGivenList` (without the `Validator` suffix), `defaultValueValidator`, `sizeInPixelsValidator`, `checkingFilesValidator`, `minMaxDateValidator`, `valueValidator`, `checkForLettersValidator`. Any of them may have `customErrorText`. Switches (`requiredValidator`, `trimValidator`, `urlInspectionValidator`, `emailInspectionValidator`) are typed as `object | boolean`: both forms occur in live data, so read through `typeof v.x === 'object' ? v.x.customErrorText : undefined`. If you need a name that the SDK does not yet know, — define the type in one place, rather than returning an index signature.
+
+Below are nine that occur most frequently in projects; the others are read by the same rule (presence of the key = rule included).
 
 | Validator | What Comes | Meaning |
 | --- | --- | --- |
 | `requiredValidator` | `{ strict: true }`, `{ customErrorText: 'Required field!' }`, sometimes `{}` | Field is required |
 | `stringInspectionValidator` | `{ stringMin: '3', stringMax: '20', stringLength: 0 }` | String length: minimum, maximum, exact length |
 | `emailInspectionValidator` | `true` **or** `{ customErrorText: 'Email incorrect' }` | Value must be an email |
-| `regExpValidator` | `{ patternValue: '^[0-9+\\- ]{1,20}$', customErrorText: '…' }` | Check by regular expression |
-| `fieldMaskValidator` | `{ maskValue: '$99-99-9999-9999', hint: '+62' }` | Input mask with a non-consumable prefix |
+| `regExpValidator` | `{ patternValue: '^[0-9+\\- ]{1,20}$', customErrorText: '…' }` | Validation by regular expression |
+| `fieldMaskValidator` | `{ maskValue: '$99-99-9999-9999', hint: '+62' }` | Input mask with non-consumable prefix |
 | `trimValidator` | `true` | Trim spaces from the edges of the value |
 | `defaultValueValidator` | `{ fieldDefaultValue: 'USD', fieldDefaultValue2: '' }` | Default value — the field is pre-filled with it |
 | `checkingFilesValidator` | `{ maxUnits: 'kb', maxValue: '2000', extensions: [] }` | File size and extensions |
@@ -129,12 +131,12 @@ The set of validators is extensible (the `IAttributeValidators` type has an inde
 ### Five Traps That Cause Validators to Read Incorrectly
 
 1. **Numbers come as strings, and "not set" is `0` or `''`.** `stringMax: '20'`, `stringMin: '3'`, `stringLength: 0 | ''`. Passing as is gives `maxLength={0}` — the field stops accepting input, and comparison `'20' > 5` gives an incorrect result. Normalize: `const n = Number(x); n > 0 ? n : undefined`.
-2. **`requiredValidator` can be without `strict`.** In real projects, you may encounter `{}` and `{ customErrorText: '…' }` — the admin enabled the rule but did not check the strict box. Checking `!!v.requiredValidator?.strict` on such a field gives `false`: there is no asterisk, no required, the form goes empty. **The sign of necessity is the presence of the key**, and `strict: true` is a sign of strict mode. Verified by requests: a field with `strict: true`, sent empty, is rejected by the server (`400 … value is missing or incorrect`); the soft variant has not been strictly tested — therefore, put the asterisk and `aria-required` based on the presence of the key, and HTML `required`, which blocks submission, — only based on `strict`.
-3. **`emailInspectionValidator` is not an object, but `true`** (it becomes an object only when `customErrorText` is set). `v.emailInspectionValidator?.strict` will not work — check for the presence of the key. And this is **the only** sign of an email field: its `type` is a regular `string`, and guessing by the marker (`marker.includes('email')`) misses on `login`, `contact_mail`, `user_mail_id`.
-4. **Error text is `customErrorText`, not `errorMessage`.** The field is optional and lies within a specific validator: `validators.stringInspectionValidator.customErrorText`.
-5. **In the schema of the set, validators are laid out by locales.** `getFormByMarker` and `getAttributesByMarker(set, langCode)` return them flat, while `getAttributeSetByMarker(...).schema.attributeN.validators` — as `{ en_US: {...}, fr_FR: {...} }`, and the sets of rules in locales **differ** (in one the field is required, in another it is not). Details — `.claude/rules/attribute-sets.md`.
+2. **`requiredValidator` can be without `strict`.** In real projects, `{}` and `{ customErrorText: '…' }` are encountered — the admin enabled the rule, but did not check the strict box. Checking `!!v.requiredValidator?.strict` on such a field gives `false`: there is no asterisk, no `required`, the form goes empty. **The sign of necessity is the presence of the key**, while `strict: true` is a sign of strict mode. Verified by requests: a field with `strict: true`, sent empty, is rejected by the server (`400 … value is missing or incorrect`); the soft version has not been strictly tested — therefore, place the asterisk and `aria-required` based on the presence of the key, and HTML `required`, which blocks submission, only based on `strict`.
+3. **`emailInspectionValidator` is not an object, but `true`** (it becomes an object only when `customErrorText` is set). `v.emailInspectionValidator?.strict` will not work — check for the presence of the key. And this is **the only** sign of an email field: its `type` is a regular `string`, and guessing by the marker (`marker.includes('email')`) misses `login`, `contact_mail`, `user_mail_id`.
+4. **Error text is `customErrorText`, not `errorMessage`.** The field is optional and lies inside a specific validator: `validators.stringInspectionValidator.customErrorText`.
+5. **In the schema of the set, validators are laid out by locales.** `getFormByMarker` and `getAttributesByMarker(set, langCode)` return them flat, while `getAttributeSetByMarker(...).schema.attributeN.validators` is like `{ en_US: {...}, fr_FR: {...} }`, and the sets of rules in locales **differ** (in one the field is required, in another it is not). Details — `.claude/rules/attribute-sets.md`.
 
-> `spam` falls out of this: for captcha `validators` are always `{}`, settings lie in `settings.captcha` (see `/create-captcha`). And `isSignUpRequired` for registration form fields is a standalone flag, unrelated to `requiredValidator` (`.claude/rules/auth-provider.md`).
+> `spam` is excluded from this: the captcha's `validators` is always `{}`, settings are in `settings.captcha` (see `/create-captcha`). And `isSignUpRequired` for registration form fields is a standalone flag, unrelated to `requiredValidator` (`.claude/rules/auth-provider.md`).
 
 ### Reading Validators: One Helper for the Whole Form
 
@@ -146,7 +148,7 @@ const positive = (v: unknown): number | undefined => {
   return Number.isFinite(n) && n > 0 ? n : undefined
 }
 
-/** Field rules in a format suitable for input props */
+/** Field rules in a form suitable for input props */
 export function fieldRules(attr: IFormAttribute) {
   const v = (attr.validators ?? {}) as Record<string, any>
   const size = v.stringInspectionValidator
@@ -166,14 +168,14 @@ export function fieldRules(attr: IFormAttribute) {
   }
 }
 
-/** Error text from the admin panel for a specific rule, with a fallback to your own */
+/** Error text from the admin for a specific rule, with a fallback to your own */
 export function errorText(attr: IFormAttribute, validator: string, fallback: string): string {
   const v = (attr.validators ?? {}) as Record<string, any>
   return v[validator]?.customErrorText || fallback
 }
 ```
 
-`defaultValue` — this is pre-filling: put it in the initial state of the field, not in `placeholder`, otherwise the value will not go into `postFormsData`.
+`defaultValue` — this is pre-filling: place it in the initial state of the field, not in `placeholder`, otherwise the value will not go into `postFormsData`.
 
 ### Required Field: Asterisk and Accessibility
 
@@ -185,7 +187,7 @@ const label = field.localizeInfos?.title ?? field.marker
 
 <label htmlFor={field.marker}>
   {label}
-  {/* the symbol is decoration: tells the screen reader about the necessity via aria-required */}
+  {/* the symbol is decoration: tells the screen reader about the requirement via aria-required */}
   {rules.required && <span className="text-red-500" aria-hidden="true"> *</span>}
 </label>
 
@@ -193,7 +195,7 @@ const label = field.localizeInfos?.title ?? field.marker
   id={field.marker}
   type={rules.isEmail ? 'email' : 'text'}
   required={rules.strict}                       // strictly block submission only when strict
-  aria-required={rules.required || undefined}    // "required" — by the presence of the validator
+  aria-required={rules.required || undefined}    // "required" — based on the presence of the validator
   aria-invalid={fieldError ? true : undefined}
   aria-describedby={fieldError ? `${field.marker}-error` : undefined}
   minLength={rules.minLength}
@@ -207,15 +209,15 @@ const label = field.localizeInfos?.title ?? field.marker
 
 Rules around the asterisk:
 
-- once above the form — legend `* — required fields`; the asterisk itself is marked `aria-hidden`, the necessity is voiced through `aria-required`/`required`;
-- `required` in HTML is set by `strict`, while the asterisk and `aria-required` — by the presence of the validator: soft mode (`{}` / only `customErrorText`) should not block submission on the client, the decision remains with the server;
+- once above the form — legend `* — required fields`; the asterisk itself is marked `aria-hidden`, the requirement is voiced through `aria-required`/`required`;
+- `required` in HTML is set based on `strict`, while the asterisk and `aria-required` are based on the presence of the validator: soft mode (`{}` / only `customErrorText`) should not block submission on the client, the decision remains with the server;
 - `checkbox` groups and radio buttons are labeled through `<fieldset><legend>` — the asterisk goes in the `legend`, not in each option;
-- `spam`, `button`, `textWithHeader` do not receive labels and asterisks — they are not input fields.
+- `spam`, `button`, `textWithHeader` labels and asterisks do not receive — they are not input fields.
 
 ### Format: pattern, mask, email
 
 ```tsx
-// regExpValidator → HTML pattern. The regular expression from the admin panel may be broken —
+// regExpValidator → HTML pattern. The regular expression from the admin can be broken —
 // in JS validation always through try/catch, otherwise one typo from the content manager crashes the form
 function safeRegExp(pattern?: string): RegExp | null {
   if (!pattern) return null
@@ -227,24 +229,24 @@ const re = safeRegExp(rules.pattern)
 const patternOk = !re || re.test(value)
 ```
 
-`fieldMaskValidator` — input mask: `#` and `9` in `maskValue` — place for a digit, other characters — separators, and `hint` (`'+62'`) — prefix, which is inserted at the beginning and is not editable (the cursor and Backspace should not go behind it). The same string that the user sees goes into `formData` — with separators.
+`fieldMaskValidator` — input mask: `#` and `9` in `maskValue` — places for digits, other characters are separators, and `hint` (`'+62'`) — a prefix that is placed at the beginning and is not editable (the cursor and Backspace should not go behind it). The same string that the user sees goes into `formData` — with separators.
 
 `trimValidator: true` — trim the value both before checking length and before submission: spaces at the edges otherwise eat a character from `stringMax`.
 
-### Client-Side Validation — This is UX, the Server Makes the Decision
+### Client-side Validation — It's UX, the Server Makes the Decision
 
-HTML attributes and your validation are not needed "just in case": the server validates fields **in order and returns only the first error**, so without client-side validation, the visitor fixes the form one field at a time per submission.
+HTML attributes and your own validation are not needed "just in case": the server validates fields **in order and returns only the first error**, so without client-side validation, the visitor fixes the form one field at a time per submission.
 
-What actually comes from `postFormsData` (verified with requests to a live project):
+What actually comes from `postFormsData` (verified against requests to a live project):
 
 ```json
 { "statusCode": 400, "message": "formData's marker 'first_nme' value is missing or incorrect" }
 ```
 
 - `message` — **a string with the marker inside**, not a list of markers (the type is declared as `string | string[]`, so also parse the array);
-- **missing and incorrect values are indistinguishable**: a missed required field and a string shorter than `stringMin` give the same phrase;
-- `customErrorText` from the admin panel **does not come** in the response — substitute it yourself, matching the marker from the message with the form field;
-- for a form with a `spam` field, submission without the spam attribute is rejected earlier than field validation: `formData doesn't have spam attribute`;
+- **missing and incorrect values are indistinguishable**: a missing required field and a string shorter than `stringMin` give the same phrase;
+- `customErrorText` from the admin **does not come** in the response — substitute it yourself, matching the marker from the message with the form field;
+- for a form with a `spam` field, submission without the spam attribute is rejected earlier in field validation: `formData doesn't have spam attribute`;
 - an empty `formData` — `empty form data section`.
 
 ```ts
@@ -275,7 +277,7 @@ if (isError(result)) {
 }
 ```
 
-> ⚠️ **`postFormsData` does not accept `sign_in_up` and `order` forms.** Such a form responds with `404 Form has incorrect type: sing_in_up`: registration goes through AuthProvider (`.claude/rules/auth-provider.md`), orders — through Orders (`.claude/rules/orders.md`). Forms of type `data` **and `rating`** are sent normally: on a `rating` type form (reviews about the master) records are created and read with `getFormsDataByMarker` — check `form.type` before sending, but do not filter out `rating`.
+> ⚠️ **`postFormsData` does not accept `sign_in_up` and `order` forms.** Such a form responds with `404 Form has incorrect type: sing_in_up`: registration goes through AuthProvider (`.claude/rules/auth-provider.md`), orders — through Orders (`.claude/rules/orders.md`). Forms of type `data` **and `rating`** are sent normally: on a `rating` type form (reviews about the master) records are created and read with `getFormsDataByMarker` — check `form.type` before submission, but do not filter out `rating`.
 
 ```ts
 const form = await getApi().Forms.getFormByMarker('contact_us')
@@ -295,7 +297,7 @@ const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? '
 
 ---
 
-## Reading Records: Group Rights and Privacy of Other Requests
+## Reading Records: Group Rights and Privacy of Other Applications
 
 `getFormsDataByMarker` goes to `POST /api/content/form-data/marker/{marker}`, and this route is closed to guests by default: group rights (section `form-data`) come with `addRule: false`, and a public call responds
 
@@ -306,13 +308,13 @@ const moduleEntityIdentifier = formModuleConfig?.entityIdentifiers?.[0]?.id ?? '
 In the showcase that displays reviews, this right is needed — but it is **one for all forms of the project**: enabling it opens reading records for both `contact_us` (names, phones, emails of visitors) and any other form. Therefore, it should be enabled **together** with the protection of private forms:
 
 - flag `viewOnlyUserData: true` in the configuration of the private form module — the guest sees only their records (verified: after editing `contact_us` returns `total: 0` to an anonymous token, while the review form returns all `approved`);
-- the flags of the rules are adjusted through `GET|PUT /api/admin/user-permissions/{id}`; `PUT /api/admin/user-groups/{g}/permissions/{id}/change` accepts only `{ state: 'attach' | 'detach' }` and does not change the flags (rule `admin-api`).
+- the flags themselves are adjusted through `GET|PUT /api/admin/user-permissions/{id}`; `PUT /api/admin/user-groups/{g}/permissions/{id}/change` accepts only `{ state: 'attach' | 'detach' }` and does not change the flags (the `admin-api` rule).
 
 ---
 
 ## Manual HTTP Requests: `x-device-metadata` on Every POST
 
-The SDK inserts the header itself, but scripts and samples that go to the public API directly (`curl`, `fetch`, Playwright request`) receive on POST
+The SDK inserts the header itself, but scripts and samples that access the public API directly (`curl`, `fetch`, Playwright request`) receive on POST
 
 ```json
 { "statusCode": 400, "message": "Missing x-device-metadata header" }
@@ -344,7 +346,7 @@ const moduleEntityIdentifier = form.moduleFormConfigs?.[0]?.entityIdentifiers?.[
 
 ⚠️ **`formModuleConfigId` should be taken from reading the form, not from reading the page.** The page returns the same value, but with a delay — submitting with "yesterday's" identifier receives `400 Incorrect formIdentifier`.
 
-⚠️ **Binding the form to records is completely replaced.** Editing the form through the admin API with the `formModuleConfigs` field overwrites the set of bindings: if you skip the field — all bindings **along with the requests received through them are deleted**, response `200`. Therefore, when making any edits, always pass the **`id` of the existing binding**, even when the set of pages does not change: without `id` the binding is recreated, and requests to it are lost. The binding element is `{ formId, moduleId, isGlobal | entityIdentifiers }`, bind **by the page marker, not by the numeric id**.
+⚠️ **Binding the form to records is completely replaced.** Editing the form through the admin API with the `formModuleConfigs` field overwrites the set of bindings: if you skip the field — you delete all bindings **along with the applications received through them**, response `200`. Therefore, when making any edits, always pass **the `id` of the existing binding**, even when the set of pages does not change: without `id` the binding is recreated, and applications to it are lost. The binding element is `{ formId, moduleId, isGlobal | entityIdentifiers }`, bind **by the page marker, not by the numerical id**.
 
 ---
 
@@ -395,7 +397,7 @@ For `date` / `dateTime` / `time` fields, **always** render the corresponding nat
 - If a specific format is needed (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`) — take it from the attribute and use it when building `formattedValue`.
 - If the format is not specified — apply the default value for the type (`DD-MM-YYYY`, `DD-MM-YYYY HH:mm`, `HH:mm`).
 
-**Building value from native input:**
+**Assembling value from native input:**
 
 ```ts
 // date
@@ -407,7 +409,7 @@ const value = { fullDate: iso, formattedValue: formatted, formatString: 'DD-MM-Y
 // dateTime
 const input = '2024-05-07T18:30' // value from <input type="datetime-local">
 const iso = new Date(input).toISOString()
-// formattedValue by formatString from the attribute schema
+// formattedValue according to formatString from the attribute schema
 
 // time — sent with a reference date (usually today)
 const input = '14:30' // value from <input type="time">
@@ -416,7 +418,7 @@ const d = new Date(); d.setUTCHours(h, m, 0, 0)
 const value = { fullDate: d.toISOString(), formattedValue: input, formatString: 'HH:mm' }
 ```
 
-**Dynamic Field Rendering in the Form (Pattern):**
+**Dynamic rendering of the field in the form (pattern):**
 
 ```tsx
 if (attr.type === 'date') {
@@ -438,7 +440,7 @@ if (attr.type === 'time') {
 // ❌ INCORRECT — sending a string
 { marker: 'message', type: 'text', value: 'Hello' }
 
-// ✅ CORRECT — an array with one object, only one field
+// ✅ CORRECT — array with one object, only one field
 { marker: 'message', type: 'text', value: [{ plainValue: 'Hello world' }] }
 { marker: 'message', type: 'text', value: [{ htmlValue: '<p>Hello</p>', params: { editorMode: 'html' } }] }
 { marker: 'message', type: 'text', value: [{ mdValue: '**Hello**' }] }
@@ -466,7 +468,7 @@ if (attr.type === 'time') {
 { marker: 'color', type: 'radioButton', value: ['red'] }
 ```
 
-**What to draw `list` with — determined by `attribute.multiselect`** (declared in types from v1.0.157 in the schema set and from v1.0.164 in `IFormAttribute`; data came earlier but were read as `unknown` due to the index signature):
+**What to draw `list` with — is decided by `attribute.multiselect`** (declared in types since v1.0.157 in the schema set and since v1.0.164 in `IFormAttribute`; data came earlier but were read as `unknown` due to the index signature):
 
 ```tsx
 // ✅ multiple options from listTitles or one
@@ -521,15 +523,17 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
 { marker: 'gallery', type: 'groupOfImages', value: [file1, file2] }
 ```
 
-⚠️ **`type` — `'groupOfImages'`, in the plural.** Until v1.0.163, the type `IBodyTypeImageGroupOfImages` contained a typo `'groupOfImage'`, and the editor auto-completed it; the API rejects such a value: `400 formData's marker '…' type must be one of […]`.
+⚠️ **`type` — `'groupOfImages'`, in plural.** Until v1.0.163, the type `IBodyTypeImageGroupOfImages` contained a typo `'groupOfImage'`, and the editor auto-completed it; the API rejects such a value: `400 formData's marker '…' type must be one of […]`.
 
-⚠️ **An already uploaded file is attached in the form as `IImageValue` / `IFileValue`** (`{ filename, downloadLink, size, previewLink?, params? }`) — this is **not** what `FileUploading.upload` returns: it has `contentType`, which form-data rejects (the SDK cuts it out itself when it uploads the file for you).
+⚠️ **An already uploaded file is sent as is — with v1.0.171.** What `FileUploading.upload` returned is placed in `value` without repackaging: the SDK distinguishes a file from a descriptor, does not reload it, and cuts out `contentType`, which form-data rejects. Until 1.0.171 this was not possible — a single descriptor crashed inside the package (`fd.value.map is not a function`), while an array of descriptors was reloaded by the SDK, and the platform responded with `400 … value[0].filename is required`, naming the field that the SDK itself replaced (CMS-990). On older versions, assemble the value manually: `IImageValue` / `IFileValue` (`{ filename, downloadLink, size, previewLink?, params? }`).
 
-### file — two variants depending on the source
+⚠️ **The file value is sent as an array.** A single object — a loading descriptor or manually assembled `IFileValue` — is rejected by the platform: `400 formData's marker '…' value must be an array`. A single `File` passes: the SDK sends the upload result, and it is already an array.
+
+### file — three sources of value
 
 ```ts
-// New file from the user (from <input type="file">):
-// value = raw File object (NOT an array), fileQuery indicates where to save
+// 1. A new file from the user (from <input type="file">): File, Blob, or FileList.
+//    The SDK uploads it itself; fileQuery tells where — without it, page/editor has a random id.
 {
   marker: 'document',
   type: 'file',
@@ -537,7 +541,17 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
   fileQuery: { type: 'page', entity: 'editor', id: 4965 }
 }
 
-// Already uploaded file (link to existing):
+// 2. An already uploaded file — what upload() returned, in an array (with v1.0.171):
+const up = await getApi().FileUploading.upload(selectedFile, {
+  type: 'page', entity: 'editor', id: 4965,
+})
+{
+  marker: 'document',
+  type: 'file',
+  value: [Array.isArray(up) ? up[0] : up],   // not reloaded, contentType is cut by the SDK
+}
+
+// 3. Value assembled manually:
 {
   marker: 'document',
   type: 'file',
@@ -547,13 +561,16 @@ const file = await getApi().FileUploading.createFileFromUrl(imageUrl, 'image.png
     size: 392585
   }]
 }
+
+// Sources can be mixed in one array: [descriptor, new File([...], 'second.pdf')]
+// — the SDK only uploads File and Blob, everything else is sent as it came.
 ```
 
-> **Reading saved file field (v1.0.157):** in the response, one file comes as **an object**, not an array of one element; the array remains for two or more. The body type has been expanded: `IBodyTypeFile.value: IFileValue | IFileValue[]`. You can still send it as an array. Read resiliently: `const files = v ? [v].flat() : []`.
+> **Reading a saved file field (v1.0.157):** in the response, a single file comes as **an object**, not an array of one element; an array remains when two or more. The body type has been expanded: `IBodyTypeFile.value: IFileValue | IFileValue[]`. You can still send it as an array. Read resiliently: `const files = v ? [v].flat() : []`.
 
 ---
 
-## Full Flow: Get Form → Submit Data
+## Full Flow: Get Form → Send Data
 
 ```ts
 // src/app/actions/forms.ts
@@ -570,7 +587,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
   const formModuleConfig = form.moduleFormConfigs?.[0]
 
-  // With v1.0.158 attributes are always an array; this branch is needed only for SDK ≤ 1.0.157
+  // With v1.0.158 attributes are always an array; the branch is needed only for SDK ≤ 1.0.157
   const attrs: IFormAttribute[] = Array.isArray(form.attributes)
     ? form.attributes
     : Object.values(form.attributes ?? {})
@@ -623,4 +640,4 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
 `result.formData.id` — id of the created record.
 
-> ⚠️ `fingerprint` — now `string | null`. For anonymous submissions and submissions via app-token (without user session) it comes as `null`. Do not rely on its presence — check for `null` before use.
+> ⚠️ `fingerprint` — now `string | null`. For anonymous submissions and submissions by app-token (without user session) it comes as `null`. Do not rely on its presence — check for `null` before use.

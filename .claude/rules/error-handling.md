@@ -13,11 +13,11 @@ The basic rule (`isError` + `IError` structure) is in CLAUDE.md, section "Error 
 
 ## Centralized handler — `ApiError` + `handleApiError`
 
-In projects with many SDK call sites, it's convenient to extract error normalization into one place: `src/app/utils/errorHandler.ts`. This provides:
+In projects with many SDK call sites, it is convenient to extract error normalization into one place: `src/app/utils/errorHandler.ts`. This provides:
 
 - a consistent error shape at all levels (`ApiError` extends `Error` + `.statusCode` + `.originalError`);
 - a unified log collector with `handle` (caller name) and `timestamp`;
-- mapping of status code → user-facing message in one place.
+- mapping status code → user-facing message in one place.
 
 ```typescript
 // src/app/utils/errorHandler.ts
@@ -92,11 +92,39 @@ try {
   }
   return { ok: true, orderId: order.id };
 } catch (e) {
-  // we only reach here when isShell:false (or non-SDK throw).
-  // With default isShell:true, network/parsing/unexpected do NOT throw, but
-  // return as order value (raw Error without statusCode → isError does not catch it).
+  // we only reach here with isShell:false (or non-SDK throw).
+  // With default isShell:true, the network and unparsed response do NOT throw,
+  // but return as a value — with v1.0.168/1.0.169 they have a statusCode, see below.
   const apiError = handleApiError('createOrder', e);
   return { ok: false, error: apiError.message };
+}
+```
+
+## `statusCode: 0` — no response from the platform (v1.0.168 / v1.0.169)
+
+Before 1.0.168, a connection drop with default `isShell: true` returned as a thrown `TypeError`, which serialized to `{}`: neither `statusCode` nor message, and `isError` did not catch such a value. "No connection" could not be distinguished from "no data" — on one site, such a value ended up in the page cache and was served minutes after the connection was restored, while the static build baked the site from 404 and reported success.
+
+Now both cases of "no useful response received" are described the same way:
+
+```ts
+// request did not reach the platform (drop, timeout, DNS) — v1.0.168
+{ statusCode: 0, message: 'TypeError: fetch failed', pageData: null, timestamp: '…' }
+
+// response came, but it's not JSON — v1.0.169. The platform can respond 200 OK
+// with content-type: text/html and its own admin page in the body (CMS-957)
+{ statusCode: 0, message: 'Expected JSON from the platform, received text/html (HTTP 200): <!DOCTYPE html>…' }
+```
+
+- **`statusCode: 0` — a value that no HTTP response has.** Treat it as "no response": do not cache, do not count as an empty result, during build — fail the build, not write 404 to the page.
+- If non-JSON came with an unsuccessful code, the code that the server actually sent (`502` etc.) is preserved, and the message also names the received `content-type`.
+- `isError` catches both: the value has `statusCode` and `message`. Distinguish "no response" from platform error by `statusCode === 0`:
+
+```ts
+if (isError(result)) {
+  if (result.statusCode === 0) {
+    // there was no response: retry, degrade to cache, fail build
+  }
+  // otherwise — the platform responded and explained what went wrong
 }
 ```
 
@@ -104,7 +132,7 @@ try {
 
 ## Normalizing `message`
 
-The type declares `message: string`, but in form validator errors (`postFormsData`), the API actually sends **an array of strings**:
+The type declares `message: string`, but when form validator errors (`postFormsData`) occur, the API actually sends **an array of strings**:
 
 ```typescript
 function normalizeErrorMessage(message: string | string[]): string {
@@ -115,16 +143,16 @@ function normalizeErrorMessage(message: string | string[]): string {
 
 ## "Resource is closed" — graceful fallback
 
-`statusCode: 403` + `message: "Resource is closed"` means that the resource is not open in the admin panel (the page, form, block is not configured). This is **not a real authorization error** — it is a signal that "the admin has not set it up yet". Handle it as an empty result and log the item in `mismatch-log.md` (Section C):
+`statusCode: 403` + `message: "Resource is closed"` means that the resource is not open in the admin panel (the page, form, block is not configured). This **is not a real authorization error** — it is a signal that "the admin has not set it up yet". Handle it as an empty result and log the item in `mismatch-log.md` (Section C):
 
 ```typescript
 const reviews = await getProductReviews(productId);
 // graceful fallback: will return [] instead of throw if the review_form is not open in the admin panel
 ```
 
-## Trace for intentionally swallowed errors
+## Trail for intentionally swallowed errors
 
-`handleApiError` is for errors that are **returned upwards**. It does not cover another, more common case: the loader returned `null`/`[]` from `catch`, the section simply did not render, the error object did not reach anyone. The showcase looks functional, but half of the blocks are empty — and it's unclear whether to fix the content or the code.
+`handleApiError` is for errors that **are returned upwards**. It does not cover another, more common case: the loader returned `null`/`[]` from `catch`, the section simply did not render, the error object did not reach anyone. The showcase looks operational, but half of the blocks are empty — and it is unclear whether to fix the content or the code.
 
 A tiny logger in each `catch` of degradation paths is sufficient:
 
@@ -150,19 +178,19 @@ try {
 }
 ```
 
-The difference from `handleApiError` is that it logs **always**; here, a trace that can be turned off in production is needed, otherwise, expected degradation (unclosed resource, empty collection) clutters the logs. Write `scope` with the call arguments: `blocks.getBlockByMarker(hero)` finds the problem immediately, `error in loader` does not.
+The difference from `handleApiError` is that it logs **always**; here, a switchable log in production is needed, otherwise, expected degradation (unclosed resource, empty collection) clutters the logs. Write `scope` with call arguments: `blocks.getBlockByMarker(hero)` finds the problem immediately, `error in loader` does not.
 
-> Degradation **during assembly** is a separate case, where `console.warn` is needed without a flag: see `.claude/rules/troubleshooting.md`. Profiling the same loaders — `.claude/rules/observability.md`.
+> Degradation **during build** — a separate case, there you need `console.warn` without a flag: see `.claude/rules/troubleshooting.md`. Profiling the same loaders — `.claude/rules/observability.md`.
 
 ## Response Codes
 
 | Code | Value | What to do |
 | --- | --- | --- |
 | 400 | Bad Request | check the request body — see `troubleshooting.md` |
-| 401 | Unauthorized | token is missing or expired — retry with the token from localStorage, log out only after retry |
+| 401 | Unauthorized | no or expired token — retry with token from localStorage, log out only after retry |
 | 403 | Forbidden | group permissions in the admin panel (`/admin-grant-permissions`) or auth method called from the server |
 | 404 | Not Found | marker does not exist — check via `/inspect-api` |
 | 429 | Rate Limit | backoff |
 | 500, 502, 503, 504 | Server Error | retry, then graceful fallback |
 
-Full breakdown of specific messages — `troubleshooting.md`.
+A complete breakdown of specific messages — `troubleshooting.md`.

@@ -46,7 +46,7 @@ const similar = res.items ?? []
 | Autocomplete within a single module | `Products.searchProduct` / `Pages.searchPage` / `Blocks.searchBlock` | only the name (substring) |
 | "Find by meaning," not by letters | `<Module>.get…ByVectorSearch(body, langCode?, offset?, limit?)` | vector similarity of embeddings |
 
-Semantic search with v1.0.161 is available in seven modules: `Products` (was earlier) plus `Admins`, `Discounts`, `FormData`, `Orders`, `Pages`, `Users`. The form is the same for all — `body = { queryText, vectorDistanceThreshold?, maxHits?, debug? }` (`maxHits` — Top-K before pagination, default 100, maximum 500; `debug: true` adds a `distance` field to each element), the response is a container `{ items, total }`. The types of bodies (`IAdminsVectorSearch`, `IPagesVectorSearch`, …) and responses are imported from the root of the package: `import type { IAdminsVectorSearch } from 'oneentry'`. The vector index is enabled on the OneEntry project side — if it is not configured, the method will return `IError`, not an empty list; handle it through `isError` and degrade to regular search (see `.claude/rules/error-handling.md`).
+Semantic search with v1.0.161 is available in seven modules: `Products` (was earlier) plus `Admins`, `Discounts`, `FormData`, `Orders`, `Pages`, `Users`. The form is the same for all — `body = { queryText, vectorDistanceThreshold?, maxHits?, debug? }` (`maxHits` — Top-K before pagination, default 100, maximum 500; `debug: true` adds a `distance` field to each element), the response is a container `{ items, total, indexReady }`. **`indexReady` (declared in the types since v1.0.172, `IVectorSearchResponse<T>`):** `false` — vectors for this entity and language are not built yet, the query was not embedded, and an empty `items` **does not mean** "nothing found": show "search is still indexing" or fall back to the ordinary search; `true` — an honest result. Before 1.0.172 the field arrived but the type did not declare it, so `res.indexReady` did not compile. The types of bodies (`IAdminsVectorSearch`, `IPagesVectorSearch`, …) and responses are imported from the root of the package: `import type { IAdminsVectorSearch } from 'oneentry'`. The vector index is enabled on the OneEntry project side — if it is not configured, the method will return `IError`, not an empty list; handle it through `isError` and degrade to regular search (see `.claude/rules/error-handling.md`).
 
 **Other type clarifications (v1.0.161).** ⚠️ **Breaking:** the field `attributeSetIdentifier` has been removed from `ITemplatesPreviewEntity` (`TemplatePreviews`) — the API no longer returns it, code accessing it will stop compiling. Extensions without breaking: `IAccountsEntity.type` (`Payments`) is now `'stripe' | 'yookassa' | 'midtrans' | 'xendit' | 'custom'` — do not write `type === 'stripe' ? … : 'custom'`; `IFilterParams.conditionMarker` (`Products`) received operators `'pat'` (pattern match), `'same'` (exact value match), and `'same_part'` (exact part value match); `IContentFilterItem.value` (`Filters`) has become `string | string[] | null` — for range nodes this is an array of range values, so check `Array.isArray` before string operations; `IFormDataSearchEntity` (`FormData`) — a new type of records from vector search by form-data, it has moderation fields (`status`, `ip`, `fingerprint`, `isUserAdmin`, `userIdentifier`, `entityIdentifier`, `parentId`), which are not in `IFormDataEntity`.
 
@@ -79,7 +79,7 @@ const extra = getAdditionalFields(product.attributeValues.price) // Record<marke
 
 ```ts
 getAdminsInfo(body?: IFilterParams[], langCode?, offset?, limit?): IAdminEntity[]
-getAdminsByVectorSearch(body: IAdminsVectorSearch, langCode?, offset?, limit?): IAdminsResponse   // semantic search, { items, total }
+getAdminsByVectorSearch(body: IAdminsVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IAdminsResponse>   // semantic search, { items, total }
 ```
 
 The "command/specialists" pattern: OneEntry admins with a designated set of attributes work as content entities (masters, doctors, trainers) — photo, rating, services-`entity`, schedule-`timeInterval`. The "team member" sign is a filled key attribute (for example, name): filter the list on your side, there is no separate flag.
@@ -147,6 +147,7 @@ getSlides(marker): IBlockSlidesResponse
 
 - `...ByProductIds` — versions by explicit list: `body: IBlockProductsLookup = { productIds: number[], langCode?, limit?, signPrice? }`. Versions without `ByProductIds` take the cart/wishlist **from context** (authorized user or guest by `x-guest-id`).
 - `BlockType` has been supplemented with values: `'frequently_ordered_block'`, `'trending_block'`, `'recently_viewed_block'`, `'repeat_purchase_block'`, `'slider_block'`, `'personal_recommendations_block'`, `'cart_complement_block'`, `'cart_similar_block'`, `'wishlist_similar_block'`. Take the block marker in the OneEntry admin → Blocks.
+- **`BlockType` without `'none'` (v1.0.172).** The platform has no such type (`GeneralTypes.getAllTypes()` does not return it), and a filter by it answered `400 type must be a valid enum value` — now it is a compile error. `'service'` stays: that is the platform's own name for the type. But the `type` filter of `getBlocks` and `Templates.getTemplateByType` currently answers `'service'` with the same `400` (platform defect, CMS-1073) — blocks/templates of this type cannot be fetched by the filter; fetch all and pick by `type` on the client.
 
 ## Discounts
 
@@ -155,12 +156,13 @@ getAllDiscounts(langCode?, offset?, limit?, type?: 'DISCOUNT' | 'BONUS' | 'PERSO
 getDiscountByMarker(marker, langCode?): IDiscountsEntity
 validateDiscountsCoupon(code): ICouponValidationResult     // { valid, coupon?, error? }
 getBonusBalance(): IBonusBalanceEntity                      // ⚠️ user — { balance }
-getBonusHistory(type?, dateFrom?, dateTo?, discountId?, moduleId?, isAdmin?): IBonusTransactionEntity[]  // ⚠️ user
-getDiscountsByVectorSearch(body: IDiscountsVectorSearch, langCode?, offset?, limit?): IDiscountsResponse  // semantic search
+getBonusHistory(type?, dateFrom?, dateTo?, discountId?, moduleId?, isAdmin?): IBonusHistoryResponse  // ⚠️ user
+getDiscountsByVectorSearch(body: IDiscountsVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IDiscountsResponse>  // semantic search
 ```
 
 - `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate a discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
 - Bonuses: `getBonusBalance` / `getBonusHistory` require user authorization. `IBonusTransactionType` = `'ACCRUAL' | 'USAGE' | 'REDUCE' | 'REVERSAL_ACCRUAL' | 'REVERSAL_USAGE' | 'EXPIRATION'`.
+- ⚠️ **`getBonusHistory` returns the container `{ items, total }`, not an array (corrected in the types in v1.0.168).** Until then the method was declared as `IBonusTransactionEntity[]`, and code written from the type read `.length` off an object and got `undefined`. An account with no transactions gives `{"items":[],"total":0}`.
 
 ## Events ⚠️ require authorization
 
@@ -180,6 +182,8 @@ getAllEvents(): IContentApiEvent[]                               // public via S
 
 > ⚠️ **Breaking (v1.0.157):** `subscribeByMarker`, `unsubscribeByMarker`, `subscribeToForm`, `unsubscribeFromForm` now truly return `IError` on API refusal. Until 1.0.157, the general helper only caught exceptions, and with `isShell: true` (default), the SDK **returns** the error instead of throwing it — thus, any refusal was reported as `true`. Check strictly: `if (result === true)`, `if (result)` will skip the error object. The same pitfalls were present in `Subscriptions.cancelSubscription` / `recoverSubscriptions`.
 >
+> Since v1.0.172 these six methods **throw** `IError` with `isShell: false`, like the rest of the SDK. Before 1.0.172 they returned the error as a value in this mode, and a `try/catch` around the call never fired.
+>
 > ⚠️ `getAllEvents` is public from the SDK side, but the events route must be **issued to the guest group** — it is not issued for some tenants, and the method returns `401` with the app token. Then look for event markers in the admin panel → Events, through the admin API (`GET /api/admin/events`, rule `admin-api`) or grant permission (`/admin-grant-permissions`). The existence of an event cannot be checked with trial `generateCode`/`checkCode` — they mask the error (see `.claude/rules/auth-provider.md`).
 >
 > Do not confuse with the **Subscriptions** module (paid subscriptions) — these are different entities. `Events.getAllSubscriptions` → user subscriptions to products (`ISubscriptions`); `Subscriptions.getAllSubscriptions` → available paid plans (`ISubscriptionEntity[]`, v1.0.157).
@@ -188,7 +192,7 @@ getAllEvents(): IContentApiEvent[]                               // public via S
 
 ```ts
 upload(file: File | Blob, fileQuery?: IUploadingQuery): IUploadingReturn[]
-delete(filename, fileQuery?): boolean
+delete(filename, fileQuery?): boolean   // true on success — since v1.0.172; before that {} arrived (empty 200 body)
 createFileFromUrl(url, filename, mimeType?): Promise<File>
 getFile(id, type, entity, filename, template?): Response   // raw fetch Response — extract data via .blob()/.arrayBuffer()
 
@@ -225,7 +229,7 @@ getFormsDataByMarker(marker, formModuleConfigId, body?: IFormsDataFilter, isExte
 updateFormsDataByid(id, body?): IUpdateFormsData          // ⚠️ user
 updateFormsDataStatusByid(id, body?): boolean             // ⚠️ user
 deleteFormsDataByid(id): boolean                          // ⚠️ user
-getFormsDataByVectorSearch(body: IFormsDataVectorSearch, langCode?, offset?, limit?): IFormsDataSearchResponse  // semantic search
+getFormsDataByVectorSearch(body: IFormsDataVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IFormsDataSearchResponse>  // semantic search
 ```
 
 Update/delete methods require user authorization (call after `reDefine(refreshToken)`); `postFormsData` and `getFormsDataByMarker` work with app-token.
@@ -271,7 +275,7 @@ createRefundRequest(id, body: ICreateRefundRequest): boolean    // body: { produ
 cancelRefundRequest(id): boolean
 
 // Semantic search for orders of AUTHORIZED user
-getOrdersByVectorSearch(body: IOrdersVectorSearch, langCode?, offset?, limit?): IOrdersByMarkerEntity
+getOrdersByVectorSearch(body: IOrdersVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IOrdersByMarkerEntity>
 ```
 
 > Bonuses and coupons: `ICreateOrderPreview` / `IOrderData` accept `couponCode`, `additionalDiscountsMarkers`, `bonusAmount`; responses (`IBaseOrdersEntity`, `IOrderPreviewResponse`) return `bonusApplied`, `totalDue`, `discountConfig`. Split payment (`IOrderSplit`) and `discountConfig` come in `getOrderByMarkerAndId`. Elements `products` in body — `{ productId, quantity, signedPrice? }`: `signedPrice` take from the product obtained with the `signPrice` parameter (price fixation, v1.0.154). Details — `.claude/rules/orders.md`.
@@ -287,13 +291,15 @@ getPageById(id, langCode?): IPagesEntity
 getPageByUrl(url, langCode?): IPagesEntity
 getChildPagesByParentUrl(url, langCode?): IPagesEntity[]
 getBlocksByPageUrl(url, langCode?): IPositionBlock[]
-searchPage(name, url?, langCode?): IPagesEntity[] | IPageSearchResult[]   // ⚠️ form depends on traficLimit
-getPagesByVectorSearch(body: IPagesVectorSearch, langCode?, offset?, limit?): IPagesResponse   // semantic search, { items, total }
+searchPage(name, url?, langCode?): IPagesEntity[] | IPageSearchResult[]   // ⚠️ form depends on traficLimit; langCode works since v1.0.172
+getPagesByVectorSearch(body: IPagesVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IPagesResponse>   // semantic search, { items, total }
 ```
 
 > `IPagesEntity.type` is now typed as `PageType` = `'catalog_page' | 'common_page' | 'error_page' | 'external_page'` (a subset of `BlockType`). `categoryPath` has become `string | null` (for nested pages it comes as `null`).
 >
 > `searchPage` with `traficLimit: true` returns short cards `IPageSearchResult` (`{ id, title }`) — see the Products section, there is also a type narrowing pattern. Since v1.0.157, this mode has skipped the useless pass for templates (short cards do not have `templateIdentifier`).
+>
+> ⚠️ **Before v1.0.172 `searchPage` searched only in the default language:** the SDK sent `lang=` instead of `langCode=`, and the platform ignored it. A word of the second locale was not found, while English matches were loaded in the requested locale, and the `404`s of pages that failed to load came back **as array elements** — `page.localizeInfos.title` crashed. Since 1.0.172 the search runs in the given `langCode`, and a page that could not be loaded is left out of the result. On a multilingual site require `oneentry` ≥ 1.0.172.
 >
 > `getBlocksByPageUrl` enriches blocks with products (v1.0.153): for a block `type: 'product_block'` appears `products?: IProductsEntity[]`, for `type: 'similar_products_block'` — `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. With `traficLimit: true` in the SDK config, enrichment is disabled, and in case of loading error, the field is filled with `[]` — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
 
@@ -319,7 +325,7 @@ getPaymentStagesByOrderId(id): IPaymentProgress
 
 ```ts
 getProducts(body?: IFilterParams[], langCode?, userQuery?: IProductsQueryBase): IProductsResponse
-getProductsEmptyPage(body?, langCode?, userQuery?): IAggregatedProductGroup[]   // ⚠️ POST, aggregated product groups without category
+getProductsEmptyPage(body?, langCode?, userQuery?): IProductsResponse   // ⚠️ POST, products without a category, { items, total }
 getProductsByPageId(id: number, body?, langCode?, userQuery?): IProductsResponse
 getProductsPriceByPageUrl(url, langCode?, userQuery?: IProductsPriceQuery): IProductsInfo
 getProductsByPageUrl(url, body?, langCode?, userQuery?): IProductsResponse
@@ -328,15 +334,16 @@ getProductsByIds(ids: string, langCode?, userQuery?: IProductsByIdsQuery): IProd
 getProductById(id, langCode?, isNormalized?): IProductsEntity
 getProductBlockById(id): IProductBlock[]
 searchProduct(name, langCode?): IProductsEntity[] | IProductSearchResult[]   // ⚠️ form depends on traficLimit
-getProductsByVectorSearch(body: IVectorSearchProducts, langCode?, offset?, limit?): IProductsResponse  // semantic (vector) search
+getProductsByVectorSearch(body: IVectorSearchProducts, langCode?, offset?, limit?): IVectorSearchResponse<IProductsResponse>  // semantic (vector) search
 getProductsCount(body?): IProductsCount
 getProductsCountByPageId(id: string, body?): IProductsCount   // ⚠️ id — string, unlike getProductsByPageId(id: number)
 getProductsCountByPageUrl(url, body?): IProductsCount
 ```
 
-- Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price', signPrice? }` — for `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. For `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`); for `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); for `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting this endpoint no longer accepts, extra fields — TS error). `IProductsQuery` — deprecated alias `IProductsQueryBase`, do not use in new code.
+- Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price'|'status', signPrice? }` (`'status'` — since v1.0.172) — for `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. For `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`, `relationMode?: 'global' | 'local'` — since v1.0.172: `'global'` (default) — the usual chain of the relation template's conditions, `'local'` — product `id` itself must satisfy the template condition); for `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); for `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting this endpoint no longer accepts, extra fields — TS error). `IProductsQuery` — deprecated alias `IProductsQueryBase`, do not use in new code.
 - `getProductsByVectorSearch` — `body: IVectorSearchProducts = { queryText, vectorDistanceThreshold?, maxHits?, debug? }`. Semantic search by the meaning of the request (not by substring, like `searchProduct`).
-- `getProductsEmptyPage` — now **POST**, returns `IAggregatedProductGroup[]` (`{ attrValue, items, productIds, total }`), not `IProductsResponse`.
+- `getProductsEmptyPage` — **POST**, returns `IProductsResponse` (`{ items, total }`), like `getProducts`. Before v1.0.172 the method was declared as `IAggregatedProductGroup[]`, but the API and the SDK always returned `{ items, total }` — code written from the old type (`result.map`, `result[0]`) compiled and failed at run time. `IAggregatedProductGroup` is kept deprecated — no method returns it.
+- Example filter operator — `conditionMarker: 'eq'`. The value `'equals'` from the old JSDoc is refused by the API with `400 filter.0.conditionMarker must be a valid enum value`.
 - **Quick search and `traficLimit` (types clarified in v1.0.157).** `searchProduct` → `IProductsEntity[] | IProductSearchResult[] | IError`, `Pages.searchPage` → `IPagesEntity[] | IPageSearchResult[] | IError`. With `traficLimit: true`, it returns the **raw response of quick search** — short card `IProductSearchResult = { id, title, pageId }` / `IPageSearchResult = { id, title }`, without `attributeValues`, `localizeInfos`, `blocks`. The behavior at runtime has not changed — previously the signature simply lied, and `attributeValues` in traficLimit mode silently came as `undefined`. Narrow down by config or by field:
 
 ```ts
@@ -359,7 +366,7 @@ validateMarker(marker): boolean
 ## Search
 
 ```ts
-globalSearch(query, types?: TGlobalSearchEntityType[], visibility?: 'all' | 'visible' | 'hidden', offset?, limit?): IGlobalSearchResponse
+globalSearch(query, types?: TGlobalSearchEntityType[], visibility?: 'all' | 'visible' | 'hidden', offset?, limit?, langCode?): IGlobalSearchResponse
 ```
 
 Public cross-entity search (`GET /api/content/search`, app-token) — the only method that, in one request, goes **both by names and by attribute values** across 18 types of entities (`products`, `pages`, `blocks`, `slides`, `templates`, `discounts`, `user_groups`, `users`, `admins`, `menus`, `forms`, `attributes_sets`, `attributes`, `orders`, `workflows`, `events`, `subscriptions`, `collections`). The basis for "one search string for the entire site"; for searching only products, use `Products.searchProduct` (see `/create-search`).
@@ -367,6 +374,7 @@ Public cross-entity search (`GET /api/content/search`, app-token) — the only m
 - The response **is grouped by types**, not flat: `{ query, groups: [{ type, items, hasMore }] }`. There is no flat array — `groups.flatMap((g) => g.items)`.
 - ⚠️ **`offset`/`limit` — drilldown mode**: the API accepts them only if exactly one available type is passed in `types`, otherwise it responds with `400`. Without them, each group returns in full, and the SDK does not substitute anything by default. Pagination of output "across all types at once" is impossible by design: first a general request, then a drilldown by the selected type.
 - `visibility` defaults to `'all'` — for a public site, pass `'visible'`, otherwise hidden records will be included in the output.
+- ⚠️ **`langCode` was added in v1.0.168 and defaults to the language given to `defineOneEntry`.** The search index is **per language**: before 1.0.168 the method sent no language at all, and on a bilingual project a word of the second locale returned an empty group while the same request with the right `langCode` returned a full page. On a multilingual site pass the language of the current page explicitly instead of relying on the client's language (CMS-912).
 - The element carries **the context of the match**, not the entity itself: `matchKind` (`'exact' | 'title' | 'attributeName' | 'attributeValue'`), `matchedField`, `fragment` (plain text around the match, without markup — highlight it yourself), `langCode`, plus `parent` for entities without their own page (slide → block, order → storage) and `matchedAttribute`. `attributeValues`, `localizeInfos`, and prices are **not there** — for cards go to `Products.getProductsByIds` by collected `id`.
 - `id` — `number | string`: for `workflows` and `attributes` it is string. Do not blindly convert to a number.
 
@@ -403,10 +411,12 @@ Paid subscriptions. `subscribe` returns `paymentUrl` for redirect to payment (li
 ## UserActivity
 
 ```ts
-trackUserActivity(body: ITrackActivity): boolean           // works for user AND guest (x-guest-id)
+trackUserActivity(body: ITrackActivity): boolean | IError   // works for user AND guest (x-guest-id)
 ```
 
 `ITrackActivity = { type: TUserActivityType, productId?, pageId?, categoryId?, query?, meta? }`. `TUserActivityType` = `'product_view' | 'page_view' | 'category_view' | 'search' | 'product_add_to_cart' | 'product_remove_from_cart' | 'product_add_to_wishlist' | 'product_remove_from_wishlist' | 'product_purchase' | 'product_rating'`. These events feed the recommendations Blocks (recently-viewed, personal-recommendations, trending).
+
+> ⚠️ **Before v1.0.172 `trackUserActivity` answered `true` to any error** — a wrong `type`, a `query` over 255 characters, a permission refusal: the event was lost while the code considered it recorded. Since 1.0.172 — `true` on success (`204`), `IError` on refusal (thrown with `isShell: false`). Check strictly: `if (result === true)`.
 
 ## UserGroups
 
@@ -437,7 +447,7 @@ archiveUser(): boolean
 deleteUser(): boolean
 addFCMToken(token): boolean
 deleteFCMToken(token): boolean
-getUsersByVectorSearch(body: IUsersVectorSearch, langCode?, offset?, limit?): IUsersResponse   // semantic search for users
+getUsersByVectorSearch(body: IUsersVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IUsersResponse>   // semantic search for users
 
 // Cart — works for user OR guest (x-guest-id)
 getCart(): ICartResponse                       // { items: [{ productId, qty, addedAt? }], total }

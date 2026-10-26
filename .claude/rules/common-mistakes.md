@@ -12,11 +12,11 @@ if (isError(product)) return
 console.log(product.attributeValues.title)
 ```
 
-> Detailed error handling — section **Error Handling**.
+> Detailed information on error handling — section **Error Handling**.
 
 ## Creating SDK Instance in Component
 
-`defineOneEntry()` in a component = new instance on every render. Use singleton via `getApi()`. Full pattern — section **SDK Initialization**.
+`defineOneEntry()` in the component = new instance on every render. Use singleton via `getApi()`. Full pattern — section **SDK Initialization**.
 
 ## Guessing Menu Markers and Filtering by Titles
 
@@ -59,14 +59,14 @@ return {
 
 // In the component — directly:
 field.localizeInfos?.title
-'requiredValidator' in (field.validators ?? {})        // required — by the presence of the key, strict may not be set
+'requiredValidator' in (field.validators ?? {})        // required — based on the presence of the key, strict may not be set
 Number(field.validators?.stringInspectionValidator?.stringMax) || undefined  // numbers come as strings, 0 = not set
 field.listTitles   // full objects with title, value, extended
 ```
 
 Analysis of all validators (asterisk for required field, email, mask, `customErrorText`) — `.claude/rules/forms.md`, section "Field Validators".
 
-**Rule:** Server Action — thin proxy. The only allowed operations: `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
+**Rule:** Server Action — thin proxy. The only permissible operations: `filter` (exclude types) and `sort` (by `position`). Everything else — in the component.
 
 ## Inventing API Fields and Creating Unnecessary Transformations
 
@@ -88,15 +88,15 @@ const rootItems = Array.isArray(pages) ? pages : [pages]
 
 ## Logging Out on Any Error on Account Pages
 
-On 401 — retry with the current token from localStorage (another operation may have updated it). Log out ONLY on confirmed 401/403 after retry.
+On 401 — retry with the current token from localStorage (another operation might have updated it). Log out ONLY on confirmed 401/403 after retry.
 
-**Never do `localStorage.removeItem('refresh-token')`** on form/data loading error — this destroys the fresh token just written by another operation.
+**Never do `localStorage.removeItem('refresh-token')`** on form/data loading error — this destroys the fresh token that another operation just wrote.
 
-⚠️ Key — **with a hyphen**: `'refresh-token'`. This is written by `saveFunction` SDK. `'refreshToken'` — a common hallucination: `getItem` will return `null`, and retry will go without a token. Details — `.claude/rules/tokens.md`.
+⚠️ Key — **with a hyphen**: `'refresh-token'`. This is written by `saveFunction` SDK. `'refreshToken'` — a common hallucination: `getItem` will return `null`, and retry will go without a token. Detailed information — `.claude/rules/tokens.md`.
 
-> Full patterns: `/create-profile`, `/create-orders-list`.
+> Complete patterns: `/create-profile`, `/create-orders-list`.
 
-## Showing Preloader on State Change (Not Just on Loading)
+## Showing Preloader on State Change (Not Just on Load)
 
 When adding/removing from favorites/cart, the entire list reloads with a loader.
 
@@ -106,7 +106,7 @@ When adding/removing from favorites/cart, the entire list reloads with a loader.
 
 ## Calling setState Synchronously Inside useEffect
 
-Synchronous `setState`/`dispatch` in the body of `useEffect` triggers cascading re-renders.
+Synchronous `setState`/`dispatch` in the body of `useEffect` causes cascading re-renders.
 
 ```typescript
 // ❌ Synchronous setState / dispatch
@@ -136,13 +136,13 @@ const mounted = useSyncExternalStore(() => () => {}, () => true, () => false);
 - Do not call `setState`/`dispatch` synchronously in the body of `useEffect`.
 - Initial value — in `useState(initialValue)` or via `useMemo`.
 - For "is the component mounted" — `useSyncExternalStore`, not `useEffect + setMounted`.
-- Asynchronous calls (fetch, dispatch after `await`) — are allowed.
+- Asynchronous calls (fetch, dispatch after `await`) — are permissible.
 
 ## Frequent AI Hallucinations
 
 ### Hardcoding OAuth Provider URL or Skipping Redirect
 
-`config.oauthAuthUrl` from `getAuthProviderByMarker` contains the base URL. Do not hardcode — take from the config. `oauth(marker, body)` accepts `body: IOauthData`, where `code` is one of the required fields (`client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri`); `code` is only available after redirect.
+`config.oauthAuthUrl` from `getAuthProviderByMarker` contains the base URL. Do not hardcode — take it from the config. `oauth(marker, body)` accepts `body: IOauthData`, where `code` is one of the required fields (`client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri`); `code` is only available after redirect.
 
 ```typescript
 // ❌ Hardcoded URL
@@ -157,7 +157,7 @@ window.location.href = `${baseUrl}?client_id=...&redirect_uri=...`
 
 **OAuth flow:** button → `getAuthProviderByMarker` → `config.oauthAuthUrl` + params → redirect → callback reads `code` → `oauth(marker, body)` via Server Action (`body` — `IOauthData`: `client_id`, `client_secret`, `code`, `grant_type`, `redirect_uri`).
 
-> Details: `.claude/rules/auth-provider.md` (section "OAuth Providers").
+> Detailed information: `.claude/rules/auth-provider.md` (section "OAuth Providers").
 
 ### Searching for Child Menu Items via `parentId` Filter Instead of `children`
 
@@ -165,11 +165,11 @@ window.location.href = `${baseUrl}?client_id=...&redirect_uri=...`
 
 ### Rendering Captcha as a Regular Input
 
-The captcha type in OneEntry is **`'spam'`**, not `'captcha'`. This is an invisible reCAPTCHA v3 — render `<FormReCaptcha>`, not `<input>`. Full pattern for dynamic form — skill **`/create-form`**.
+The captcha type in OneEntry is **`'spam'`**, not `'captcha'`. This is an invisible reCAPTCHA v3 — render `<FormReCaptcha>`, not `<input>`. Full pattern of dynamic form — skill **`/create-form`**.
 
 ### Using `getProductsByPageUrl` for the Entire Catalog
 
-`getProductsByPageUrl` returns **only products from a specific catalog_page**. For all products in the project — `getProducts`.
+`getProductsByPageUrl` returns **only products of a specific catalog_page**. For all products in the project — `getProducts`.
 
 ```typescript
 // ✅ Entire catalog
@@ -182,12 +182,31 @@ await getApi().Products.getProductsByPageUrl('soft_toys', [], locale, { offset: 
 
 ### Hardcoding langCode
 
-In Next.js 15+ `params` — Promise, `await params` is mandatory. Do not hardcode `'en_US'`. Details: `.claude/rules/localization.md`.
+In Next.js 15+ `params` — Promise, `await params` is mandatory. Do not hardcode `'en_US'`. Detailed information: `.claude/rules/localization.md`.
 
 ### Hardcoding Filter Data (Colors, Price Range)
 
-Get from the API. Full pattern for catalog with filters — skill **`/create-product-list`**.
+Get from the API. Full pattern of catalog with filters — skill **`/create-product-list`**.
 
 ### Passing `filters` and `gridKey` as Server Props in ShopView
 
 `ShopView` MUST read `activeFilters` and `gridKey` from `useSearchParams`, otherwise `loadMore` ignores filters. Full pattern — skill **`/create-product-list`**.
+
+### Reusing Request Body Assembled Once
+
+Before v1.0.168, methods sending a body modified **the passed object**: `formData`
+was wrapped in the language on the spot, `signUp` and `updateUser` appended `langCode`. The body,
+reused a second time — retry wrapper, two parallel calls, common
+default — arrived already wrapped, wrapped again, and the platform responded
+`400 "formData.en_US[0].marker" is required`: an error about a field that the caller did not send. Since 1.0.168 the common normalization (`signUp`, `updateUser` and the other methods
+built on it) works on a copy (CMS-909). But `Orders.createOrder`,
+`Orders.updateOrderByMarkerAndId` and `FormData.postFormsData` wrap `formData`
+themselves and until **1.0.172** kept writing the result into the passed object: a repeated
+`createOrder` / `postFormsData` with the same body got `400 formData's marker '#0'
+marker is required`, and `updateOrderByMarkerAndId` answered `200` and **stored the
+corrupted `formData` in the order**. `postFormsData` also replaced the caller's `File`
+with the upload result and deleted `fileQuery` (CMS-1063, CMS-1071).
+
+With `oneentry` ≥ 1.0.172 no method changes the caller's object, and "protective"
+copies of the body before a call can be removed. On an older version, build the body
+for orders and forms anew for every call (retry, resubmission from the same state).

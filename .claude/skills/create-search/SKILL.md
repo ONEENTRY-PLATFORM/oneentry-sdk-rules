@@ -12,7 +12,7 @@ Argument: what to search for — `products` (products), `pages` (pages), `all` (
 
 1. **What to search for?**
    - `products` — by name: `searchProduct(query, locale)`; by meaning (semantic): `getProductsByVectorSearch({ queryText: query }, locale)` — not by substring, optional fields body: `vectorDistanceThreshold`, `maxHits`, `debug`. **From v1.0.158 returns `IProductsResponse` (`{ items, total, totalFound? }`), not an array** — take `res.items ?? []`. The availability of semantic search depends on the OneEntry project settings — in case of an error, the method will return `IError` (the skill handles it as `[]`)
-   - `pages` — `searchPage(name, url?, langCode?)` — locale is the THIRD argument (the second is the url filter)
+   - `pages` — `searchPage(name, url?, langCode?)` — locale is the THIRD argument (the second is the url filter). ⚠️ It is honoured only with `oneentry` ≥ 1.0.172: before that the SDK sent the language under a wrong name, the search always ran in the default language, and `404` error objects ended up in the array
    - `blocks` — `searchBlock(name)`
    - `all` (one search string for the entire site) — **`Search.globalSearch(query, types?, visibility?, offset?, limit?)`** (SDK ≥ 1.0.161): one request by names **and attribute values** at once for 18 types of entities. The response is grouped: `{ query, groups: [{ type, items, hasMore }] }`. For a public site, pass `visibility: 'visible'`; `offset`/`limit` are allowed **only** together with exactly one type in `types` (otherwise, the API responds with `400`)
    - multiple at once — either `Search.globalSearch` in one request or parallel requests via `Promise.all`
@@ -229,7 +229,7 @@ export default async function SearchPage({
 ✅ Search created. Key rules:
 
 ```md
-1. searchProduct/searchPage search by NAME, not by attributes; for semantic search — getProductsByVectorSearch (from v1.0.158 returns { items, total }, not an array)
+1. searchProduct/searchPage search by NAME, not by attributes; for semantic search — getProductsByVectorSearch (from v1.0.158 returns { items, total }, not an array; from v1.0.172 the type has indexReady — with false an empty items means "the index is still being built", not "nothing found")
 2. Debounce 300ms — DO NOT call Action on every character
 3. On an empty query — clear results, do not make a request
 4. Dropdown closes on mousedown outside the component and on Escape
