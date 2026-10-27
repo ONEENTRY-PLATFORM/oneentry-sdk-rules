@@ -195,14 +195,16 @@ getAllEvents(): IContentApiEvent[]                               // public via S
 ## FileUploading
 
 ```ts
-upload(file: File | Blob, fileQuery?: IUploadingQuery): IUploadingReturn[]
-delete(filename, fileQuery?): boolean   // true on success — since v1.0.172; before that {} arrived (empty 200 body)
+upload(file: File | Blob, fileQuery: IUploadingQuery): IUploadingReturn[]   // fileQuery is required — since v1.0.173
+delete(filename, fileQuery: IUploadingQuery): boolean   // true on success — since v1.0.172; before that {} arrived (empty 200 body)
 createFileFromUrl(url, filename, mimeType?): Promise<File>
 getFile(id, type, entity, filename, template?): Response   // raw fetch Response — extract data via .blob()/.arrayBuffer()
 
 // Public search inside the content of files attached to records (v1.0.167)
 searchFileContent(query, langCode?, extensions?, ownerTables?, localeCodes?, onlyTruncated?, offset?, limit?): IFileSearchResponse
 ```
+
+> ⚠️ **`fileQuery` of `upload` and `delete` is required, and `type`, `entity`, `id` are required inside it (v1.0.173).** Without any of the three the endpoint answers `400 type should not be empty; entity should not be empty; id should not be empty`, and `delete` without `type` does not remove the file. Before 1.0.173 the types declared all of this optional — the call compiled but could never succeed; now it is a compile error. Pass it in full: `upload(file, { type: 'page', entity: 'editor', id: 4965 })` and the same `fileQuery` in `delete`. `width`, `height`, `compress`, `template` stay optional. A file field in `postFormsData` is not affected: there `fileQuery` can still be omitted.
 
 > **`searchFileContent` (v1.0.167)** — the unit of the result is a **file, not a fragment**: one `snippet` per file even when the document matches on many pages, with `snippet.pageFrom` for paged formats. The match inside `snippet.text` is wrapped in the control characters `U+0002` / `U+0003`, **not HTML** — replace them with your own highlighting before rendering. `query` needs at least 3 characters (`400` otherwise), `limit` is capped at 50 (default 10). The result is narrowed by access: only files of visible records in sections enabled in project settings, personal sections only down to the caller's own records, the admins section never. A separate `403` means the feature is not in the project tariff. Not every stand has the endpoint yet — older builds answer `404`.
 
@@ -505,9 +507,9 @@ Reference of entity types in the project (`forPage`, `forProduct`, `forBlock`, �
 
 ```ts
 // reading
-getICollections(langCode?, userQuery?: ICollectionQuery): ICollectionEntity[]
+getICollections(langCode?, userQuery?: ICollectionsListQuery): ICollectionEntity[]   // { limit?, offset? } — default 30 / 0
 getICollectionById(id, langCode?): ICollectionEntity
-getICollectionRowsById(id, langCode?, userQuery?): ICollectionRowsResponce
+getICollectionRowsById(id, langCode?, userQuery?: ICollectionQuery): ICollectionRowsResponce   // { limit?, offset?, entityType?, entityId? }
 getICollectionRowsByMarker(marker, langCode?): ICollectionRowsResponce
 getICollectionRowByMarkerAndId(marker, id, langCode?): ICollectionRow
 
@@ -522,6 +524,8 @@ validateICollectionMarker(marker): ICollectionIsValid
 
 The only content module with full CRUD — use it if the project stores data in OneEntry collections. The body of the record (`{ formIdentifier, formData }`) is structured like in `FormData`.
 
+> v1.0.173: `ICollectionFormObject.formData` is `ICollectionFormData[] | Record<string, ICollectionFormData[]>`: a flat array `[{ marker, type, value }]` (the way the platform stores the row) compiles without a cast, as does an object keyed by language. All fields of `ICollectionQuery` are optional, and `getICollections` takes only `ICollectionsListQuery` (`limit`, `offset`) — the collection list has no entity filter. Before 1.0.173 `{ limit, offset }` did not compile.
+>
 > v1.0.157: in `ICollectionRow` `langCode` and `formIdentifier` have been declared (`formIdentifier` comes on update) — the API always returned them, but with `validation.enabled` they were cut from the response.
 >
 > ⚠️ `validateICollectionMarker` — the semantics are **opposite** to JSDoc: `true` = marker is FREE (does not exist), `false` = occupied. Check for the existence of a collection through `getICollections()`, not this method. Details — `product-statuses.md` (there is also a similar case described).
@@ -529,7 +533,7 @@ The only content module with full CRUD — use it if the project stores data in 
 ## System
 
 ```ts
-getApiStat(): unknown          // number of requests to the API
+getApiStat(): IApiStatEntry[]  // API requests per day: [{ '2026-10-25': 17280 }, …] — typed since v1.0.173, unknown before
 test404(): unknown             // test error handling — returns 404
 test500(): unknown             // test error handling — returns 500
 ```

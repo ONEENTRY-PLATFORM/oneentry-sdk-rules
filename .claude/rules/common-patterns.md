@@ -31,11 +31,14 @@ const page2 = await getApi().Products.getProducts([], undefined, { offset: 20, l
 
 ```typescript
 interface IFilterParams {
-  attributeMarker: string                 // attribute name
-  conditionMarker: string                 // "eq", "neq", "mth", "lth", "in", "nin", "exs", "nexs"
+  attributeMarker?: string                // attribute name
+  conditionMarker?: string                // "eq", "neq", "mth", "lth", "in", "nin", "exs", "nexs"
                                           // + with v1.0.161: "pat" (by pattern), "same" (exact value), "same_part" (exact part of value)
-  conditionValue: number | string | null
+  conditionValue?: number | string | null
+  statusMarker?: string                   // filter by product status — applies to the whole request
 }
+// attributeMarker and conditionValue are optional since v1.0.173: an entry may filter
+// by status alone — getProducts([{ statusMarker: 'sale' }])
 
 // Price 100-500
 const filters: IFilterParams[] = [
