@@ -107,7 +107,7 @@ getAttributeSetByMarker(marker, langCode?): IAttributeSetsEntity    // SET objec
 ## AuthProvider
 
 ```ts
-signUp(marker, body: ISignUpData, langCode?): ISignUpEntity
+signUp(marker, body: ISignUpData, langCode?): ISignUpEntity   // formData: FormDataType | FormDataType[] — since v1.0.175
 generateCode(marker, userIdentifier, eventIdentifier): void
 checkCode(marker, userIdentifier, eventIdentifier, code): boolean
 activateUser(marker, userIdentifier, code): boolean
@@ -122,6 +122,8 @@ getActiveSessionsByMarker(marker): IActiveSession[]
 oauth(marker, body: IOauthData, langCode?): IAuthEntity   // session tokens ({ accessToken, refreshToken, userIdentifier }), NOT user object
 ```
 
+> v1.0.175: `formData` of `signUp` and `Users.updateUser` is `FormDataType | FormDataType[]`: a field value shaped by its type (a date `{ fullDate, formattedValue, formatString }`, a text `{ htmlValue }`, a list, a file), not only a string. Before 1.0.175 the type was `IAuthFormData` with `value: string`, and such fields did not compile without a cast. Pass a file as the descriptor `FileUploading.upload` returns — these methods do not upload a `File`/`Blob` themselves.
+>
 > v1.0.157: in `ISignUpEntity` (response from `signUp`) `attributeSetId` and `attributesSets` have been declared — the API returned them, but with `validation.enabled` they were cut from the response.
 
 ## Blocks
@@ -342,7 +344,7 @@ getProductBlockById(id): IProductBlock[]
 searchProduct(name, langCode?): IProductsEntity[] | IProductSearchResult[]   // ⚠️ form depends on traficLimit
 getProductsByVectorSearch(body: IVectorSearchProducts, langCode?, offset?, limit?): IVectorSearchResponse<IProductsResponse>  // semantic (vector) search
 getProductsCount(body?): IProductsCount
-getProductsCountByPageId(id: string, body?): IProductsCount   // ⚠️ id — string, unlike getProductsByPageId(id: number)
+getProductsCountByPageId(id: number | string, body?): IProductsCount   // takes a number too since v1.0.174, like getProductsByPageId; before 1.0.174 — a string only
 getProductsCountByPageUrl(url, body?): IProductsCount
 ```
 
@@ -448,7 +450,7 @@ Three things that bite:
 
 ```ts
 getUser(langCode?): IUserEntity
-updateUser(body: IUserBody, langCode?): boolean
+updateUser(body: IUserBody, langCode?): boolean   // formData: FormDataType | FormDataType[] — since v1.0.175
 archiveUser(): boolean
 deleteUser(): boolean
 addFCMToken(token): boolean
@@ -468,6 +470,8 @@ addWishlistItem(body: IWishlistAddItem): IWishlistResponse  // { productId }
 removeWishlistItem(productId): IWishlistResponse
 ```
 
+> `IUserEntity.total` (optional and `@deprecated` since v1.0.175) is a service counter of the platform, always `"1"` for a single user; it says nothing about the user — do not use it.
+>
 > Cart/Wishlist are stored on the OneEntry server and synchronized between devices/sessions. For anonymous visitors, a guest id is needed (see `.claude/rules/sdk-init.md`). Skills: `/create-cart-manager`, `/create-favorites`.
 
 ## WebSocket ⚠️ require authorization

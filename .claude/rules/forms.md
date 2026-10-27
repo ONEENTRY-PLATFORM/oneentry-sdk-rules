@@ -331,7 +331,7 @@ await getApi().FormData.postFormsData({
   formIdentifier: 'contact_us',           // form marker (from form.identifier)
   formModuleConfigId: 2,                  // from form.moduleFormConfigs[0].id
   moduleEntityIdentifier: 'blog',         // from form.moduleFormConfigs[0].entityIdentifiers[0].id
-  replayTo: null,                         // email for reply or null
+  replayTo: null,                         // id of the parent record (a reply in the tree) or null; not an email
   status: '',                             // data-form: '' (verified with working projects)
   formData: [...]                         // form field data
 })

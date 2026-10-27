@@ -177,7 +177,7 @@ export async function submitComment(
     formIdentifier: formMarker,
     formModuleConfigId,
     moduleEntityIdentifier: String(productId),
-    replayTo: String(parentReviewId),  // ID of the parent review
+    replayTo: parentReviewId,  // ID of the parent review — a number (typed number | null since oneentry 1.0.174)
     status: 'approved',
     formData: [{ marker: commentMarker, type: 'string', value: text }],
   });
@@ -339,7 +339,7 @@ It is cheapest to check all this with a trial: send one record with a script (SD
 1. formMarker and formModuleConfigId — from /inspect-api forms or Forms.getAllForms(), DO NOT guess
 2. isNested: 1 — mandatory for parent-child structure (reviews + replies)
 3. entityIdentifier in body — filter by product
-4. replayTo: null → review, replayTo: String(id) → reply
+4. replayTo: null → review, replayTo: id (a number) → reply; the platform stores it as parentId. An email string answers 500
    ⚠️ Typo in SDK: the field is called replayTo, not replyTo
 5. rating inside the review (FormData) is stored as a string ('5') — convert using Number()
 6. parentId === null → review, parentId !== null → reply
