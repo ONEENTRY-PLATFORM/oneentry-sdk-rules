@@ -362,9 +362,34 @@ Each element of formData: `{ marker, type, value }`. `type` is taken from `attri
 { marker: 'price', type: 'float', value: 2.256 }
 ```
 
-> **Sending vs Reading (v1.0.157).** You can send a number as a string — the body type has been expanded to `string | number | null` (`IBodyTypeStringNumberFloat.value`). However, **when reading** the response (`getFormsDataByMarker`, fields of the sent form), the number always comes as `number` — numerical normalization now applies to both form attributes and form-data fields that were previously skipped. An unfilled numeric field is `null`, not `0` and not `''`: reconsider comparisons like `value === '5'` and `if (!value)`.
+> **Sending vs reading.** A number may be sent as a number or as a string (`IBodyTypeStringNumberFloat.value: string | number | null`). **When reading** records (`getFormsDataByMarker`, the `postFormsData` response), a numeric field comes back **as a string**: send `3` — get `"3"`, `2.565` → `"2.565"`. Use `Number(value)` before arithmetic and comparisons. An empty field is `null`.
 >
-> File fields in form-data follow the same rule as entity attributes: one file → object, multiple → array (`IBodyTypeFile.value: IFileValue | IFileValue[]`).
+> File fields (`file`, `image`, `groupOfImages`) in a read record are **always an array**, even with one file: `value[0].downloadLink`.
+
+### Reading a record — what `value` comes back per field type
+
+Checked on the js-sdk-tests stand on 2026-10-29 (`FormDataType` describes this since SDK 1.0.176). Submit and read shapes differ:
+
+| type | value when reading |
+|---|---|
+| `string` | `"Ivan"` |
+| `integer`, `float` | a string: `"1"`, `"2.565"` |
+| `date`, `dateTime`, `time` | `{ fullDate, formattedValue, formatString }` |
+| `text` | `[{ htmlValue, params: { isImageCompressed, editorMode } }]` — an array, **no `plainValue`** |
+| `textWithHeader` | `[{ header, htmlValue, params }]` — an array, no `plainValue` |
+| `list` | an array of stored values: `["1"]` — not `{ title, value }`; look the caption up in the form attribute's `listTitles` |
+| `radioButton` | one string: `"1"` |
+| `entity` | an array of ids: `[2954, 2957]` |
+| `timeInterval` | `[[start, end], …]` — ISO strings |
+| `file`, `image`, `groupOfImages` | an array of `{ filename, downloadLink, size }` |
+
+```ts
+// ❌ by the old types: value.plainValue, value[0].title, value.downloadLink
+// ✅
+const text = Array.isArray(f.value) ? f.value[0]?.htmlValue : f.value?.htmlValue
+const rating = Number(f.value)
+const file = f.value[0]?.downloadLink
+```
 
 ### date, dateTime, time
 
@@ -566,7 +591,7 @@ const up = await getApi().FileUploading.upload(selectedFile, {
 // — the SDK only uploads File and Blob, everything else is sent as it came.
 ```
 
-> **Reading a saved file field (v1.0.157):** in the response, a single file comes as **an object**, not an array of one element; an array remains when two or more. The body type has been expanded: `IBodyTypeFile.value: IFileValue | IFileValue[]`. You can still send it as an array. Read resiliently: `const files = v ? [v].flat() : []`.
+> **Reading a saved file field:** in a form-data record a file comes back **as an array, even a single one** (`[{ filename, downloadLink, size }]`, checked on js-sdk-tests on 2026-10-29). The "one file — an object" rule (v1.0.157) applies to entity attributes, not to form records. Send it as an array too. Read resiliently: `const files = v ? [v].flat() : []`.
 
 ---
 
@@ -639,5 +664,7 @@ export async function submitContactForm(formValues: Record<string, any>) {
 ```
 
 `result.formData.id` — id of the created record.
+
+> Before v1.0.176, `postFormsData(body, langCode)` with a language other than the client's returned `result.formData.formData` as an object `{ "ru_RU": [ … ] }`. Since 1.0.176 it is an array, as when sending in the client's language.
 
 > ⚠️ `fingerprint` — now `string | null`. For anonymous submissions and submissions by app-token (without user session) it comes as `null`. Do not rely on its presence — check for `null` before use.

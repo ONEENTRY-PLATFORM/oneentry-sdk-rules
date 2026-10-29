@@ -246,11 +246,15 @@ Update/delete methods require user authorization (call after `reDefine(refreshTo
 
 **Filter `getFormsDataByMarker` is typed (v1.0.163)** — `IFormsDataFilter` = `{ entityIdentifier?, parentId?, userIdentifier?, status?: FormDataStatus[], dateFrom?, dateTo? }`; previously it was just `object`, and no one caught the typo. Three traps:
 
-- **The API silently ignores unknown fields.** `statuses: ['approved']` instead of `status` will return **all** records, including unmoderated ones — the code looks correct. The field `entityparentIdentifier` does not exist: responses for records are selected through `parentId`.
+- **An unknown filter field answers `400`.** `statuses: ['approved']` instead of `status` → `400 property statuses should not exist` (the `IFormsDataFilter` type catches the typo at compile time). The field `entityparentIdentifier` does not exist: replies to a record are selected through `parentId`.
+- **A non-existent marker or someone else's `formModuleConfigId` → `200 { items: [], total: 0 }`**, not `404`: an empty list does not prove the form exists. `limit` from `1`, `offset` from `0`, otherwise `400`; `dateFrom`/`dateTo` — `YYYY-MM-DD` or `YYYY-MM-DD HH:MM:SS`. With `offset` past the end of the list `total` comes back `0` (platform bug CMS-1147) — count pages from the first page.
+- **`formData` values on read are not the submit shapes** (numbers as strings, `text` — an array without `plainValue`, `list` — `["1"]`, files — an array). The per-type table is in `forms.md`, "Reading a record". The types describe this since v1.0.176.
 - **`status` — only an array** and only from the set `sent | moderation | approved | banned | deleted` (type `FormDataStatus`). A string instead of an array or another value → `400 each value in status must be a valid enum value`.
 - **`formData` comes wrapped in language.** The raw response from the API — `formData: { "en_US": [ … ] }`; the SDK unwraps it and returns an array under the requested `langCode`. Code written based on the response from curl or the admin panel reads `formData[langCode]`, gets `undefined`, and renders an empty list without errors.
 
 > `IBodyTypeImageGroupOfImages.type` until v1.0.163 contained a typo `'groupOfImage'` — a value that the API rejects (`400 formData's marker '…' type must be one of […]`), and the editor auto-completed it. The correct value is `'groupOfImages'`. The form of the attached file is `IImageValue` / `IFileValue`, and this is **not** what `FileUploading.upload` returns (there is `contentType`, which form-data rejects).
+
+> **Markers are encoded in the path (v1.0.176).** Before 1.0.176 a marker went into the URL as is: `getFormsDataByMarker('..', id)` ended up at `POST /api/content/form-data/` (record creation), and `#` or `?` in a marker cut off or replaced the query. Now every `${marker}` goes through `_pathSegment` — an invalid marker gets `400 marker must match …`. Still validate a marker taken from the URL or user input (`/^[A-Za-z][A-Za-z0-9_-]*$/`) before the call; page/product URLs (`getPageByUrl` etc.) are not encoded — `/` is allowed there.
 
 ## Locales
 

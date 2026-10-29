@@ -73,7 +73,8 @@ await getApi().FormData.getFormsDataByMarker('review', 12, {
 });
 ```
 
-- **API silently ignores unknown fields:** `statuses` instead of `status` will return all records, including unmoderated ones — the filter "works," but moderation is not applied.
+- **An unknown filter field → `400 property statuses should not exist`** (`statuses` instead of `status`) — the `IFormsDataFilter` type already catches the typo.
+- **Field values on read:** an `integer` rating comes back as a string (`"3"` → `Number(value)`), `text` — an array `[{ htmlValue }]` without `plainValue`, files — an array. The table is in `forms.md`, "Reading a record".
 - `status` is an array of `sent | moderation | approved | banned | deleted` (`FormDataStatus`); a string or other value → `400 each value in status must be a valid enum value`.
 - The field `entityparentIdentifier` does not exist: for responses to a record — `parentId`.
 
