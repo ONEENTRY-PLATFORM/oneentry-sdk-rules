@@ -77,6 +77,8 @@ const extra = getAdditionalFields(product.attributeValues.price) // Record<marke
 
 **`IFormAttribute.multiselect` declared (v1.0.164).** For a form field of type `list`, the flag determines how to render it: `true` — multiple options from `listTitles` (checkboxes), `false` — one (radio buttons). The data was coming earlier, but due to the index signature `[key: string]: unknown`, the field was read as `unknown`, so it was often overlooked. The same flag exists in `IAttributeSchemaItem` (v1.0.162).
 
+**Other type clarifications (v1.0.179).** No breaking behavior, but declarations were extended — rely on them without casts: `position` on a product, a block and a page became optional (`number → number?`) — read `entity.position ?? 0`; `IContentFilterItem` (`Filters`) gained `isVisible?: boolean`; the order declares `total?: string` (the string total on read endpoints, alongside `totalSum`); `ITemplatesPreviewEntity.width`/`height` narrowed to `number | null` (was `string | number | null`), and `getTemplatePreviews` made `langCode` optional; `IUserBody.formIdentifier` (body of `Users.updateUser`) is optional; a collection row's `formIdentifier` is returned only in the update response, not in the create response.
+
 **Device metadata (v1.0.155).** Each module has `setDeviceMetadata(value)` and `getDeviceMetadata()` — override the header `x-device-metadata` (the API binds refresh tokens to it); there is also the option `config.deviceMetadata`. Needed for server-side OAuth code exchange — see `.claude/rules/sdk-init.md` (section "Device metadata") and `/create-google-oauth`.
 
 ## Admins
@@ -114,7 +116,7 @@ signUp(marker, body: ISignUpData, langCode?): ISignUpEntity   // formData: FormD
 generateCode(marker, userIdentifier, eventIdentifier): void
 checkCode(marker, userIdentifier, eventIdentifier, code): boolean
 activateUser(marker, userIdentifier, code): boolean
-auth(marker, body: IAuthPostBody): IAuthEntity
+auth(marker, body: IAuthPostBody): IAuthEntity   // body.code? — since v1.0.179: one-time code for code-based login
 refresh(marker, token): IAuthEntity
 logout(marker, token): boolean
 logoutAll(marker): boolean
@@ -127,6 +129,8 @@ oauth(marker, body: IOauthData, langCode?): IAuthEntity   // session tokens ({ a
 
 > ⚠️ **Before v1.0.177, signing in with an open session counted a wrong password twice:** the API answers `401` both to a wrong password and to an expired token — the SDK renewed the open session and retried `auth` with the same password. Since 1.0.177 `auth`/`signUp`/`oauth` go without the current session and without a refresh. A failed `logout`/`logoutAll` before 1.0.177 wiped the tokens of a live session (the error object is "truthy") — check the result strictly with `=== true`. `oauth` since 1.0.177 saves the tokens to state. `authData` values must be strings only (a number → `400`).
 >
+> v1.0.179: the `auth` body accepts `code?: string` — a one-time code for providers with code-based login; the response declares `isConfirmed?: boolean` (whether the user is confirmed).
+>
 > v1.0.175: `formData` of `signUp` and `Users.updateUser` is `FormDataType | FormDataType[]`: a field value shaped by its type (a date `{ fullDate, formattedValue, formatString }`, a text `{ htmlValue }`, a list, a file), not only a string. Before 1.0.175 the type was `IAuthFormData` with `value: string`, and such fields did not compile without a cast. Pass a file as the descriptor `FileUploading.upload` returns — these methods do not upload a `File`/`Blob` themselves.
 >
 > v1.0.157: in `ISignUpEntity` (response from `signUp`) `attributeSetId` and `attributesSets` have been declared — the API returned them, but with `validation.enabled` they were cut from the response.
@@ -134,7 +138,7 @@ oauth(marker, body: IOauthData, langCode?): IAuthEntity   // session tokens ({ a
 ## Blocks
 
 ```ts
-getBlocks(type?: BlockType, langCode?, offset?, limit?): IBlocksResponse
+getBlocks(type?: BlockType, langCode?, offset?, limit?, markers?: string[]): IBlocksResponse   // markers? — since v1.0.179: restrict the result to a list of block markers
 getBlockByMarker(marker, langCode?, offset?, limit?): IBlockEntity
 searchBlock(name, langCode?): ISearchBlock[]
 
@@ -173,6 +177,7 @@ getDiscountsByVectorSearch(body: IDiscountsVectorSearch, langCode?, offset?, lim
 
 - `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate a discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
 - Bonuses: `getBonusBalance` / `getBonusHistory` require user authorization. `IBonusTransactionType` = `'ACCRUAL' | 'USAGE' | 'REDUCE' | 'REVERSAL_ACCRUAL' | 'REVERSAL_USAGE' | 'EXPIRATION'`. Dates `dateFrom`/`dateTo` must be full ISO only (`2026-01-01T00:00:00.000Z`); a bare date → `400`.
+- **Bonus amounts are decimal strings since v1.0.179.** `amount` is declared `string` (`"100.00"`), `remainingAmount` is `string | null`. Cast to a number (`Number`/`parseFloat`) before arithmetic and comparisons.
 - Coupon code: case does not matter, but **surrounding spaces are not trimmed** (`" CODE "` → `Coupon not found`) — do `trim()` before the call; an empty code → IError `400 Coupon code is required`, not `{ valid: false }`. `validate` answers `valid: true` even for a discount with an expired `endDate` — check the term by the discount's own `startDate`/`endDate`.
 - Before v1.0.177 `getAllDiscounts`/`getDiscountByMarker` unwrapped the response by the client's language, not by the call's `langCode`.
 - ⚠️ **`getBonusHistory` returns the container `{ items, total }`, not an array (corrected in the types in v1.0.168).** Until then the method was declared as `IBonusTransactionEntity[]`, and code written from the type read `.length` off an object and got `undefined`. An account with no transactions gives `{"items":[],"total":0}`.
@@ -182,7 +187,7 @@ getDiscountsByVectorSearch(body: IDiscountsVectorSearch, langCode?, offset?, lim
 ```ts
 // Subscriptions to products (availability / price)
 getAllSubscriptions(offset?, limit?): ISubscriptions
-subscribeByMarker(marker, productId, langCode?): boolean | IError
+subscribeByMarker(marker, productId, langCode?, threshold?): boolean | IError   // threshold? — since v1.0.179: price threshold that triggers the notification when crossed (minimum 0)
 unsubscribeByMarker(marker, productId, langCode?): boolean | IError
 
 // Subscriptions to form events
@@ -211,10 +216,10 @@ getAllEvents(): IContentApiEvent[]                               // requires use
 upload(file: File | Blob, fileQuery: IUploadingQuery): IUploadingReturn[]   // fileQuery is required — since v1.0.173
 delete(filename, fileQuery: IUploadingQuery): boolean   // true on success — since v1.0.172; before that {} arrived (empty 200 body)
 createFileFromUrl(url, filename, mimeType?): Promise<File>   // since v1.0.177 throws Error on non-2xx (previously a 404 page became a "file")
-getFile(id, type, entity, filename, template?): Response   // raw fetch Response, including on error — check response.ok; template is ignored by GET
+getFile(id, type, entity, filename, template?, preview?): Response   // raw fetch Response, including on error — check response.ok; template is ignored by GET; preview? — since v1.0.179: return the stored preview of the file instead of the file itself
 
 // Public search inside the content of files attached to records (v1.0.167)
-searchFileContent(query, langCode?, extensions?, ownerTables?, localeCodes?, onlyTruncated?, offset?, limit?): IFileSearchResponse
+searchFileContent(query, langCode?, extensions?, ownerTables?, localeCodes?, onlyTruncated?, offset?, limit?, correct?): IFileSearchResponse   // correct? — since v1.0.179: typo-correct the query (default true); the response echoes back the query field
 ```
 
 > ⚠️ **`fileQuery` of `upload` and `delete` is required, and `type`, `entity`, `id` are required inside it (v1.0.173).** Without any of the three the endpoint answers `400 type should not be empty; entity should not be empty; id should not be empty`, and `delete` without `type` does not remove the file. Before 1.0.173 the types declared all of this optional — the call compiled but could never succeed; now it is a compile error. Pass it in full: `upload(file, { type: 'page', entity: 'editor', id: 4965 })` and the same `fileQuery` in `delete`. `width`, `height`, `compress`, `template` stay optional. A file field in `postFormsData` is not affected: there `fileQuery` can still be omitted.
@@ -240,20 +245,22 @@ getAllForms(langCode?, offset?, limit?): IFormsResponse   // paginated: { total,
 getFormByMarker(marker, langCode?): IFormsEntity
 ```
 
-> `IFormsEntity.type` narrowed to `'order' | 'sign_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`.
+> `IFormsEntity.type` narrowed to `'order' | 'sign_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`. Since v1.0.179 `IFormsEntity` declares `formId?: number` and `moduleId?: number`.
 
 ## FormData
 
 ```ts
 postFormsData(body: IBodyPostFormData, langCode?): IPostFormResponse
-getFormsDataByMarker(marker, formModuleConfigId, body?: IFormsDataFilter, isExtended?, langCode?, offset?, limit?): IFormsByMarkerDataEntity
-updateFormsDataByid(id, body?): IUpdateFormsData          // ⚠️ user
+getFormsDataByMarker(marker, formModuleConfigId, body?: IFormsDataFilter, isExtended?, langCode?, offset?, limit?, isNested?): IFormsByMarkerDataEntity   // isNested? — since v1.0.179: replies nested under their parent instead of a flat list
+updateFormsDataByid(id, body: IBodyPostFormData, langCode?): IUpdateFormsData   // ⚠️ user; since v1.0.179 body is required and typed like postFormsData (+langCode)
 updateFormsDataStatusByid(id, body?): boolean             // ⚠️ user
 deleteFormsDataByid(id): boolean                          // ⚠️ user
 getFormsDataByVectorSearch(body: IFormsDataVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IFormsDataSearchResponse>  // semantic search
 ```
 
 Update/delete methods require user authorization (call after `reDefine(refreshToken)`); `postFormsData` and `getFormsDataByMarker` work with app-token.
+
+> ⚠️ **`updateFormsDataByid` since v1.0.179: `body` is required and typed `IBodyPostFormData`** (was `body?: object`). A `langCode?` was added, and the SDK now wraps the flat `formData` array under the language itself, exactly like `postFormsData`. Pass a body of the same shape as `postFormsData`; the old call with an arbitrary `object` or no body will no longer compile.
 
 > `IPostFormResponseData.fingerprint` is now `string | null` (for anonymous / app-token submissions it comes as `null`).
 
@@ -281,6 +288,8 @@ getLocales(): ILocalEntity[]
 getMenusByMarker(marker, langCode?): IMenusEntity
 ```
 
+> Since v1.0.179 menu items declare `isVisible: boolean` — whether to show the item; honor it when rendering.
+
 ## Orders ⚠️ require authorization
 
 ```ts
@@ -289,7 +298,7 @@ getAllOrdersByMarker(marker, langCode?, offset?, limit?): IOrdersByMarkerEntity
 getOrdersStorageByMarker(marker, langCode?): IOrdersEntity
 getOrderByMarkerAndId(marker, id, langCode?): IOrderByMarkerEntity
 getOrderById(id, langCode?): IOrderByMarkerEntity               // v1.0.167 — same order, no storage marker needed
-previewOrder(body: ICreateOrderPreview, langCode?): IOrderPreviewResponse
+previewOrder(body: ICreateOrderPreview, langCode?): IOrderPreviewResponse   // since v1.0.179 no auth required — a guest can preview too (only products are needed)
 createOrder(marker, body: IOrderData, langCode?): IBaseOrdersEntity
 updateOrderByMarkerAndId(marker, id, body: IOrderData, langCode?): IBaseOrdersEntity
 getAllStatusesByStorageMarker(marker, langCode?, offset?, limit?): IOrderStatus[]
@@ -316,11 +325,11 @@ getPageById(id, langCode?): IPagesEntity
 getPageByUrl(url, langCode?): IPagesEntity
 getChildPagesByParentUrl(url, langCode?): IPagesEntity[]
 getBlocksByPageUrl(url, langCode?): IPositionBlock[]
-searchPage(name, url?, langCode?): IPagesEntity[] | IPageSearchResult[]   // ⚠️ form depends on traficLimit; langCode works since v1.0.172
+searchPage(name, url?, langCode?, correct?): IPagesEntity[] | IPageSearchResult[]   // ⚠️ form depends on traficLimit; langCode works since v1.0.172; correct? — since v1.0.179: typo correction (default true)
 getPagesByVectorSearch(body: IPagesVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IPagesResponse>   // semantic search, { items, total }
 ```
 
-> `IPagesEntity.type` is now typed as `PageType` = `'catalog_page' | 'common_page' | 'error_page' | 'external_page'` (a subset of `BlockType`). `categoryPath` has become `string | null` (for nested pages it comes as `null`).
+> `IPagesEntity.type` is now typed as `PageType` = `'catalog_page' | 'common_page' | 'error_page' | 'external_page'` (a subset of `BlockType`). `categoryPath` has become `string | null` (for nested pages it comes as `null`). Since v1.0.179 the field `nestedBlocks?: IBlockEntity[] | string[]` is declared — the page's nested blocks (as objects or as markers).
 >
 > `searchPage` with `traficLimit: true` returns short cards `IPageSearchResult` (`{ id, title }`) — see the Products section, there is also a type narrowing pattern. Since v1.0.157, this mode has skipped the useless pass for templates (short cards do not have `templateIdentifier`).
 >
@@ -340,7 +349,7 @@ getPagesByVectorSearch(body: IPagesVectorSearch, langCode?, offset?, limit?): IV
 getSessions(offset?, limit?): ISessionsEntity
 getSessionById(id): ISessionEntity
 getSessionByOrderId(id): ISessionEntity[]   // always an array, [] for an order with no sessions — since v1.0.177 so in the type too
-createSession(orderId, type: 'session'|'intent', automaticTaxEnabled?): ISessionEntity   // paymentUrl for redirect (+ clientSecret when 'intent')
+createSession(orderId, type: 'session'|'intent', automaticTaxEnabled?, nextStages?): ISessionEntity   // paymentUrl for redirect (+ clientSecret when 'intent'); nextStages?: Record<string, string[]> — since v1.0.179: stage-by-stage (partial) payment, a map "stage number → markers of the attributes that price it"
 getAccounts(langCode?): IAccountsEntity[]   // langCode — since v1.0.177
 getAccountById(id, langCode?): IAccountsEntity
 
@@ -352,7 +361,7 @@ getPaymentStagesByOrderId(id): IPaymentProgress
 >
 > The platform since 2026-10-29 (CMS-1091/1092): `getSessions` and `getSessionByOrderId` return only the signed-in user's sessions (someone else's order's sessions — `[]`), and `getAccounts` does not return the Stripe webhook secret (`signingSecretKey` removed from the type in v1.0.177). A subscription session has no order: `orderId: null` (type `number | null` since v1.0.177). On older platform builds, do not output or log `getSessions`/`getAccounts` responses to the client.
 >
-> **`getPaymentStagesByOrderId` (v1.0.167)** — an order can be paid in parts rather than in one payment. `partial` says which case it is, `completed` says whether anything is left to pay, and each entry of `stages` carries `marker`, `sessionId`, `productId`, `title`, `value` and a `status` of `'planned' | 'completed'`.
+> **`getPaymentStagesByOrderId` (v1.0.167)** — an order can be paid in parts rather than in one payment. `partial` says which case it is, `completed` says whether anything is left to pay, and each entry of `stages` carries `marker`, `sessionId` (`number | null` since v1.0.179 — an unpaid stage has no session yet), `productId`, `title`, `value` and a `status` of `'planned' | 'completed'`.
 
 ## Products
 
@@ -366,18 +375,19 @@ getProductsPriceByPageUrl(url, langCode?, userQuery?: IProductsPriceQuery): IPro
 getProductsByPageUrl(url, body?, langCode?, userQuery?): IProductsResponse
 getRelatedProductsById(id, langCode?, userQuery?: IProductsRelatedQuery): IProductsResponse
 getProductsByIds(ids: string, langCode?, userQuery?: IProductsByIdsQuery): IProductsEntity[]   // userQuery — ONLY { signPrice? }
-getProductById(id, langCode?, isNormalized?): IProductsEntity   // isNormalized — deprecated, the API does not read it
+getProductById(id, langCode?, isNormalized?, signPrice?): IProductsEntity   // isNormalized — deprecated, the API does not read it; signPrice? — since v1.0.179: fix the price under an orders-storage marker, the product comes with signedPrice
 getProductBlockById(id, langCode?): IProductBlock[]   // langCode — since v1.0.177; before it, blocks in a second language stayed {en_US:{…}}
-searchProduct(name, langCode?): IProductsEntity[] | IProductSearchResult[]   // ⚠️ form depends on traficLimit
+searchProduct(name, langCode?, url?, correct?): IProductsEntity[] | IProductSearchResult[]   // ⚠️ form depends on traficLimit; url? — search within a category, correct? — typo correction (default true), both since v1.0.179
 getProductsByVectorSearch(body: IVectorSearchProducts, langCode?, offset?, limit?): IVectorSearchResponse<IProductsResponse>  // semantic (vector) search
-getProductsCount(body?): IProductsCount
-getProductsCountByPageId(id: number | string, body?): IProductsCount   // takes a number too since v1.0.174, like getProductsByPageId; before 1.0.174 — a string only
-getProductsCountByPageUrl(url, body?): IProductsCount   // counts do NOT depend on language: in a language with an empty catalog they still count all products (CMS-1201)
+getProductsCount(body?, langCode?): IProductsCount   // langCode — since v1.0.179
+getProductsCountByPageId(id: number | string, body?, langCode?): IProductsCount   // takes a number too since v1.0.174, like getProductsByPageId; langCode — since v1.0.179
+getProductsCountByPageUrl(url, body?, langCode?): IProductsCount   // langCode — since v1.0.179
 ```
 
 - Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price'|'status', signPrice? }` (`'status'` — since v1.0.172) — for `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. For `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`, `relationMode?: 'global' | 'local'` — since v1.0.172: `'global'` (default) — the usual chain of the relation template's conditions, `'local'` — product `id` itself must satisfy the template condition); for `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); for `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting this endpoint no longer accepts, extra fields — TS error). `IProductsQuery` — deprecated alias `IProductsQueryBase`, do not use in new code.
 - **`additional.prices` is the price range of the whole catalog**, the same for every product and independent of the filter (`{min:51, max:180}` for products priced 51 and 150). Good for the bounds of a price slider, not for a specific product's "price from–to".
 - **No language fallback:** a product without a translation for `langCode` — `getProductById` → `404 Product not found`, and it is absent from lists. `limit` is an integer from `1` (`0`/`1.5` → `400`); `signPrice` with a non-existent storage crashes the whole request with `404`. In `getProductsByIds` unknown ids are dropped, duplicates are collapsed, a non-numeric id → `400`.
+- **Counts depend on language since v1.0.179.** `getProductsCount` / `...ByPageId` / `...ByPageUrl` gained `langCode?` (defaults to the language from `defineOneEntry`) and now count the products visible in that language. `langCode` must be one of the project's active languages — an inactive one answers `400 langCode must be one of the active languages`. Before 1.0.179 the counts ignored language and in a language with an empty catalog still counted all products (the former CMS-1201 behavior).
 - **An unknown key in `IFilterParams` is silently ignored by the API** (a typo returns the whole catalog, platform bug CMS-1158) — take filter keys only from the type. In `searchProduct` the characters `_` and `%` work as wildcards (`_` finds everything, CMS-1157) — escape or strip them from user input.
 - `getProductsByVectorSearch` — `body: IVectorSearchProducts = { queryText, vectorDistanceThreshold?, maxHits?, debug? }`. Semantic search by the meaning of the request (not by substring, like `searchProduct`).
 - `getProductsEmptyPage` — **POST**, returns `IProductsResponse` (`{ items, total }`), like `getProducts`. Before v1.0.172 the method was declared as `IAggregatedProductGroup[]`, but the API and the SDK always returned `{ items, total }` — code written from the old type (`result.map`, `result[0]`) compiled and failed at run time. `IAggregatedProductGroup` is kept deprecated — no method returns it.
@@ -404,7 +414,7 @@ validateMarker(marker): boolean
 ## Search
 
 ```ts
-globalSearch(query, types?: TGlobalSearchEntityType[], visibility?: 'all' | 'visible' | 'hidden', offset?, limit?, langCode?): IGlobalSearchResponse
+globalSearch(query, types?: TGlobalSearchEntityType[], visibility?: 'all' | 'visible' | 'hidden', offset?, limit?, langCode?, limitPerType?): IGlobalSearchResponse   // limitPerType? — since v1.0.179: dropdown mode, max items per type (default 5, max 20; independent from offset/limit)
 ```
 
 Public cross-entity search (`GET /api/content/search`, app-token) — the only method that, in one request, goes **both by names and by attribute values** across 18 types of entities (`products`, `pages`, `blocks`, `slides`, `templates`, `discounts`, `user_groups`, `users`, `admins`, `menus`, `forms`, `attributes_sets`, `attributes`, `orders`, `workflows`, `events`, `subscriptions`, `collections`). The basis for "one search string for the entire site"; for searching only products, use `Products.searchProduct` (see `/create-search`).
@@ -441,6 +451,8 @@ recoverSubscriptions(body: ICancelSubscription): boolean | IError  // recovery t
 ```
 
 > Module errors come without `pageData` (CMS-1178; in the SDK `IError.pageData` is optional since 1.0.177), and an invalid `marker` (empty, not a string) gives `404 not found`, not `400` — check the marker yourself. `recoverSubscriptions` returns `true`: the link to the Stripe Billing Portal, if the API returns it, the SDK does not pass on (CMS-1112).
+>
+> A subscription's `paymentUrl` is `string | null` since v1.0.179: a fresh session has no link yet. Check `if (res.paymentUrl)` before redirecting.
 
 Paid subscriptions. `subscribe` returns `paymentUrl` for redirect to payment (like `createSession` for orders). Skills: `/create-subscription`.
 
