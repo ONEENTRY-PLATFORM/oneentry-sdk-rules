@@ -103,6 +103,9 @@ getAttributeSetByMarker(marker, langCode?): IAttributeSetsEntity    // SET objec
 
 - Do not confuse the two types: **`IAttributesSetsEntity`** — a separate attribute (`{ marker, type, value, position, listTitles, validators, localizeInfos, additionalFields }`); **`IAttributeSetsEntity`** — a set object (`{ id, identifier, title, schema, isVisible, type: { id, type }, position }`). Since v1.0.155, the set has removed the fields `typeId` and `properties` — read the type of the set from `type.id` / `type.type`.
 - `getAttributesByMarker` returns an array of **attributes** (`IAttributesSetsEntity[]`, without `id`/`identifier`/`schema`), not sets. Since v1.0.158 this has been reflected in the types; until 1.0.157 inclusive, d.ts declared `IAttributeSetsEntity[]` — do not trust the declared type here on the old SDK.
+- **v1.0.177:** `IAttributesSets` declares all 4 methods; `IAttributeSchemaItem` declares the form flags (`isLogin`, `isSignUp`, `isPassword`, `isNotification*`) and `isProductPreview` / `previewTemplateId`; `additionalFields` is `Record<string, { type, value }>`, not nested attributes; the attribute's `multiselect` is declared and is not cut by validation.
+- **A set's `position` is its number in the current output**, not a property of the set: it changes with `sortBy`/`typeId`, and by marker it is always `1` (CMS-1169). `sortBy: 'id'` sorts in descending order. `offset` of `getAttributes` works (CMS-1097 shipped 2026-10-29; on older platform builds `offset` was ignored — there fetch everything with a single `limit`).
+- **⚠️ Language without translation:** `getAttributeSetByMarker` and `getAttributes` do not apply `langCode` — in a language without translation the SDK returns raw maps (`listTitles: { en_US: [...] }`, CMS-1167), while `getAttributesByMarker` returns `listTitles: []` (CMS-1168). For forms in a second language check `Array.isArray(attr.listTitles)` and, if necessary, read the set in the default language.
 
 ## AuthProvider
 
@@ -122,6 +125,8 @@ getActiveSessionsByMarker(marker): IActiveSession[]
 oauth(marker, body: IOauthData, langCode?): IAuthEntity   // session tokens ({ accessToken, refreshToken, userIdentifier }), NOT user object
 ```
 
+> ⚠️ **Before v1.0.177, signing in with an open session counted a wrong password twice:** the API answers `401` both to a wrong password and to an expired token — the SDK renewed the open session and retried `auth` with the same password. Since 1.0.177 `auth`/`signUp`/`oauth` go without the current session and without a refresh. A failed `logout`/`logoutAll` before 1.0.177 wiped the tokens of a live session (the error object is "truthy") — check the result strictly with `=== true`. `oauth` since 1.0.177 saves the tokens to state. `authData` values must be strings only (a number → `400`).
+>
 > v1.0.175: `formData` of `signUp` and `Users.updateUser` is `FormDataType | FormDataType[]`: a field value shaped by its type (a date `{ fullDate, formattedValue, formatString }`, a text `{ htmlValue }`, a list, a file), not only a string. Before 1.0.175 the type was `IAuthFormData` with `value: string`, and such fields did not compile without a cast. Pass a file as the descriptor `FileUploading.upload` returns — these methods do not upload a `File`/`Blob` themselves.
 >
 > v1.0.157: in `ISignUpEntity` (response from `signUp`) `attributeSetId` and `attributesSets` have been declared — the API returned them, but with `validation.enabled` they were cut from the response.
@@ -153,7 +158,7 @@ getSlides(marker): IBlockSlidesResponse
 
 - `...ByProductIds` — versions by explicit list: `body: IBlockProductsLookup = { productIds: number[], langCode?, limit?, signPrice? }`. Versions without `ByProductIds` take the cart/wishlist **from context** (authorized user or guest by `x-guest-id`).
 - `BlockType` has been supplemented with values: `'frequently_ordered_block'`, `'trending_block'`, `'recently_viewed_block'`, `'repeat_purchase_block'`, `'slider_block'`, `'personal_recommendations_block'`, `'cart_complement_block'`, `'cart_similar_block'`, `'wishlist_similar_block'`. Take the block marker in the OneEntry admin → Blocks.
-- **`BlockType` without `'none'` (v1.0.172).** The platform has no such type (`GeneralTypes.getAllTypes()` does not return it), and a filter by it answered `400 type must be a valid enum value` — now it is a compile error. `'service'` stays: that is the platform's own name for the type. But the `type` filter of `getBlocks` and `Templates.getTemplateByType` currently answers `'service'` with the same `400` (platform defect, CMS-1073) — blocks/templates of this type cannot be fetched by the filter; fetch all and pick by `type` on the client.
+- **`BlockType` without `'none'` (v1.0.172).** The platform has no such type (`GeneralTypes.getAllTypes()` does not return it), and a filter by it answered `400 type must be a valid enum value` — now it is a compile error. `'service'` stays: that is the platform's own name for the type. The `type` filter of `getBlocks` and `Templates.getTemplateByType` accepts `'service'` in lowercase (CMS-1073 shipped 2026-10-29; `'Service'` answers `400`). On platform builds before that date `'service'` gave `400` — there fetch all and pick by `type` on the client.
 
 ## Discounts
 
@@ -162,12 +167,14 @@ getAllDiscounts(langCode?, offset?, limit?, type?: 'DISCOUNT' | 'BONUS' | 'PERSO
 getDiscountByMarker(marker, langCode?): IDiscountsEntity
 validateDiscountsCoupon(code): ICouponValidationResult     // { valid, coupon?, error? }
 getBonusBalance(): IBonusBalanceEntity                      // ⚠️ user — { balance }
-getBonusHistory(type?, dateFrom?, dateTo?, discountId?, moduleId?, isAdmin?): IBonusHistoryResponse  // ⚠️ user
+getBonusHistory(type?, dateFrom?, dateTo?, discountId?, moduleId?, isAdmin?, offset?, limit?): IBonusHistoryResponse  // ⚠️ user; offset/limit — since v1.0.177
 getDiscountsByVectorSearch(body: IDiscountsVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IDiscountsResponse>  // semantic search
 ```
 
 - `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate a discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
-- Bonuses: `getBonusBalance` / `getBonusHistory` require user authorization. `IBonusTransactionType` = `'ACCRUAL' | 'USAGE' | 'REDUCE' | 'REVERSAL_ACCRUAL' | 'REVERSAL_USAGE' | 'EXPIRATION'`.
+- Bonuses: `getBonusBalance` / `getBonusHistory` require user authorization. `IBonusTransactionType` = `'ACCRUAL' | 'USAGE' | 'REDUCE' | 'REVERSAL_ACCRUAL' | 'REVERSAL_USAGE' | 'EXPIRATION'`. Dates `dateFrom`/`dateTo` must be full ISO only (`2026-01-01T00:00:00.000Z`); a bare date → `400`.
+- Coupon code: case does not matter, but **surrounding spaces are not trimmed** (`" CODE "` → `Coupon not found`) — do `trim()` before the call; an empty code → IError `400 Coupon code is required`, not `{ valid: false }`. `validate` answers `valid: true` even for a discount with an expired `endDate` — check the term by the discount's own `startDate`/`endDate`.
+- Before v1.0.177 `getAllDiscounts`/`getDiscountByMarker` unwrapped the response by the client's language, not by the call's `langCode`.
 - ⚠️ **`getBonusHistory` returns the container `{ items, total }`, not an array (corrected in the types in v1.0.168).** Until then the method was declared as `IBonusTransactionEntity[]`, and code written from the type read `.length` off an object and got `undefined`. An account with no transactions gives `{"items":[],"total":0}`.
 
 ## Events ⚠️ require authorization
@@ -183,14 +190,18 @@ subscribeToForm(marker, body: ISubscribeFormEvent): boolean | IError   // body: 
 unsubscribeFromForm(marker, body: ISubscribeFormEvent): boolean | IError
 getFormSubscriptions(offset?, limit?): IFormSubscriptionsResponse   // [{ eventMarker, formDataId }]
 
-getAllEvents(): IContentApiEvent[]                               // public via SDK, but see note about 401
+getAllEvents(): IContentApiEvent[]                               // requires user sign-in: app token → 401
 ```
 
 > ⚠️ **Breaking (v1.0.157):** `subscribeByMarker`, `unsubscribeByMarker`, `subscribeToForm`, `unsubscribeFromForm` now truly return `IError` on API refusal. Until 1.0.157, the general helper only caught exceptions, and with `isShell: true` (default), the SDK **returns** the error instead of throwing it — thus, any refusal was reported as `true`. Check strictly: `if (result === true)`, `if (result)` will skip the error object. The same pitfalls were present in `Subscriptions.cancelSubscription` / `recoverSubscriptions`.
 >
 > Since v1.0.172 these six methods **throw** `IError` with `isShell: false`, like the rest of the SDK. Before 1.0.172 they returned the error as a value in this mode, and a `try/catch` around the call never fired.
 >
-> ⚠️ `getAllEvents` is public from the SDK side, but the events route must be **issued to the guest group** — it is not issued for some tenants, and the method returns `401` with the app token. Then look for event markers in the admin panel → Events, through the admin API (`GET /api/admin/events`, rule `admin-api`) or grant permission (`/admin-grant-permissions`). The existence of an event cannot be checked with trial `generateCode`/`checkCode` — they mask the error (see `.claude/rules/auth-provider.md`).
+> ⚠️ `getAllEvents` requires user authorization (JSDoc SDK 1.0.177) — with an app token alone the method returns `401` (verified on js-sdk-tests 2026-10-30). Without a signed-in user, look for event markers in the admin panel → Events, through the admin API (`GET /api/admin/events`, rule `admin-api`). The existence of an event cannot be checked with trial `generateCode`/`checkCode` — they mask the error (see `.claude/rules/auth-provider.md`).
+>
+> ⚠️ **Before v1.0.177 a dropped connection looked like success:** with `isShell: true` these methods (and `cancelSubscription`, `recoverSubscriptions`, `FileUploading.delete`, `trackUserActivity`) returned `true` if the request never reached the server. Since 1.0.177 — `IError` with `statusCode: 0`. On the old SDK, re-read the list after a "successful" unsubscribe/cancel.
+>
+> Subscription pagination is not applied by the platform (CMS-1172): `getAllSubscriptions` / `getFormSubscriptions` always return the whole list — do not page through it. A subscription's `locale` is not checked and is not part of the key (CMS-1173). `getAllEvents` requires sign-in; an event's `localizeInfos` comes only in `en_US` — in another client language it is a raw map `{ en_US: { title } }` (CMS-1167).
 >
 > Do not confuse with the **Subscriptions** module (paid subscriptions) — these are different entities. `Events.getAllSubscriptions` → user subscriptions to products (`ISubscriptions`); `Subscriptions.getAllSubscriptions` → available paid plans (`ISubscriptionEntity[]`, v1.0.157).
 
@@ -199,14 +210,16 @@ getAllEvents(): IContentApiEvent[]                               // public via S
 ```ts
 upload(file: File | Blob, fileQuery: IUploadingQuery): IUploadingReturn[]   // fileQuery is required — since v1.0.173
 delete(filename, fileQuery: IUploadingQuery): boolean   // true on success — since v1.0.172; before that {} arrived (empty 200 body)
-createFileFromUrl(url, filename, mimeType?): Promise<File>
-getFile(id, type, entity, filename, template?): Response   // raw fetch Response — extract data via .blob()/.arrayBuffer()
+createFileFromUrl(url, filename, mimeType?): Promise<File>   // since v1.0.177 throws Error on non-2xx (previously a 404 page became a "file")
+getFile(id, type, entity, filename, template?): Response   // raw fetch Response, including on error — check response.ok; template is ignored by GET
 
 // Public search inside the content of files attached to records (v1.0.167)
 searchFileContent(query, langCode?, extensions?, ownerTables?, localeCodes?, onlyTruncated?, offset?, limit?): IFileSearchResponse
 ```
 
 > ⚠️ **`fileQuery` of `upload` and `delete` is required, and `type`, `entity`, `id` are required inside it (v1.0.173).** Without any of the three the endpoint answers `400 type should not be empty; entity should not be empty; id should not be empty`, and `delete` without `type` does not remove the file. Before 1.0.173 the types declared all of this optional — the call compiled but could never succeed; now it is a compile error. Pass it in full: `upload(file, { type: 'page', entity: 'editor', id: 4965 })` and the same `fileQuery` in `delete`. `width`, `height`, `compress`, `template` stay optional. A file field in `postFormsData` is not affected: there `fileQuery` can still be omitted.
+>
+> **File name in `delete`/`getFile` is encoded since v1.0.177** — before it, a `#` in the name cut off `type/entity/id`, and `&id=` injected parameters. The platform does not validate `id`/`entity` on upload (CMS-1176): pass a positive integer `id` and an `entity` from `[a-z0-9_-]`. `getFile` on a missing file answers `404` with a JSON body, but the `content-type` is by extension (`image/png`) — do not judge the file by the header. On js-sdk-tests file indexing is off: `searchFileContent` is always empty (`warnings: ["processing_disabled"]`).
 
 > **`searchFileContent` (v1.0.167)** — the unit of the result is a **file, not a fragment**: one `snippet` per file even when the document matches on many pages, with `snippet.pageFrom` for paged formats. The match inside `snippet.text` is wrapped in the control characters `U+0002` / `U+0003`, **not HTML** — replace them with your own highlighting before rendering. `query` needs at least 3 characters (`400` otherwise), `limit` is capped at 50 (default 10). The result is narrowed by access: only files of visible records in sections enabled in project settings, personal sections only down to the caller's own records, the admins section never. A separate `403` means the feature is not in the project tariff. Not every stand has the endpoint yet — older builds answer `404`.
 
@@ -227,7 +240,7 @@ getAllForms(langCode?, offset?, limit?): IFormsResponse   // paginated: { total,
 getFormByMarker(marker, langCode?): IFormsEntity
 ```
 
-> `IFormsEntity.type` narrowed to `'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`.
+> `IFormsEntity.type` narrowed to `'order' | 'sign_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`.
 
 ## FormData
 
@@ -254,7 +267,7 @@ Update/delete methods require user authorization (call after `reDefine(refreshTo
 
 > `IBodyTypeImageGroupOfImages.type` until v1.0.163 contained a typo `'groupOfImage'` — a value that the API rejects (`400 formData's marker '…' type must be one of […]`), and the editor auto-completed it. The correct value is `'groupOfImages'`. The form of the attached file is `IImageValue` / `IFileValue`, and this is **not** what `FileUploading.upload` returns (there is `contentType`, which form-data rejects).
 
-> **Markers are encoded in the path (v1.0.176).** Before 1.0.176 a marker went into the URL as is: `getFormsDataByMarker('..', id)` ended up at `POST /api/content/form-data/` (record creation), and `#` or `?` in a marker cut off or replaced the query. Now every `${marker}` goes through `_pathSegment` — an invalid marker gets `400 marker must match …`. Still validate a marker taken from the URL or user input (`/^[A-Za-z][A-Za-z0-9_-]*$/`) before the call; page/product URLs (`getPageByUrl` etc.) are not encoded — `/` is allowed there.
+> **Markers are encoded in the path (v1.0.176).** Before 1.0.176 a marker went into the URL as is: `getFormsDataByMarker('..', id)` ended up at `POST /api/content/form-data/` (record creation), and `#` or `?` in a marker cut off or replaced the query. Now every `${marker}` goes through `_pathSegment` — an invalid marker gets `400 marker must match …`. Still validate a marker taken from the URL or user input (`/^[A-Za-z][A-Za-z0-9_-]*$/`) before the call. **Since v1.0.177** page URLs are encoded too (`getPageByUrl`, `getProductsByPageUrl` etc. — per segment, `/` is preserved; before 1.0.177 `getProductsByPageUrl('../../all')` returned the whole catalog), as are ids in `Orders`/`Products` paths and `langCode` in the query (before 1.0.177 `'en_US&limit=1'` injected a parameter).
 
 ## Locales
 
@@ -313,22 +326,32 @@ getPagesByVectorSearch(body: IPagesVectorSearch, langCode?, offset?, limit?): IV
 >
 > ⚠️ **Before v1.0.172 `searchPage` searched only in the default language:** the SDK sent `lang=` instead of `langCode=`, and the platform ignored it. A word of the second locale was not found, while English matches were loaded in the requested locale, and the `404`s of pages that failed to load came back **as array elements** — `page.localizeInfos.title` crashed. Since 1.0.172 the search runs in the given `langCode`, and a page that could not be loaded is left out of the result. On a multilingual site require `oneentry` ≥ 1.0.172.
 >
-> `getBlocksByPageUrl` enriches blocks with products (v1.0.153): for a block `type: 'product_block'` appears `products?: IProductsEntity[]`, for `type: 'similar_products_block'` — `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. With `traficLimit: true` in the SDK config, enrichment is disabled, and in case of loading error, the field is filled with `[]` — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
+> `getBlocksByPageUrl` enriches blocks with products (v1.0.153): for a block `type: 'product_block'` appears `products?: IProductsEntity[]`, for `type: 'similar_products_block'` — `similarProducts?: IProductsResponse` (`{ total, items }`); separate requests for products of the block are not needed. With `traficLimit: true` in the SDK config, enrichment is disabled; on a loading error, since v1.0.177 — an empty value of the declared type (`products: []`, `similarProducts: { items: [], total: 0 }`; before 1.0.177 an error object or `[]` could land there) — access is only optional: `block.products ?? []`, `block.similarProducts?.items ?? []`.
+>
+> `getChildPagesByParentUrl(url)` / `getPageByUrl(url)` take the page's own `pageUrl`, **not a nested path**: `blog/blog1` → `404`.
+>
+> **Language (v1.0.177):** before 1.0.177 `Blocks.*`, `Pages.getBlocksByPageUrl` and page templates unwrapped the response by the client's language, not by the call's `langCode` — in another language `block.localizeInfos` stayed `{ en_US: { title } }`. Since 1.0.177 — by the call's language.
+>
+> **⚠️ Quick search `searchPage` / `searchBlock`:** `_` and `%` in `name` work as LIKE wildcards (CMS-1157) — strip them from user input before the call. A quote no longer crashes the query (CMS-1049 shipped 2026-10-29).
 
 ## Payments ⚠️ require authorization
 
 ```ts
 getSessions(offset?, limit?): ISessionsEntity
 getSessionById(id): ISessionEntity
-getSessionByOrderId(id): ISessionEntity | ISessionEntity[]
+getSessionByOrderId(id): ISessionEntity[]   // always an array, [] for an order with no sessions — since v1.0.177 so in the type too
 createSession(orderId, type: 'session'|'intent', automaticTaxEnabled?): ISessionEntity   // paymentUrl for redirect (+ clientSecret when 'intent')
-getAccounts(): IAccountsEntity[]
-getAccountById(id): IAccountsEntity
+getAccounts(langCode?): IAccountsEntity[]   // langCode — since v1.0.177
+getAccountById(id, langCode?): IAccountsEntity
 
 // Payment progress of an order: stages and whether they are paid (v1.0.167)
 getPaymentStagesByOrderId(id): IPaymentProgress
 ```
 
+> ⚠️ **Node.js / SSR: before v1.0.177 token refresh worked only from `AuthProvider`.** Each module had its own device fingerprint, and a refresh from `Payments` / `Orders` / any other module got `400 Provided token is incorrect` — the session broke on every access-token expiry. Since 1.0.177 the fingerprint is shared across the client. It did not reproduce in the browser.
+>
+> The platform since 2026-10-29 (CMS-1091/1092): `getSessions` and `getSessionByOrderId` return only the signed-in user's sessions (someone else's order's sessions — `[]`), and `getAccounts` does not return the Stripe webhook secret (`signingSecretKey` removed from the type in v1.0.177). A subscription session has no order: `orderId: null` (type `number | null` since v1.0.177). On older platform builds, do not output or log `getSessions`/`getAccounts` responses to the client.
+>
 > **`getPaymentStagesByOrderId` (v1.0.167)** — an order can be paid in parts rather than in one payment. `partial` says which case it is, `completed` says whether anything is left to pay, and each entry of `stages` carries `marker`, `sessionId`, `productId`, `title`, `value` and a `status` of `'planned' | 'completed'`.
 
 ## Products
@@ -343,16 +366,19 @@ getProductsPriceByPageUrl(url, langCode?, userQuery?: IProductsPriceQuery): IPro
 getProductsByPageUrl(url, body?, langCode?, userQuery?): IProductsResponse
 getRelatedProductsById(id, langCode?, userQuery?: IProductsRelatedQuery): IProductsResponse
 getProductsByIds(ids: string, langCode?, userQuery?: IProductsByIdsQuery): IProductsEntity[]   // userQuery — ONLY { signPrice? }
-getProductById(id, langCode?, isNormalized?): IProductsEntity
-getProductBlockById(id): IProductBlock[]
+getProductById(id, langCode?, isNormalized?): IProductsEntity   // isNormalized — deprecated, the API does not read it
+getProductBlockById(id, langCode?): IProductBlock[]   // langCode — since v1.0.177; before it, blocks in a second language stayed {en_US:{…}}
 searchProduct(name, langCode?): IProductsEntity[] | IProductSearchResult[]   // ⚠️ form depends on traficLimit
 getProductsByVectorSearch(body: IVectorSearchProducts, langCode?, offset?, limit?): IVectorSearchResponse<IProductsResponse>  // semantic (vector) search
 getProductsCount(body?): IProductsCount
 getProductsCountByPageId(id: number | string, body?): IProductsCount   // takes a number too since v1.0.174, like getProductsByPageId; before 1.0.174 — a string only
-getProductsCountByPageUrl(url, body?): IProductsCount
+getProductsCountByPageUrl(url, body?): IProductsCount   // counts do NOT depend on language: in a language with an empty catalog they still count all products (CMS-1201)
 ```
 
 - Per-method query types (v1.0.154), all exported from the SDK: base `IProductsQueryBase = { offset?, limit?, sortOrder?: 'DESC'|'ASC', sortKey?: 'id'|'position'|'title'|'date'|'price'|'status', signPrice? }` (`'status'` — since v1.0.172) — for `getProducts` / `getProductsEmptyPage` / `getProductsByPageId` / `getProductsByPageUrl`. For `getRelatedProductsById` — `IProductsRelatedQuery` (base + `statusMarker?`, `templateMarker?`, `relationMode?: 'global' | 'local'` — since v1.0.172: `'global'` (default) — the usual chain of the relation template's conditions, `'local'` — product `id` itself must satisfy the template condition); for `getProductsPriceByPageUrl` — `IProductsPriceQuery` (base **without** `sortKey`, + `statusMarker?`); for `getProductsByIds` — `IProductsByIdsQuery` (only `signPrice?`: pagination and sorting this endpoint no longer accepts, extra fields — TS error). `IProductsQuery` — deprecated alias `IProductsQueryBase`, do not use in new code.
+- **`additional.prices` is the price range of the whole catalog**, the same for every product and independent of the filter (`{min:51, max:180}` for products priced 51 and 150). Good for the bounds of a price slider, not for a specific product's "price from–to".
+- **No language fallback:** a product without a translation for `langCode` — `getProductById` → `404 Product not found`, and it is absent from lists. `limit` is an integer from `1` (`0`/`1.5` → `400`); `signPrice` with a non-existent storage crashes the whole request with `404`. In `getProductsByIds` unknown ids are dropped, duplicates are collapsed, a non-numeric id → `400`.
+- **An unknown key in `IFilterParams` is silently ignored by the API** (a typo returns the whole catalog, platform bug CMS-1158) — take filter keys only from the type. In `searchProduct` the characters `_` and `%` work as wildcards (`_` finds everything, CMS-1157) — escape or strip them from user input.
 - `getProductsByVectorSearch` — `body: IVectorSearchProducts = { queryText, vectorDistanceThreshold?, maxHits?, debug? }`. Semantic search by the meaning of the request (not by substring, like `searchProduct`).
 - `getProductsEmptyPage` — **POST**, returns `IProductsResponse` (`{ items, total }`), like `getProducts`. Before v1.0.172 the method was declared as `IAggregatedProductGroup[]`, but the API and the SDK always returned `{ items, total }` — code written from the old type (`result.map`, `result[0]`) compiled and failed at run time. `IAggregatedProductGroup` is kept deprecated — no method returns it.
 - Example filter operator — `conditionMarker: 'eq'`. The value `'equals'` from the old JSDoc is refused by the API with `400 filter.0.conditionMarker must be a valid enum value`.
@@ -401,7 +427,7 @@ const products = ids.length ? await getApi().Products.getProductsByIds(ids.join(
 
 ```ts
 getSitemap(): string[]
-updateSitemap(body: ISitemapQuery): string[]    // body: { baseUrls?, url?, lastmod?, changefreq?, priority? }
+updateSitemap(body: ISitemapQuery): string[]    // body: { baseUrls, … } — baseUrls: Record<langCode, 'https://…/'> REQUIRED (since 1.0.177 in the type too; without it the API generates nothing → 502); url/lastmod/changefreq/priority — deprecated, the API ignores them
 ```
 
 ## Subscriptions ⚠️ require authorization
@@ -409,10 +435,12 @@ updateSitemap(body: ISitemapQuery): string[]    // body: { baseUrls?, url?, last
 ```ts
 subscribe(body: ISubscribe): ICreatedSubscription             // body: { marker } → { id, amount, paymentUrl, status }
 cancelSubscription(body: ICancelSubscription): boolean | IError  // body: { marker }
-getAllSubscriptions(): ISubscriptionEntity[]                  // ⚠️ v1.0.157: objects, NOT markers
+getAllSubscriptions(): ISubscriptionEntity[]                  // ⚠️ v1.0.157: objects, NOT markers; sign-in NOT required (a guest gets the list)
 getActiveSubscriptions(): string[]                            // markers of active user subscriptions
 recoverSubscriptions(body: ICancelSubscription): boolean | IError  // recovery through Stripe Billing Portal
 ```
+
+> Module errors come without `pageData` (CMS-1178; in the SDK `IError.pageData` is optional since 1.0.177), and an invalid `marker` (empty, not a string) gives `404 not found`, not `400` — check the marker yourself. `recoverSubscriptions` returns `true`: the link to the Stripe Billing Portal, if the API returns it, the SDK does not pass on (CMS-1112).
 
 Paid subscriptions. `subscribe` returns `paymentUrl` for redirect to payment (like `createSession` for orders). Skills: `/create-subscription`.
 
@@ -453,12 +481,12 @@ Three things that bite:
 ## Users ⚠️ require authorization
 
 ```ts
-getUser(langCode?): IUserEntity
-updateUser(body: IUserBody, langCode?): boolean   // formData: FormDataType | FormDataType[] — since v1.0.175
+getUser(langCode?): IUserEntity   // since v1.0.177: response in the call's langCode, state — as saved
+updateUser(body: IUserBody, langCode?): boolean   // formData: FormDataType | FormDataType[] — since v1.0.175; since 1.0.177 the formData wrapper is by body.langCode
 archiveUser(): boolean
 deleteUser(): boolean
 addFCMToken(token): boolean
-deleteFCMToken(token): boolean
+deleteFCMToken(token): boolean   // ⚠️ before v1.0.177 token went into the path as is: '../account' → DELETE /users/me/account (user deletion)
 getUsersByVectorSearch(body: IUsersVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IUsersResponse>   // semantic search for users
 
 // Cart — works for user OR guest (x-guest-id)
@@ -474,17 +502,25 @@ addWishlistItem(body: IWishlistAddItem): IWishlistResponse  // { productId }
 removeWishlistItem(productId): IWishlistResponse
 ```
 
-> `IUserEntity.total` (optional and `@deprecated` since v1.0.175) is a service counter of the platform, always `"1"` for a single user; it says nothing about the user — do not use it.
+> ⚠️ **Before v1.0.177 values in Users paths were not escaped:** `deleteFCMToken('../account')` deleted the account, `'..'` or `removeCartItem('../..')` archived it. On the old SDK never pass external values into these methods without validation (`/^[A-Za-z0-9_:-]+$/` for the token, an integer for `productId`).
+>
+> The user's `state` before v1.0.177 was distorted on read (maps `{ en_US: … }` were collapsed, `{ type, value }` was zeroed out, and `{ attributes: { x: 's' } }` crashed `getUser` with a `TypeError`) — do not store such shapes in `state` on the old SDK. A cart without sign-in and without a `guestId` answers `201` but saves nothing (CMS-1181) — on the server always pass `guestId`. `qty`/`productId` larger than int4 → `500` (CMS-1155). A profile in a language without translation comes with `formData: []` (CMS-1156).
+
+> `IUserEntity.total` removed in v1.0.177: it was a service counter of the platform (always `"1"`), the platform no longer sends it (CMS-1088). The same for a single form, discount, collection row, and page (CMS-1095).
 >
 > Cart/Wishlist are stored on the OneEntry server and synchronized between devices/sessions. For anonymous visitors, a guest id is needed (see `.claude/rules/sdk-init.md`). Skills: `/create-cart-manager`, `/create-favorites`.
 
-## WebSocket ⚠️ require authorization
+## WebSocket
 
 ```ts
-connect(): Socket
+connect(): Socket<IWsServerEvents>   // payload 'notification' — IWsNotification (since v1.0.177)
 ```
 
-> v1.0.160: `socket.io-client` (~41 KB) loads **on the first `connect()`**, not together with the SDK. The signature is synchronous and `Socket` is returned immediately: `on`, `emit`, `disconnect` accumulate and play on the real socket at the moment of its creation — before the connection can deliver anything, so events are not lost. `id` (`undefined`) and `connected` (`false`) are read correctly — for a freshly created socket they are the same. Only methods that must **return** a value (`listeners()`) and nested objects (`socket.io`) do not work until the chunk loads.
+> Without sign-in the socket is a **guest**: it connects but receives only "for everyone" broadcasts. Personal notifications — only after `AuthProvider.auth`. Each `connect()` opens a separate connection — keep one socket per client.
+>
+> ⚠️ **Before v1.0.177 personal notifications reached no one:** the SDK did not send `x-device-metadata`, and without it the platform registers the socket as a guest even with a valid token; after a token refresh, reconnection went with the old one; a path in the project URL (`https://host/prefix`) turned into a namespace — `Invalid namespace`. In the browser the platform does not yet read the `auth` handshake, and the browser does not send WebSocket headers — so in the browser the socket stays a guest until CMS-1197 is fixed. After `logout` the socket does not close itself (CMS-1197) — call `socket.disconnect()`.
+
+> v1.0.160: `socket.io-client` (~41 KB) loads **on the first `connect()`**, not together with the SDK. The signature is synchronous and `Socket` is returned immediately: `on`, `emit`, `disconnect` accumulate and play on the real socket at the moment of its creation — before the connection can deliver anything, so events are not lost. `id` (`undefined`) and `connected` (`false`) are read correctly — for a freshly created socket they are the same. Before v1.0.177, until the chunk loaded, `listeners()`, `emitWithAck` (returned a non-Promise), `socket.io.on`, `volatile`, assignments (`socket.auth = …`) did not work, and `JSON.stringify(socket)` or logging the socket before the load broke the queue playback — handlers were lost. Since 1.0.177 all this works, and a chunk-load failure arrives in `connect_error`.
 
 ## Templates
 
@@ -518,13 +554,13 @@ Reference of entity types in the project (`forPage`, `forProduct`, `forBlock`, �
 getICollections(langCode?, userQuery?: ICollectionsListQuery): ICollectionEntity[]   // { limit?, offset? } — default 30 / 0
 getICollectionById(id, langCode?): ICollectionEntity
 getICollectionRowsById(id, langCode?, userQuery?: ICollectionQuery): ICollectionRowsResponce   // { limit?, offset?, entityType?, entityId? }
-getICollectionRowsByMarker(marker, langCode?): ICollectionRowsResponce
+getICollectionRowsByMarker(marker, langCode?, userQuery?: ICollectionQuery): ICollectionRowsResponce   // userQuery — since v1.0.177; without it only the first 30 rows
 getICollectionRowByMarkerAndId(marker, id, langCode?): ICollectionRow
 
 // writing
 createICollectionRow(marker, body: ICollectionFormObject, langCode?): ICollectionRow
 updateICollectionRow(marker, id, body: { formIdentifier, formData }, langCode?): ICollectionRow
-deleteICollectionRowByMarkerAndId(marker, id): boolean
+deleteICollectionRowByMarkerAndId(marker, id): boolean   // no row → IError 404 Row not found, not false
 
 // marker validation
 validateICollectionMarker(marker): ICollectionIsValid
@@ -536,17 +572,21 @@ The only content module with full CRUD — use it if the project stores data in 
 >
 > v1.0.157: in `ICollectionRow` `langCode` and `formIdentifier` have been declared (`formIdentifier` comes on update) — the API always returned them, but with `validation.enabled` they were cut from the response.
 >
-> ⚠️ `validateICollectionMarker` — the semantics are **opposite** to JSDoc: `true` = marker is FREE (does not exist), `false` = occupied. Check for the existence of a collection through `getICollections()`, not this method. Details — `product-statuses.md` (there is also a similar case described).
+> **v1.0.177:** ids in paths are escaped (before 1.0.177 `getICollectionById('1/rows')` returned rows); `ICollectionFormData.value` is `string | number | null`: `integer`/`float` fields come as numbers, a non-numeric value as `null`; the `formData` of a created/updated row is an array even when the body has a different language key.
+>
+> `updateICollectionRow` **replaces `formData` entirely** — fields missing from the body are removed. Pass all of the row's fields. The platform does not validate the body (CMS-1164): a non-existent form, fields outside the form, text in `float`, and `formData: null` are accepted — check it yourself. The row is stored under the language key from the `formData` body, not under the call's `langCode`. The `entityType`/`entityId` filter works only as a pair (CMS-1165).
+>
+> `validateICollectionMarker` answers with an object `{ valid }`: `valid: true` = a collection with that marker **exists**. Platform builds before 2026-10-29 answered the opposite (CMS-1069) — on them check existence through `getICollections()`. Details — `product-statuses.md`.
 
 ## System
 
 ```ts
 getApiStat(): IApiStatEntry[]  // API requests per day: [{ '2026-10-25': 17280 }, …] — typed since v1.0.173, unknown before
-test404(): unknown             // test error handling — returns 404
-test500(): unknown             // test error handling — returns 500
+test404(): unknown             // @deprecated v1.0.177 — the endpoint was removed by the platform, answers 404 Cannot GET
+test500(): unknown             // @deprecated v1.0.177 — the endpoint was removed by the platform, answers 404, not 500
 ```
 
-Service module. `test404`/`test500` — only for checking your error handling (see `error-handling.md`), there is no need to use them in production site code.
+Service module. Do not use `test404`/`test500`: the platform removed these endpoints (CMS-1056). Check your error handling on a real failure, for example on a non-existent marker. `getApiStat` without an app token answers `401`.
 
 ## Top-level utilities timeInterval (v1.0.156)
 

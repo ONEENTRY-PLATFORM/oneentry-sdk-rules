@@ -12,12 +12,17 @@ Creates a subscription for changes in price and availability status of a product
 
 ## Step 1: Find event markers
 
-First, obtain real markers programmatically via the public `Events.getAllEvents()` (≥1.0.150, no auth needed — just URL + App Token). Run a temp script using the pattern `/inspect-api` (in `.claude/temp/`), NOT through `getApi()` (runtime wrapper of Client Component, available only after login):
+First, obtain real markers programmatically via `Events.getAllEvents()` (≥1.0.150). ⚠️ The method **requires user authorization**: with only an App Token the API responds `401 Unauthorized` (SDK 1.0.177 JSDoc; verified on the stand 2026-10-30). So in a temp script using the pattern `/inspect-api` (in `.claude/temp/`), first log in as a test user, and do NOT use `getApi()` (runtime wrapper of Client Component). Without a test user — look up the markers via the admin API (`GET /api/admin/events`, rule `admin-api`) or in the admin panel → Events:
 
 ```ts
 // .claude/temp/list-events.mjs
 import { defineOneEntry } from 'oneentry';
 const api = defineOneEntry(URL, { token: TOKEN });
+// log in as a test user (creds — from env, do not hardcode); auth() puts tokens into the instance state
+await api.AuthProvider.auth(PROVIDER_MARKER, { authData: [
+  { marker: LOGIN_MARKER, value: process.env.TEST_EMAIL },
+  { marker: PASSWORD_MARKER, value: process.env.TEST_PASSWORD },
+] });
 const events = await api.Events.getAllEvents();          // IContentApiEvent[] { identifier, module, localizeInfos, id }
 // take the identifier field, preferring product events (module === 'catalog');
 // if empty after filtering — show the full list

@@ -34,7 +34,7 @@ What to look for in the response:
 
 > **Important:** by default `auth()`, `signUp()`, `generateCode()`, `activateUser()` — call **directly from Client Component** (not through Server Action).
 > The SDK passes the user's device fingerprint — if naively called on the server, `deviceInfo.browser` in the fingerprint will be server-side, not the user's actual browser, and the issued refreshToken will not be updated from the browser.
-> Through Server Action without additional configuration — only methods without fingerprint: `getAuthProviders`, `logout`, `logoutAll`.
+> Through Server Action without additional configuration — only `getAuthProviders`. `logout`/`logoutAll` require the user's `Bearer`: the shared server-side `getApi()` does not have it — the request will respond `401`, and the session on the backend will **not** be revoked. Call them where there is a user session — in a Client Component via `getApi()` (by default) or on the server on a per-request instance with the user's tokens (see `/create-google-oauth`, server-side logout).
 >
 > **Server token issuance (SDK ≥ 1.0.155).** Token-issuing methods CAN be called on the server if the browser fingerprint is passed:
 > 1. on the client get the string: `const dm = getApi().AuthProvider.getDeviceMetadata();`
@@ -60,10 +60,19 @@ export async function getAuthProviders() {
     title: p.localizeInfos?.title,
   }));
 }
+```
+
+### src/lib/logout.ts (logout — client code)
+
+`logout` requires the user's `Bearer`. A Server Action on the shared `getApi()` will go without it → `401`, the session on the backend stays alive, while the client erases `refresh-token` anyway. That is why logout goes on the client, where `getApi()` holds the session:
+
+```typescript
+import { getApi } from '@/lib/oneentry';
 
 export async function logout(authProviderMarker: string, token: string) {
   const result = await getApi().AuthProvider.logout(authProviderMarker, token);
-  if (isError(result)) return { error: result.message };
+  // strictly === true: the error object is "truthy"
+  if (result !== true) return { error: (result as { message?: string })?.message ?? 'logout failed' };
   return { success: true };
 }
 ```
@@ -101,7 +110,11 @@ import { defineOneEntry } from 'oneentry';
 
 // dm — string from getApi().AuthProvider.getDeviceMetadata(), obtained on the client
 export async function oauthExchange(providerMarker: string, code: string, dm: string) {
-  const api = defineOneEntry(process.env.PROJECT_URL!, { deviceMetadata: dm });
+  // token is required: defineOneEntry throws without it (the IConfig.token type is optional, though)
+  const api = defineOneEntry(process.env.NEXT_PUBLIC_ONEENTRY_URL!, {
+    token: process.env.NEXT_PUBLIC_ONEENTRY_TOKEN!,
+    deviceMetadata: dm,
+  });
   const result = await api.AuthProvider.oauth(providerMarker, {
     client_id: process.env.OAUTH_CLIENT_ID!,
     client_secret: process.env.OAUTH_CLIENT_SECRET!, // SERVER env ONLY
@@ -147,7 +160,6 @@ export async function oauthExchange(providerMarker: string, code: string, dm: st
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getFormByMarker } from '@/app/actions/forms';
-import { logout } from '@/app/actions/auth';
 import { getApi, isError } from '@/lib/oneentry';
 import type { IAuthEntity, IFormAttribute, ISignUpData } from 'oneentry';
 
@@ -460,12 +472,12 @@ export function AuthForm({ authProviderMarker, formIdentifier, isCheckCode, loca
 }
 ```
 
-### Logout (call from any component)
+### Logout (call from any client component)
 
 ```tsx
 'use client';
 
-import { logout } from '@/app/actions/auth';
+import { logout } from '@/lib/logout';
 
 async function handleLogout() {
   const marker = localStorage.getItem('authProviderMarker') || 'email';

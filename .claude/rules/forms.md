@@ -48,7 +48,7 @@ const form = await getApi().Forms.getFormByMarker('contact_us', locale)
 - `moduleFormConfigs[0].entityIdentifiers[0].id` — this is `moduleEntityIdentifier` for `postFormsData`.
 - `validators` — field validation rules set in the admin panel (`{}` — nothing is configured). Full breakdown — see the "Field Validators" section below; the error text is in `validators[name].customErrorText`.
 - `additionalFields: Record<marker, IFormAttributeAdditionalField>` — the SDK normalizes the array into an object. Contains UI metadata for the field: `placeholder`, `hint`, and others.
-- `type: 'order' | 'sing_in_up' | 'collection' | 'data' | 'rating' | null` — form type (the typo `sing_in_up` — from the API, that's how it is). Based on this, choose the behavior: `order` → checkout, `sing_in_up` → authorization/registration, `rating` → reviews/ratings.
+- `type: 'order' | 'sign_in_up' | 'collection' | 'data' | 'rating' | null` — form type (in the API and in the SDK type — `sign_in_up`; the spelling `sing_in_up` won't match anything). Based on this, choose the behavior: `order` → checkout, `sign_in_up` → authorization/registration, `rating` → reviews/ratings.
 - `moduleFormConfigs[].exceptionIds?: string[]` — list of excluded identifiers in the module config (for example, entities for which the form does not apply).
 
 > ⚠️ **`attributes` in an empty form.** The API returns `attributes: {}` (an empty object), not `[]`. **With v1.0.158 the SDK normalizes this in `_normalizeAttr`**, so `attributes` is always `IFormAttribute[]`, and `form.attributes.map(...)` is safe on any form.

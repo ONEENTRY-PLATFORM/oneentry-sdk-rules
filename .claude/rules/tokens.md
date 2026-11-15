@@ -42,8 +42,10 @@ Thanks to `saveFunction`, the token is always current in `localStorage` — ther
 // After auth() (email login) manual saving is NOT needed —
 // auth() itself places both tokens in state and calls saveFunction.
 
-// After oauth() — manually (oauth tokens are NOT saved in state and saveFunction is not called):
-localStorage.setItem('refresh-token', result.refreshToken)
+// After oauth() (SDK ≥ 1.0.177) — also nothing: oauth() places both tokens and the
+// provider marker in state and calls saveFunction.
+// Before 1.0.177 oauth() did NOT save tokens in state and did not call saveFunction — manually:
+// localStorage.setItem('refresh-token', result.refreshToken)
 
 // After logout
 localStorage.removeItem('refresh-token')
@@ -108,7 +110,9 @@ On refresh failure, the SDK simply returns an error envelope / `false`; `saveFun
 
 `isShell: true` (default) → the SDK returns an envelope, and **does not throw** — `try/catch` will not catch the dead token. Clear by response code:
 
-**`removeItem` is not enough.** The dead refresh token also remains in the state of the live instance — the SDK continues to proactively call `/refresh` until the page is reloaded. `clearTokens` must **recreate the instance** with one app token and remove the provider marker:
+**What the SDK does itself (1.0.177+).** If `/refresh` responded with `400` about the token itself (`Provided token is incorrect`: expired, revoked, issued to another device), the SDK removes the refresh token from the instance's state — subsequent requests go without a repeated `/refresh`. The SDK does **not** clear `localStorage` in this case and does **not** call `saveFunction` (on another device the saved token may still be alive). A `400` about the header (`Invalid x-device-metadata format`, `Missing x-device-metadata header`) does **not** remove the token from state — this is a request error, not a token error. Before 1.0.177 the dead token stayed in state, and the SDK called `/refresh` before every request until the page was reloaded.
+
+**`removeItem` is still needed** — otherwise on the next load the instance will come up again with the dead token. `clearTokens` clears storage, removes the provider marker, and **recreates the instance** with one app token (on SDK < 1.0.177 this is mandatory, on 1.0.177+ — a guarantee of clean state):
 
 ```typescript
 // src/lib/oneentry.ts
@@ -138,11 +142,11 @@ if (isError(res) && (res.statusCode === 401 || res.statusCode === 403)) {
 
 `AuthProvider.refresh(marker, token)` itself places both `accessToken` **and** `refreshToken` in state and calls `saveFunction` — after it, neither `syncTokens` nor manual `localStorage.setItem` are needed. It provides more explicit detection of a dead token (`/refresh 400 → clearTokens`, `getUser` is not even called), but this is an optional approach, not a necessity.
 
-**Trap:** explicit `refresh()` goes through the same request pipeline. If the instance is created **with** `auth.refreshToken` (as in `reDefine`) and the access token is still absent, before the explicit `POST /refresh`, the proactive internal refresh will trigger with the same token from state — the token is rotated, and the explicit request will go with an already burned token → `400`. The application will call `clearTokens()` on this 400 during an active session. The explicit pattern is safe **only** on an instance created without `auth.refreshToken` (then the proactive refresh does not trigger).
+**Before 1.0.177 — a trap:** explicit `refresh()` went through the same request pipeline. If the instance was created **with** `auth.refreshToken` (as in `reDefine`) and the access token was still absent, before the explicit `POST /refresh` the proactive internal refresh triggered with the same token — the token was rotated, and the explicit request went with an already burned token → `400`, and the application called `clearTokens()` on this 400 during an active session. Fixed in 1.0.177: `refresh(marker, token)` sends the passed token once, without a preceding auto-refresh. On SDK < 1.0.177 the explicit pattern is safe **only** on an instance created without `auth.refreshToken`.
 
 ## login() — What to Do After auth() / oauth()
 
-**After `auth()` nothing needs to be synchronized:** `AuthProvider.auth()` itself places both tokens in the state of the current instance and calls `saveFunction` — `syncTokens` and manual `localStorage.setItem('refresh-token', ...)` after it are redundant. However, **`oauth()` does NOT save tokens in state** — you need to set them manually after it.
+**After `auth()` and `oauth()` (SDK ≥ 1.0.177) nothing needs to be synchronized:** both methods themselves place the tokens (and the provider marker) in the state of the current instance and call `saveFunction` — `syncTokens` and manual `localStorage.setItem('refresh-token', ...)` after them are redundant. **Before 1.0.177 `oauth()` did not save tokens in state** and did not call `saveFunction` — on older versions you need to set them manually after it (`loginOAuth` below).
 
 ⚠️ **Trap of server `oauth()`:** if the code exchange is performed in a Server Action / route handler without passing the browser's fingerprint, the issued refresh token is bound to the server's Node fingerprint — the proactive `/refresh` from the browser will receive `400` → 401 envelope → `clearTokens()` will log out the active session. Correctly (SDK ≥ 1.0.155): in the browser, take the string `getApi().AuthProvider.getDeviceMetadata()`, pass it to the Server Action, and there create a per-request instance `defineOneEntry(url, { token, deviceMetadata })` before `oauth()` — then the token will refresh from the browser. See `.claude/rules/auth-provider.md` (OAuth section) and `/create-google-oauth`.
 
@@ -154,7 +158,10 @@ const login = async () => {
   await fetchUser()
 }
 
-// ✅ oauth login: set tokens from the response in the current instance manually
+// SDK < 1.0.177 — oauth login: set tokens from the response in the current instance manually
+// (since 1.0.177 oauth() does this itself; setIsAuth + fetchUser is enough).
+// If oauth() was performed on the server (per-request instance) — the tokens still need
+// to be passed to the browser instance this way, on any version.
 const loginOAuth = async (token: { accessToken: string; refreshToken: string }) => {
   localStorage.setItem('refresh-token', token.refreshToken)
   syncTokens(token.accessToken, token.refreshToken) // setAccessToken + setRefreshToken

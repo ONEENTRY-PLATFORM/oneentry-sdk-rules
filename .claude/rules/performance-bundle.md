@@ -143,15 +143,16 @@ Importing `defineOneEntry` from a `'use client'` file pulls the SDK into the cli
 | SDK | What is actually loaded |
 | --- | --- |
 | ≤ 1.0.158 | **~110 KB gzip (536 KB min)** — Zod and validation schemas were always loaded statically, `socket.io-client` too |
-| ≥ 1.0.160 | **~9.7 KB gzip (43 KB min)** for a project without validation and without socket: schemas and Zod are loaded on demand (the first response that is actually validated), `socket.io-client` — on the first `WS.connect()` |
+| ≥ 1.0.160 | ESM build: **~12–13 KB gzip (~58–59 KB min)** on SDK 1.0.177 (esbuild measurement, importing only `defineOneEntry`) for a project without validation and without socket: schemas and Zod are loaded on demand (the first response that is actually validated), `socket.io-client` — on the first `WS.connect()`. The CommonJS build (`require('oneentry')`) cannot split the deferred `require`s — the bundler pulls in Zod and Socket.io entirely |
 
 Conditions under which the bottom line works:
 
+- **The bundler takes the ESM build** (`import`, not `require`) — otherwise Zod and Socket.io will end up in the bundle.
 - **The bundler performs code-splitting** — default in webpack, Vite, Rollup, and Next.js. A build forcibly glued into one file compresses only to ~427 KB min: Zod is inlined, although not executed.
 - **`validation.enabled` is turned off** (default `false`). With validation enabled, Zod and schemas come into the bundle — this is the price of diagnostics, keep it for the dev environment, not for production (`.claude/rules/troubleshooting.md`).
 - **The `WS` module is not used.** `WS.connect()` remains synchronous and returns `Socket`, but the `socket.io-client` (~41 KB) is loaded on the first call; everything done with the object (`on`, `emit`, `disconnect`) is played on the real socket at the moment of its creation — events are not lost. The only difference is: methods that must **return** something (`listeners()`) and nested objects (`socket.io`) are only available after the chunk is loaded.
 
-Starting from v1.0.160, the package is also provided in ESM (`module: esm/index.js`, `sideEffects: false`), so unused SDK modules are tree-shaken; the ESM build is loaded by Node itself, not just the bundler. The `exports` map routes `oneentry` and `oneentry/types` based on conditions (`require` → CJS, `import` → ESM), old deep imports (`oneentry/dist/<module>/<module>Interfaces`, with and without `.js`) are covered by explicit patterns and work as before.
+Starting from v1.0.160, the package is also provided in ESM (`module: esm/index.js`, `sideEffects: false`), but SDK modules are not dropped by tree-shaking — `defineOneEntry` creates all the modules, and they are all in the bundle; `sideEffects: false` removes only the unimported helpers (`isFileAttribute`, `expandTimeIntervals`, …). The ESM build is loaded by Node itself, not just the bundler. The `exports` map routes `oneentry` and `oneentry/types` based on conditions (`require` → CJS, `import` → ESM), old deep imports (`oneentry/dist/<module>/<module>Interfaces`, with and without `.js`) are covered by explicit patterns and work as before.
 
 > Do not install version 1.0.159: the tarball is built from an outdated directory and `require('oneentry')` fails in it (`Cannot find module '../base/lazySchema'`) — fixed in 1.0.160 with the same set of functions. Details — `.claude/rules/typescript.md`.
 

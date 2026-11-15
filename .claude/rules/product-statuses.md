@@ -39,24 +39,22 @@ const statuses = await getApi().ProductStatuses.getProductStatuses(langCode)
 ⚠️ Status markers are set in the **project admin panel** and are unique for each project.
 **Do not hardcode** specific markers — obtain them via `getProductStatuses()` or `/inspect-api product-statuses`.
 
-## ⚠️ validateMarker — "marker is FREE", not "exists"
+## ⚠️ validateMarker — "marker exists"
 
-`ProductStatuses.validateMarker(marker)` returns `true` when the marker is **not occupied**
-(free for creating a new status), and `false` — for an existing one. JSDoc SDK
-("Returns true if the marker exists") claims the opposite — do not believe it.
-Confirmed by a live test on a real project: `in_stock`/`out_of_stock` → `false`,
-non-existent marker → `true`.
+`ProductStatuses.validateMarker(marker)` returns `true` when a status with such a marker
+**exists**, and `false` — when it does not, just as written in the JSDoc. Verified on js-sdk-tests
+2026-10-30: `sold`/`sale` → `true`, `sold1` → `false`.
+
+Platform builds before 2026-10-29 responded the other way around (`true` = marker is free, CMS-1069).
+If the project is on an old build or the response is in doubt — check by list:
 
 ```typescript
-// ❌ INCORRECT — this is NOT an existence check
-if (await getApi().ProductStatuses.validateMarker('in_stock')) { /* "exists"? On the contrary! */ }
+// ✅ validateMarker — does the status exist?
+const exists = await getApi().ProductStatuses.validateMarker('in_stock')
 
-// ✅ Existence check for status — by list
+// ✅ Reliable on any platform build — by list
 const statuses = await getApi().ProductStatuses.getProductStatuses(locale)
-const exists = statuses.some(s => s.identifier === 'in_stock')
-
-// ✅ validateMarker — check "is marker free?" before creating a new status
-const isFree = await getApi().ProductStatuses.validateMarker('new_status')
+const existsInList = statuses.some(s => s.identifier === 'in_stock')
 ```
 
 ## ⚠️ Filtering by status — ONLY through IFilterParams body, not query

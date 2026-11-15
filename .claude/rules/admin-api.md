@@ -71,7 +71,7 @@ if (Object.keys(sets).length !== expectedLocales) throw new Error('locale lost')
 | Orders | `GET /api/admin/orders-storage/{marker}?limit=50&offset=0&langCode={lc}` (or `/{storageId}/orders`) — listing of storage orders: any user order is visible, not just their own. There is no public equivalent — the occupancy of slots for "all clients" cannot be collected from the public SDK |
 | Payment Sessions | `GET /api/admin/payments/sessions/order/{orderId}` — order sessions with statuses (`waiting`/`paid`/…) |
 | Payment Accounts | `GET /api/admin/payments/accounts?langCode={lc}`, `GET /api/admin/payments/accounts/{id}` — gateway config: `successUrl`/`cancelUrl`, testMode, `stripeAccountId` (diagnosis of "session forever waiting", see rule `orders`) |
-| Events | `GET /api/admin/events?limit=100&offset=0&langCode={lc}` — actual event markers (when public `Events.getAllEvents` returns 401) |
+| Events | `GET /api/admin/events?limit=100&offset=0&langCode={lc}` — actual event markers (`Events.getAllEvents` returns 401 without a logged-in user) |
 | Menu | `GET/PUT /api/admin/menus/{id}`, **`PUT /api/admin/menus/{id}/custom-items/{itemId}`** — editing a custom item (see the gotchas below) |
 | Collections | `POST /api/admin/integration-collections`, `PUT /api/admin/integration-collections/{id}` (binding to form — `formId`), `DELETE /api/admin/integration-collections/marker/{marker}/rows/{id}` |
 | Settings | `GET /api/admin/settings-general` → `system.common.maxUploadFileSize` — project file size limit (to be learned before the first bulk upload) |

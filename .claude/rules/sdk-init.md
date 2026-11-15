@@ -23,10 +23,12 @@ The basic singleton `src/lib/oneentry.ts` and call contexts are in CLAUDE.md, se
 The minimal set above is enough for a demo; in a real project, each of these five addresses its own class of bugs.
 
 - **`isOneEntryEnabled`** — boolean flag "URL and token are set". `defineOneEntry` (SDK ≥ 1.0.154) validates input **synchronously** and throws a regular `Error` (not `IError`, `isError` does not catch it). This means you need to check **before** creating the instance, not catch the error afterward.
+
+  **Project URL in SDK 1.0.177:** `defineOneEntry` trims a trailing `/` and a copied `/api/content` at the end of the URL (`https://x.oneentry.cloud/api/content/` → `https://x.oneentry.cloud`; previously all calls responded with `404`); it throws on a URL without `http://`/`https://` (the exception is a proxy path like `/oneentry`) and on a URL with a query (`?…`) or fragment (`#…`). The `Boolean(PROJECT_URL && APP_TOKEN)` check will let a URL without a scheme through — then `getApi()` will fail with a regular `Error`; if you need a soft mode, also check the scheme (`/^https?:\/\//.test(PROJECT_URL) || PROJECT_URL.startsWith('/')`).
 - **`getApiSafe()`** — a non-throwing version of `getApi()`, returns `null`. Two entry points instead of one: `getApi()` will throw loudly (misconfigured deployment is immediately visible), `getApiSafe()` will return `null` on degradation paths — the storefront renders without CMS. More about degradation — `.claude/rules/error-handling.md`.
 - **`createRequestApi({ langCode?, guestId?, deviceMetadata? })`** — a one-time instance that does not touch the singleton. Always needed when a server request speaks on behalf of **one specific** visitor: OAuth code exchange with browser fingerprint, guest call with `x-guest-id`. The absence of such a helper pushes towards `setDeviceMetadata()`/`setGuestId()` on the shared singleton — which will apply to all concurrent visitors of the same Node process.
 - **`hasStoredSession()`** — "does this browser have a session": `hasActiveSession()` or a non-empty `localStorage['refresh-token']`. Client-side replacement for checking auth-cookie: user-scoped calls do not trigger a known 401. On the server, it is always `false`.
-- **`storeSession(entity, providerMarker)`** + **`getAuthProviderMarker()`** — `auth()` itself puts tokens in state, while `oauth()` **does not** (see `.claude/rules/tokens.md`), and both `refresh`/`logout` require the same marker that issued the session. One helper instead of three separate `localStorage.setItem` calls throughout the code.
+- **`storeSession(entity, providerMarker)`** + **`getAuthProviderMarker()`** — `refresh`/`logout` require the same marker that issued the session, and the marker and refresh token need to survive a reload. `auth()` and (since SDK 1.0.177) `oauth()` put tokens in state and call `saveFunction` themselves; before 1.0.177 `oauth()` did not (see `.claude/rules/tokens.md`). The helper is needed where the tokens did not arrive in the browser instance — a server-side `oauth()` on a per-request instance, SDK < 1.0.177 — and instead of three separate `localStorage.setItem` calls throughout the code.
 
 ```typescript
 // src/lib/oneentry.ts
@@ -89,7 +91,7 @@ if (!hasActiveSession()) {
 
 ## `traficLimit` — disabling auto-enrichment
 
-The option `traficLimit: true` (exactly like this, with one "f") in the config disables automatic enrichment requests of the SDK: loading products of blocks in `Blocks.getBlocks`/`getBlockByMarker` and `Pages.getBlocksByPageUrl`, loading full entities in `Pages.searchPage`/`Products.searchProduct`. The default is `false` (enrichment is enabled). The SDK's JSDoc describes the semantics inversely — in the code, traffic is saved precisely by `true`.
+The option `traficLimit: true` (exactly like this, with one "f") in the config disables automatic enrichment requests of the SDK: loading products of blocks in `Blocks.getBlocks`/`getBlockByMarker` and `Pages.getBlocksByPageUrl`, loading full entities in `Pages.searchPage`/`Products.searchProduct`. The default is `false` (enrichment is enabled); traffic is saved by `true` (as stated in the SDK's JSDoc too).
 
 ⚠️ Enabled `traficLimit` changes the **shape** of the quick search result, not just the volume of traffic: `searchProduct` returns `IProductSearchResult[]` (`{ id, title, pageId }`), `searchPage` — `IPageSearchResult[]` (`{ id, title }`), without `attributeValues`, `localizeInfos`, and `blocks`. From v1.0.157 this is reflected in the types (`IProductsEntity[] | IProductSearchResult[] | IError`), earlier the signature promised a full entity in both modes, and the code silently received `undefined`. If you need details — load them by id (`getProductsByIds`).
 
@@ -137,7 +139,13 @@ const results = await getApi().Products.searchProduct(query); // IProductsEntity
 
 The cart, wishlist (`Users.getCart/setCart/...`), activity tracking (`UserActivity.trackUserActivity`), and contextual recommendations Blocks (`getCartComplement`, `getCartSimilar`, `getPersonalRecommendations`, `getRecentlyViewed`, …) work for **unauthorized guests** as well. For this, the SDK sends the header `x-guest-id` on requests without `accessToken`. When the user is authorized — the header **is not sent** (to avoid linking the guest trail with the account).
 
-**In the browser — no configuration is needed.** If `guestId` is not set, the SDK generates a stable id (via Web Crypto) on the first request and saves it in `localStorage` under the key `oneentry_guest_id`. It survives reloads — the guest cart is not lost.
+**In the browser (SDK ≥ 1.0.177) — no configuration is needed.** If `guestId` is not set, the SDK generates a stable id (UUID v4) on the first request and saves it in `localStorage` under the key `oneentry_guest_id`. It survives reloads — the guest cart is not lost.
+
+> ⚠️ **`guestId` — UUID v4 only.** The platform silently replaces any other format with a new id on every request: `addCartItem` responds with `201` and the item, but `getCart` — empty (verified 2026-10-30, CMS-1181/CMS-1120). Generate `crypto.randomUUID()`.
+>
+> ⚠️ **Before SDK 1.0.177 — a non-UUID guestId in the browser without `crypto.randomUUID`.** In an insecure context (`http://` not on `localhost`) there is no `crypto.randomUUID`, and the SDK generated a base-36 string — the guest cart was lost; such an id was saved in `oneentry_guest_id` and taken from there forever (CMS-1120). Fixed in 1.0.177: the SDK generates a UUID v4 and replaces a previously saved non-UUID. On older versions, pass `guestId` (UUID v4) explicitly.
+>
+> ⚠️ **Instance = one user's session.** After `AuthProvider.auth`, all calls of the instance go on behalf of that user: a login on a shared server singleton hands the logged-in user's profile and cart to the next visitor (verified 2026-10-30). For user-scoped calls on the server — an instance per request. `logout` does not change `guestId`: after logging out, the guest cart from before the login is visible again.
 
 **On the server, the SDK does NOT automatically generate a guest id.** One shared instance of `defineOneEntry` serves all visitors — auto-generation would lead to one guest cart leaking to everyone. Therefore, on the server, **pass `guestId` explicitly** for each visitor (for example, from a cookie):
 
@@ -145,7 +153,7 @@ The cart, wishlist (`Users.getCart/setCart/...`), activity tracking (`UserActivi
 // Method 1 — in the config when creating the instance
 const api = defineOneEntry(PROJECT_URL, {
   token: APP_TOKEN,
-  guestId: cookieGuestId,   // your stable id for the visitor (from cookie/session)
+  guestId: cookieGuestId,   // your stable id for the visitor (from cookie/session) — MUST be UUID v4 (crypto.randomUUID())
 });
 
 // Method 2 — at runtime, chainable (like setAccessToken). The method is available on EVERY module

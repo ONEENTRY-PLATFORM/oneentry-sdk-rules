@@ -156,12 +156,12 @@ All three respond with success and silently do not perform the work — only ver
 }
 ```
 
-**Marker Check** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT boolean. ⚠️ Semantics — "marker **is free**": `true` = there is no collection with that marker (can be created), `false` = the marker is occupied (the same semantics confirmed by a live test at the twin endpoint `ProductStatuses.validateMarker`):
+**Marker Check** — returns an object `{ valid: boolean }` (`ICollectionIsValid`), NOT boolean. Semantics — "marker **exists**": `true` = the collection exists, `false` = it does not (js-sdk-tests 2026-10-30: `test_collection` → `true`). Platform builds before 2026-10-29 answered the opposite (CMS-1069), so on an unknown build a list is more reliable:
 
 ```typescript
 const { valid } = await getApi().IntegrationCollections.validateICollectionMarker('faq');
-if (!valid) {
-  /* marker occupied — collection faq exists */
+if (valid) {
+  /* collection faq exists */
 }
 
 // Existence check — more reliable by list:

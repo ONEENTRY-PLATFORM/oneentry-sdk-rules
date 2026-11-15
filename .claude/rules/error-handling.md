@@ -92,7 +92,8 @@ try {
   }
   return { ok: true, orderId: order.id };
 } catch (e) {
-  // we only reach here with isShell:false (or non-SDK throw).
+  // we reach here with isShell:false, and from v1.0.177 — also from the
+  // errors.customErrors handler (redirect()/notFound() reach the caller, async is awaited).
   // With default isShell:true, the network and unparsed response do NOT throw,
   // but return as a value — with v1.0.168/1.0.169 they have a statusCode, see below.
   const apiError = handleApiError('createOrder', e);
@@ -117,6 +118,7 @@ Now both cases of "no useful response received" are described the same way:
 
 - **`statusCode: 0` — a value that no HTTP response has.** Treat it as "no response": do not cache, do not count as an empty result, during build — fail the build, not write 404 to the page.
 - If non-JSON came with an unsuccessful code, the code that the server actually sent (`502` etc.) is preserved, and the message also names the received `content-type`.
+- **v1.0.177:** with `isShell: false`, a connection drop throws the same `IError` (`statusCode: 0`, the original error in `cause`), not a raw `TypeError`. An unsuccessful response whose body is not a platform error (`{"error":…}`, `[]`, `null` from the gateway) is also an `IError` with the response code; before 1.0.177 it was returned as data, and `subscribeByMarker` answered `true` to `503`.
 - `isError` catches both: the value has `statusCode` and `message`. Distinguish "no response" from platform error by `statusCode === 0`:
 
 ```ts

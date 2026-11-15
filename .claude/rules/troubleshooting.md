@@ -47,7 +47,8 @@ A typical expired session. Redirect to `/login`.
 
 - Public (Pages, Products, Menus, Forms) — any context (server or client)
 - `AuthProvider.auth()`, `.signUp()`, `.generateCode()`, `.checkCode()` — **only Client Component** (fingerprint; server — only with passing `deviceMetadata`, ≥ 1.0.155)
-- `AuthProvider.logout()`, `.logoutAll()`, `.getAuthProviders()` — any context
+- `.getAuthProviders()` — any context
+- `AuthProvider.logout()`, `.logoutAll()` — where there is a user session (they require its `Bearer`): Client Component via `getApi()` or a server request instance with the user's tokens. On the shared server `getApi()` without a session → `401`, the session is not revoked
 - `Users.*`, `Orders.*`, `Payments.*` — **only Client Component** after `reDefine()`
 
 ### 400 Bad Request — `notificationData.phoneSMS` is not allowed to be empty
@@ -80,13 +81,13 @@ const product = await getApi().Products.getProductById(id)
 if (isError(product) && product.statusCode === 404) return <NotFound />
 ```
 
-### 500 Server Error
+### 401 Unauthorized on user methods
 
-**Cause:** calling `Users.*`, `Orders.*`, `Payments.*` via `getApi()` without prior `reDefine()`. These methods require user accessToken.
+**Cause:** calling `Users.*`, `Orders.*`, `Payments.*` via `getApi()` without prior `reDefine()`. These methods require user accessToken; without a session the API responds `401` (`{ statusCode: 401, message: 'Unauthorized' }`, verified 2026-10-30 on `getUser`).
 
 ```typescript
 // ❌ INCORRECT — reDefine() was not called, no user accessToken
-const user = await getApi().Users.getUser();  // 500!
+const user = await getApi().Users.getUser();  // IError 401!
 
 // ✅ CORRECT — reDefine() called before use (e.g., in AuthContext)
 await reDefine(refreshToken, locale);
@@ -97,7 +98,9 @@ const user = await getApi().Users.getUser();
 
 Enable logging: `validation: { enabled: true, logErrors: true }` in the `defineOneEntry` config.
 
-> ⚠️ Keep this as a dev setting (`enabled: process.env.NODE_ENV !== 'production'` or a separate flag). From v1.0.160, Zod and response schemas are loaded **only on the first real validation** — with validation turned off, they are not in the client bundle at all (~110 → ~10 KB gzip, see `.claude/rules/performance-bundle.md`). Enabled validation returns this weight back.
+> ⚠️ Keep this as a dev setting (`enabled: process.env.NODE_ENV !== 'production'` or a separate flag). From v1.0.160, Zod and response schemas are loaded **only on the first real validation** — with validation turned off, they are not in the client bundle at all (~110 → ~12 KB gzip on the ESM build, see `.claude/rules/performance-bundle.md`). Enabled validation returns this weight back.
+
+> Before v1.0.177, enabled validation **changed the data**: the object parsed by Zod went out, and it drops fields absent from the schema (in both `strictMode` modes). On an older version, if a field is "present in the raw response but not in the SDK" — check whether validation is enabled. With v1.0.177 the original object is returned, and validation only decides "data or `422`".
 
 ## Environment and Build
 

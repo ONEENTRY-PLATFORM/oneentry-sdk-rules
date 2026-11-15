@@ -62,6 +62,14 @@ const accountsToShow = accounts.length > 0
 // By default, accountsToShow[0].identifier is selected
 ```
 
+### ⚠️ Parallel Orders calls — only with SDK ≥ 1.0.177
+
+Before v1.0.177, `getRefunds`, `getOrderById`, `createRefundRequest`, `cancelRefundRequest`, and `getOrdersByVectorSearch` swapped out the base URL of the entire module for the duration of the request: a parallel `getAllOrdersByMarker` / `getOrderByMarkerAndId` in the same `Promise.all` went to `/api/content/orders/…` and got a `404`, and the instance could stay stuck on someone else's path forever. On the old SDK, call these methods sequentially; with 1.0.177 `Promise.all` is safe.
+
+Language: since 1.0.177 the `Orders` methods unwrap the response by their own `langCode` (previously — by the client language: `createOrder(…, 'ru_RU')` returned `formData: { ru_RU: […] }`). But the order's form data is stored under the language it was created in: an order created in `en_US` will come back on `ru_RU` with `formData: []`, and `order-statuses` in a language without a translation — with `localizeInfos: {}` (CMS-1156). Read the order in the language it was created in.
+
+`quantity` — integer only: a fractional value is accepted by `previewOrder` and counted into the sum, but `createOrder`/`update` respond with `500` (CMS-1155). Round before sending.
+
 ### getAllOrdersByMarker → { items, total }
 
 ```ts
@@ -91,12 +99,16 @@ const total = result.total
   "paymentAccountIdentifier": "cash",
   "paymentAccountLocalizeInfos": { "title": "Cash" },
   "products": [
-    { "id": 2957, "title": "Cosmo", "price": 150, "quantity": 2, "sku": null, "previewImage": null }
+    { "id": 2957, "title": "Cosmo", "price": 150, "quantity": 2, "sku": null, "previewImage": [] }
   ],
   "paymentUrl": null,
   "isCompleted": null
 }
 ```
+
+⚠️ `products[].previewImage` — `IPicture | IPicture[] | null` (type since SDK 1.0.177, CMS-1113): a product without a preview comes back as an empty array `[]`, not `null`. Parse it like this: `const pic = Array.isArray(p.previewImage) ? p.previewImage[0] : p.previewImage` — `p.previewImage?.downloadLink` won't compile without this.
+
+⚠️ `products[].title` — `string | null`: in a language where the product has no translation, the order returns `title: null` (verified 2026-10-30, order 519 on `ru_RU`; type since SDK 1.0.177, CMS-1206). Render it with a fallback value.
 
 ⚠️ `totalSum` — **the type depends on the method**, and with v1.0.158 this is reflected in the types:
 

@@ -388,16 +388,42 @@ cookieStore.set('authProviderMarker', MARKER, { // MARKER — identifier from St
 })
 ```
 
-```typescript
-// Server-side refresh — marker from cookie, NOT hardcoded 'email'
-const marker = (await cookies()).get('authProviderMarker')?.value || 'email'
-const result = await getApi().AuthProvider.refresh(marker, refreshToken)
+⚠️ **Per-request instance only, not the shared `getApi()`.** `refresh()` puts the visitor's access and
+refresh token into the instance state: on a server-side singleton the next request from **any** visitor
+will go out with their `Bearer` (session leak, verified 2026-10-30). The same rule as for `reDefine`
+and `createRequestApi` in `.claude/rules/sdk-init.md`. Plus the refresh token is tied to the browser
+fingerprint — without it in `deviceMetadata` the server-side `/refresh` will respond `400`; pass the
+fingerprint from the browser (`getApi().AuthProvider.getDeviceMetadata()`) as an argument, as in Step 3.
 
-// Server-side logout — the same marker, otherwise the session will not be terminated on the backend
-await getApi().AuthProvider.logout(marker, refreshToken)
-// and only after that clear the cookie:
-;(await cookies()).delete('authProviderMarker')
+```typescript
+// Server-side refresh/logout (SDK ≥ 1.0.177) — marker from cookie, NOT hardcoded 'email'
+import { defineOneEntry } from 'oneentry'
+
+/** One-time instance for a single visitor — lives only within this request. */
+function userRequestApi(refreshToken: string, marker: string, deviceMetadata: string) {
+  return defineOneEntry(process.env.NEXT_PUBLIC_ONEENTRY_URL as string, {
+    token: process.env.NEXT_PUBLIC_ONEENTRY_TOKEN as string,
+    deviceMetadata, // browser fingerprint the refresh token is tied to
+    auth: { refreshToken, providerMarker: marker },
+  })
+}
+
+const marker = (await cookies()).get('authProviderMarker')?.value || 'email'
+
+// refresh
+const result = await userRequestApi(refreshToken, marker, deviceMetadata)
+  .AuthProvider.refresh(marker, refreshToken)
+
+// logout — the same marker, otherwise the session will not be terminated on the backend. logout requires
+// the user's Bearer: on an instance with auth.refreshToken the SDK first refreshes the token itself and logs out with the rotated one
+const out = await userRequestApi(refreshToken, marker, deviceMetadata)
+  .AuthProvider.logout(marker, refreshToken)
+// and only after success (=== true) do we clear the cookie:
+if (out === true) (await cookies()).delete('authProviderMarker')
 ```
+
+The simplest option is to do refresh and logout **in the browser** (the client's `getApi()` already holds
+this user's session); the server-side variant is needed only if the tokens live in an httpOnly cookie.
 
 `|| 'email'` — fallback only for sessions created before the cookie appeared: for OAuth users,
 it is guaranteed to be incorrect.

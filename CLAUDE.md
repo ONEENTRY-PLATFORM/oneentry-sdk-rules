@@ -4,7 +4,7 @@ oneentry — OneEntry NPM package
 
 **SDK Documentation:** <https://js-sdk.oneentry.cloud/docs/index/>
 
-This file is the core of the context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
+This file is the core context: only what is always needed. Reference materials (SDK modules, glossary, scenarios, troubleshooting, patterns) are moved to the rules `.claude/rules/*.md` and loaded on demand — see "Context Map".
 
 ## Project Context
 
@@ -12,22 +12,22 @@ OneEntry is a headless CMS for e-commerce and content projects. The `oneentry` S
 
 The SDK is isomorphic: it works on both the server and the client. Public methods are read-only; programmatic content writing is done through the internal admin API (`admin-api.md`).
 
-## Start of Each Session — Mandatory Checklist
+## Starting Each Session — Mandatory Checklist
 
 ### 🚨 BEFORE writing any code
 
-1. Read this file **completely** (do not stop halfway)
+1. Read this file **in full** (do not stop halfway)
 2. `ls .claude/skills/` — check available skills
 3. `ls .claude/rules/` — view the list of rules; read not all at once, but according to the "Rules Map" below
 4. Read `eslint.config.mjs` — write code only in accordance with the linter
-5. Run the necessary skill if available (do not invent it yourself)
+5. Launch the necessary skill if available (do not invent it yourself)
 
 ### Two Mandatory Questions (once per session)
 
-Ask them at the beginning of work and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
+Ask them at the beginning of your work and save the answers in **project** memory (`~/.claude/projects/<project>/memory/`):
 
-1. **“Is it necessary to save tokens?”** — **save**: do not run linter/build, do not write comments; **full**: JSDoc + lint + build after writing. Save as `feedback_token_mode.md`
-2. **“Is it necessary to write E2E tests with Playwright?”** — **yes**: run `/setup-playwright`, write tests in `e2e/` for each new component, add `data-testid`; **no**: do not create `e2/`. Save as `feedback_playwright.md`
+1. **"Is it necessary to save tokens?"** — **economy**: do not run linter/build, do not write comments; **full**: JSDoc + lint + build after writing. Save as `feedback_token_mode.md`
+2. **"Is it necessary to write E2E tests with Playwright?"** — **yes**: run `/setup-playwright`, write a test in `e2e/` for each new component, add `data-testid`; **no**: do not create `e2e/`. Save as `feedback_playwright.md`
 
 ```markdown
 ---
@@ -37,7 +37,7 @@ type: feedback
 ---
 
 <mode>: [value].
-**Why:** the user specified at the beginning of the session.
+**Why:** the user indicated at the beginning of the session.
 **How to apply:** do not ask again, use automatically.
 ```
 
@@ -47,7 +47,7 @@ The file already exists — **do not ask**.
 
 - **No `any`** — import types from the package root: `import type { IPagesEntity } from 'oneentry'` (SDK ≥ 1.0.160; see `typescript.md`). Exception — fields that the SDK itself declares as `any` (`ILocalizeInfo`, `IError`)
 - **Linter** — code must pass without errors and without post-factum auto-formatting (`next/core-web-vitals` + `next/typescript`)
-- **Imports** — only those that are used
+- **Imports** — only used ones
 - **`<img>`** → `next/image`, **`<a>`** → `next/link`
 - **Temporary files** (inspection, debugging scripts) — **only** in `.claude/temp/`, this folder survives sessions
 - **Structure of `src/components/`** — never flat: organize into groups (`layout/`, `product/`, `catalog/`, `cart/`, `favorites/`, `search/`, `user/`, `ui/` — primitives without business logic). If it doesn't fit — create a new group
@@ -57,41 +57,41 @@ The file already exists — **do not ask**.
 - **Tokens**: `localStorage`, key `'refresh-token'`; rotation is handled automatically by `saveFunction` (`tokens.md`)
 - **`src/lib/oneentry.ts`**: the only file with `getApi`, `reDefine`, `hasActiveSession`, `syncTokens`, `isError`, `getLang`, `getImageUrl` — do not duplicate `isError` in other files
 - **User Authentication**: user-auth methods (Orders, Users, Payments, Events, Subscriptions) are called from the Client Component via `getApi()` after `reDefine(refreshToken, langCode)` — the SDK itself performs proactive refresh and token rotation
-- **AuthProvider.auth/signUp/generateCode**: only from the Client Component (fingerprint); server call — only with passing `deviceMetadata` of the browser (SDK ≥ 1.0.155)
+- **AuthProvider.auth/signUp/generateCode**: only from Client Component (fingerprint); server call — only with passing `deviceMetadata` from the browser (SDK ≥ 1.0.155)
 - **`next.config.ts`**: `remotePatterns` with `*.oneentry.cloud` for `next/image`
 
 ## Context Map — what to load and when
 
-This file is a navigator. It is intentionally thin: details are in the rules and skills and are loaded **on demand**, not hanging in the context for the entire session.
+This file is a navigator. It is intentionally thin: details are in the rules and skills and are loaded **on demand**, rather than hanging in the context for the entire session.
 
 **How to load:** rule — `.claude/rules/<name>.md` in the project or MCP tool `get-rule <name>`; skill — command `/<name>` or `get-skill <name>`.
 
 ### Skills
 
-A keyword from the prompt found → **first the skill, then the code**. Multiple triggers → multiple skills, each with its own checklist.
+Keyword from the prompt found → **first skill, then code**. Multiple triggers → multiple skills, each with its own checklist.
 
 | Skill | Triggers in the prompt | What it creates |
 | --- | --- | --- |
-| `/setup-nextjs` | create a next.js project | Next.js project from scratch |
-| `/setup-oneentry` | connect SDK, set up oneentry | `src/lib/oneentry.ts`, `next.config.ts`, environment variables |
+| `/setup-nextjs` | create next.js project | Next.js project from scratch |
+| `/setup-oneentry` | connect SDK, configure oneentry | `src/lib/oneentry.ts`, `next.config.ts`, environment variables |
 | `/inspect-api` | markers, response structure, what pages/forms/products are available | report with real markers and attribute types |
 | `/create-auth` | login, registration, authorization, personal account, auth | login, registration, logout, AuthContext |
 | `/create-google-oauth` | google login, oauth, login via google/facebook | redirect, callback, code exchange |
-| `/create-profile` | profile, user's personal data | profile page |
+| `/create-profile` | profile, user personal data | profile page |
 | `/create-orders-list` | orders, order history | list of orders with cancellation and pagination |
 | `/create-checkout` | checkout, order processing | delivery form, timeInterval, payment |
 | `/create-product-list` | product list, catalog | catalog with filtering and pagination |
-| `/create-product-card` | product card (in the list) | product card |
+| `/create-product-card` | product card (in list) | product card |
 | `/create-product-page` | product page (detailed) | product page |
 | `/create-page` | page from CMS | page on Pages API |
 | `/create-menu` | menu, navigation | navigation menu |
 | `/create-form` | feedback form, form from CMS | dynamic form from Forms API |
-| `/create-captcha` | captcha, recaptcha | reCAPTCHA v3 in the form |
+| `/create-captcha` | captcha, recaptcha | reCAPTCHA v3 in form |
 | `/create-cart-manager` | cart | cart on server-side cart API |
 | `/create-favorites` | favorites, wishlist | favorites on server-side wishlist API |
 | `/create-filter-panel` | filters, filter panel | filter panel by attributes |
 | `/create-content-filter` | content filter, filter tree | content filter tree |
-| `/create-search` | search, search bar | search for products / pages |
+| `/create-search` | search, search bar | search by products / pages |
 | `/create-reviews` | reviews, reviews | reviews with hierarchy |
 | `/create-subscription-events` | product subscription, price/availability notifications | subscription to product events |
 | `/create-subscription` | paid subscriptions, rates | subscriptions + Stripe |
@@ -101,9 +101,9 @@ A keyword from the prompt found → **first the skill, then the code**. Multiple
 | `/setup-vitest` | unit tests, vitest, cover adapters with tests | Vitest + OneEntry response fixtures |
 | `/create-seo` | seo, metadata, sitemap, robots, microdata, JSON-LD | `generateMetadata`, `sitemap.ts`, `robots.ts`, `JsonLd` |
 | `/setup-pwa` | pwa, manifest, service worker, offline | `manifest.ts`, `sw.js`, offline fallback |
-| `/admin-fill-content` | fill admin with a script, upload content programmatically | content entry via internal admin API |
-| `/admin-upload-images` | upload images to CMS via script, preview/LQIP is not created | image upload with preview |
-| `/admin-grant-permissions` | 403 Permission data not found, group rights | granting route to a user group |
+| `/admin-fill-content` | fill admin with script, upload content programmatically | content entry via internal admin API |
+| `/admin-upload-images` | upload images to CMS with script, preview/LQIP not created | image upload with preview |
+| `/admin-grant-permissions` | 403 Permission data not found, group rights | granting route to user group |
 
 ### Rules — reference, on demand
 
@@ -111,10 +111,10 @@ A keyword from the prompt found → **first the skill, then the code**. Multiple
 | --- | --- |
 | `sdk-modules.md` | need method signature of SDK or list of module methods |
 | `glossary.md` | unclear term: marker, pageUrl, attributeSets, fingerprint, guestId, bonus, … |
-| `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, complete summary of call contexts |
+| `sdk-init.md` | guest mode, `deviceMetadata`, `traficLimit`, full summary of call contexts |
 | `error-handling.md` | centralized `ApiError`/`handleApiError`, "Resource is closed" |
 | `troubleshooting.md` | specific error 400/401/403/404/500 or build/environment issue |
-| `common-mistakes.md` | before reviewing your code — what AI usually invents |
+| `common-mistakes.md` | before reviewing your code — what AI usually makes up |
 | `common-patterns.md` | pagination, filtering, SSR/SSG strategies, `user.state`, RTK Query, parallel requests |
 | `scenarios.md` | typical scenarios for e-commerce, authorization, CMS pages as a whole |
 | `scenarios-advanced.md` | FormData, IntegrationCollections, catalog with filters, navigation by categories |
@@ -167,7 +167,7 @@ Import types: `import type { IPagesEntity } from 'oneentry'`. Method signatures 
 
 ### 2. Markers — from API via `/inspect-api`, not from memory
 
-Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). If there is no `.env.local` — request the URL and token.
+Markers `'main'`, `'header'`, `'footer'` — hallucination. Run `/inspect-api` — it will read `.env.local` and return real markers (Pages, Forms, Menus, AuthProvider, …). If there is no `.env.local` — ask for the URL and token.
 
 **🚨 Existing code is NOT the source of truth:**
 
@@ -180,13 +180,13 @@ const stockQty = attrs.units_product?.value
 
 ### 3. Entities must exist in OneEntry before connection
 
-If asked "add form X" / "connect product Y" — first confirm existence via API (`Forms.getAllForms()`, `Pages.getRootPages()`, `Products.getProducts()`, `AttributesSets.getAttributes()`).
+When asked to "add form X" / "connect product Y" — first confirm existence via API (`Forms.getAllForms()`, `Pages.getRootPages()`, `Products.getProducts()`, `AttributesSets.getAttributes()`).
 
 If not found → respond: **“First create [name] in OneEntry Admin Panel, then I will connect it in the code.”**
 
-### 4. SDK binding immediately, without static stub
+### 4. SDK binding immediately, without static stubs
 
-The user provided the layout of the component that should work with the SDK — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
+The user provided the layout of a component that should work with the SDK — NEVER create a static UI stub. One step: (1) `/inspect-api` → markers → (2) Server Action → (3) connected component.
 
 ### 5. Forms — ALWAYS dynamic
 
@@ -210,11 +210,11 @@ The file `value` depends only on the **number of files**, not on the module (Pro
 
 ### 8. "Add to Cart" button — by default, without question
 
-For card / catalog / product page, `AddToCartButton` is added automatically. If the cart is not implemented — first `/create-cart-manager`. The "Add to Favorites" button (`FavoriteButton`) — **only on request**.
+For the card / catalog / product page, `AddToCartButton` is added automatically. If the cart is not implemented — first `/create-cart-manager`. The "Add to Favorites" button (`FavoriteButton`) — **only on request**.
 
 ### 9. `isError` + singleton SDK + precise types
 
-Check each API call through type guard `isError`. One instance of SDK in `src/lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** new `defineOneEntry()`.
+Check every API call through type guard `isError`. One instance of SDK in `src/lib/oneentry.ts`, use via `getApi()`. For changing configuration (`refreshToken`, `langCode`) — `reDefine()`, **not** a new `defineOneEntry()`.
 
 ### 10. Server Action — thin proxy
 
@@ -226,23 +226,23 @@ Do not create intermediate types and do not map API responses to custom objects.
 
 **Step 1. Decomposition in TodoWrite:** for each subtask, define the required skill (see “Context Map”) and relevant rules.
 
-**Step 2. Execution mode:**
+**Step 2. Execution Mode:**
 
 - **Sequentially** (default) — one subtask → its rules → checklist → next.
-- **In parallel** — only for completely independent tasks without common dependencies (different pages/components without shared AuthContext/`src/lib/oneentry.ts`). Through Agent tool, each with full context.
+- **In Parallel** — only for completely independent tasks without common dependencies (different pages/components without a common AuthContext/`src/lib/oneentry.ts`). Through Agent tool, each with full context.
 
 **Step 3. Checklist after each subtask:** have all rules been applied, have all API fields been processed, have all flags (`isCheckCode`, `systemCodeTlsSec`, …) been considered.
 
-❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in one message without a checklist between them.
+❌ **NOT ALLOWED:** read the prompt with 3 tasks → immediately write 3 components in one message without a checklist in between.
 
 ## When to Stop and Ask the User
 
 - **Don't know the marker** → `/inspect-api`; no Bash — ask.
-- **403 Forbidden** → check: is `AuthProvider.auth/signUp/generateCode` called via Server Action? Move to Client Component (fingerprint). Or check group permissions in the admin panel.
+- **403 Forbidden** → check: is `AuthProvider.auth/signUp/generateCode` called via Server Action? Move it to Client Component (fingerprint). Or check group permissions in the admin panel.
 - **No layout** → “Is there an example of layout/design?”
 - **Don't understand the data source** → “Where should the data for [component] come from?”
 - **Multiple solution options** → “X or Y, which do you prefer?”
-- **You are outputting images, but the data has `previewLink`** (file uploaded with a configured preview template) → “Include `placeholder="blur"` from built-in LQIP — everywhere, only on hero/main photo, or nowhere?” If silent → only on LCP image (`.claude/rules/performance-images.md`).
+- **You are outputting images, but there is `previewLink` in the data** (file uploaded with a configured preview template) → “Should I include `placeholder="blur"` from built-in LQIP — everywhere, only on hero/main photo, or nowhere?” If silent → only on the LCP image (`.claude/rules/performance-images.md`).
 
 ## API Permissions for the "Guests" Group
 
@@ -252,13 +252,13 @@ By default, the "Guests" group has a limit of **10 objects** per entity. Before 
 2. For each entity (Pages, Products, Forms, …): **Read: Yes, with restriction → without restrictions**
 3. Without this, `getPages()`, `getProducts()`, etc. will return a maximum of 10 records.
 
-Error `403 “Permission data not found. Provide the permission for requested url”` = route not granted to the group — skill `/admin-grant-permissions`. Programmatic content writing (public SDK — read-only) — internal admin API: `admin-api.md`, skills `/admin-fill-content` and `/admin-upload-images`; web UI of the admin panel — `admin-ui.md`.
+Error `403 "Permission data not found. Provide the permission for requested url"` = route not granted to the group — skill `/admin-grant-permissions`. Programmatic content writing (public SDK — read-only) — internal admin API: `admin-api.md`, skills `/admin-fill-content` and `/admin-upload-images`; web UI of the admin panel — `admin-ui.md`.
 
 ## Miscellaneous
 
-- **Pages — from CMS** (`getPageByUrl` + `getBlocksByPageUrl`), not hardcoded. The main is usually `'home'`. Skill: `/create-page`.
-- **Exactly copy the user's layout** (Tailwind/JSX) — change only hardcoded data to API data.
-- **Linter:** write code according to the project's linter config. Do not fix someone else's linting/formatting — this is the user's job.
+- **Pages — from CMS** (`getPageByUrl` + `getBlocksByPageUrl`), not hardcoded. The main one is usually `'home'`. Skill: `/create-page`.
+- **Exactly copy the user's layout** (Tailwind/JSX) — only change hardcoded data to API data.
+- **Linter:** write code according to the project's linter config. Do not fix someone else's linting/formatting — that is the user's job.
 - **Pagination, loading states, markers instead of IDs** — recommended by default.
 
 ## SDK Initialization
@@ -348,7 +348,7 @@ Choosing a context = rendering strategy:
 
 > Rules: `server-actions.md`, `auth-provider.md`, `nextjs-pages.md`
 
-### ⚠️ params and searchParams in Next.js 15+/16 — this is a Promise
+### ⚠️ params and searchParams in Next.js 15+/16 — are Promises
 
 ```tsx
 // ✅ Always await params
@@ -357,13 +357,13 @@ export default async function Page({ params }: { params: Promise<{ locale: strin
 }
 ```
 
-Details — `nextjs-pages.md` and `localization.md`.
+For details — `nextjs-pages.md` and `localization.md`.
 
 ## Error Handling
 
 The SDK by default (`isShell: true`) does not throw exceptions — errors are returned as values: HTTP error responses come as an `IError` object (with `statusCode`), while network / parsing / unexpected errors come as a raw `Error` (without `statusCode`, so `isError` does NOT catch it). Check the result with the `isError` guard. When `isShell: false`, the SDK throws all of this as an exception — a `try/catch` is needed.
 
-> **Initialization (`defineOneEntry`, SDK ≥ 1.0.154):** input is validated synchronously — when `url` or `config.token` is empty/missing, a regular `Error` is thrown (NOT `IError`, does not depend on `isShell`). Empty/whitespace values (unfilled `.env`) are considered missing. Catch it with a regular `try/catch` during initialization.
+> **Initialization (`defineOneEntry`, SDK ≥ 1.0.154):** input is validated synchronously — when `url` or `config.token` is empty/missing, a regular `Error` is thrown (NOT `IError`, it does not depend on `isShell`). Empty/whitespace values (unfilled `.env`) are considered missing. Catch it with a regular `try/catch` during initialization.
 
 ```typescript
 function isError(result: any): result is IError {
@@ -388,7 +388,7 @@ async function getProduct(id: number) {
 // import type { IError } from 'oneentry'
 interface IError {
   message: string
-  pageData: unknown
+  pageData?: unknown            // optional (SDK 1.0.177): errors of subscriptions, /files/search, 401 /events/all come without it
   statusCode: number
   timestamp: string
   localizeMessage?: string      // filled in case of response validation failure (Zod)
@@ -396,11 +396,11 @@ interface IError {
 }
 ```
 
-⚠️ The type declares `message: string`, but in the case of form validator errors (`postFormsData`), the API actually sends **an array of strings** — normalize it before displaying.
+⚠️ The type declares `message: string`, but in case of form validator errors (`postFormsData`), the API actually sends **an array of strings** — normalize it before displaying.
 
-⚠️ `403` + `"Resource is closed"` — is not an authorization error, but "the admin has not yet set up the resource". Handle it as an empty result and log it in `mismatch-log.md`.
+⚠️ `403` + `"Resource is closed"` — is not an authorization error, but "the admin has not yet configured the resource". Handle it as an empty result and log it in `mismatch-log.md`.
 
-Centralized `ApiError`/`handleApiError`, normalization of `message`, code table — `error-handling.md`. Analysis of specific API errors and builds — `troubleshooting.md`.
+Centralized `ApiError`/`handleApiError`, normalization of `message`, codes table — `error-handling.md`. Analysis of specific API errors and builds — `troubleshooting.md`.
 
 ## API Response Structure
 
@@ -445,13 +445,13 @@ Examples for each type, `plainValue`/`mdValue`, `extended` — `attribute-values
 
 - **Filtering by `attributeValues`** — `IFilterParams` and operators `eq/neq`, `mth/lth`, `in/nin`, `exs/nexs`: `common-patterns.md`. Special values `conditionValue`: `today` (date/dateTime), `now` (time/dateTime).
 - **`localizeInfos`** — flat access to `title` / `htmlContent` / `plainContent`, without nesting by language: `localization.md`.
-- **Page blocks** — with SDK ≥ 1.0.153, products come directly in the block (`block.products`, `block.similarProducts?.items`), when `traficLimit: true` there are no fields: `pages-blocks.md`.
+- **Page blocks** — with SDK ≥ 1.0.153 products come directly in the block (`block.products`, `block.similarProducts?.items`), with `traficLimit: true` there are no fields: `pages-blocks.md`.
 
 ## Working with Real Project Data
 
 Define the data structure and entity fields based on real project data, not from memory.
 
-**All API requests — only through the SDK** (not via curl). The SDK normalizes the data before returning: it removes the locale wrapper from `attributeValues` and `localizeInfos`, converts `additionalFields` from an array to `Record<marker, field>`, transforms a single `image.value` from an array to an object. Curl returns raw data — the code based on it will contain errors.
+**All API requests — only through the SDK** (not via curl). The SDK normalizes the data before returning it: it removes the locale wrapper from `attributeValues` and `localizeInfos`, converts `additionalFields` from an array to `Record<marker, field>`, and transforms a single `image.value` from an array to an object. Curl returns raw data — the code based on it will contain errors.
 
 ### Skill `/inspect-api` — preferred method
 
@@ -469,10 +469,10 @@ The skill will read `.env.local` and run the SDK script:
 
 **What to analyze in the response:**
 
-- `items[0].statusIdentifier` — actual product status
+- `items[0].statusIdentifier` — the actual status of the product
 - `items[0].attributeValues` — all attributes with `marker`, `type`, `value`
-- `identifier` — actual marker for menus/forms/providers
-- `pageUrl` — actual marker for pages
+- `identifier` — the actual marker for menus/forms/providers
+- `pageUrl` — the actual marker for pages
 
 ### Template for Working with a New Entity
 
@@ -492,7 +492,7 @@ For each new entity (Product, Page, Block, Menu):
 
 ## Performance — SSR caching, lazy, parallelism
 
-The complete rules are in the `performance*.md` family: a universal entry point `performance.md` plus six narrow ones (popups, rtk, gsap, images, streaming, bundle). Which one is connected when is in the "Context Map" section.
+Full rules are in the `performance*.md` family: a universal entry point `performance.md` plus six narrow ones (popups, rtk, gsap, images, streaming, bundle). Which one is connected when — in the "Context Map" section.
 
 ### The minimum that always applies
 
@@ -500,4 +500,4 @@ The complete rules are in the `performance*.md` family: a universal entry point 
 - Each `useSearchParams()` in the page tree — in `<Suspense>`, otherwise ISR silently turns off.
 - Server fetcher = `unstable_cache(impl, [keyParts], { revalidate, tags })` wrapped in React `cache()`. This is composition, not an alternative.
 - In one server component, independent fetches — `Promise.all`. No for-await waterfalls.
-- SDK `oneentry` in `'use client'` files — only for client flows (auth/cart/user through `getApi()` after `reDefine()`); load SSR data on the server and pass it as props.
+- SDK `oneentry` in `'use client'` files — only for client flows (auth/cart/user via `getApi()` after `reDefine()`); load SSR data on the server and pass it as props.

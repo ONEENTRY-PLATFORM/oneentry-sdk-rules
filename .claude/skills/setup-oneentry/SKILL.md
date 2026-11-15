@@ -59,8 +59,14 @@ export function getImageUrl(value: unknown): string {
   return (v as { downloadLink?: string } | null | undefined)?.downloadLink ?? '';
 }
 
+// Browser only: the server-side singleton is shared by all visitors of the process — someone else's
+// refreshToken in it will leak the session to the next visitor (see .claude/rules/sdk-init.md,
+// "reDefine() must throw on the server"). User calls on the server — a per-request instance.
 export async function reDefine(refreshToken: string, langCode?: string): Promise<void> {
   if (!refreshToken) return;
+  if (typeof window === 'undefined') {
+    throw new Error('reDefine() — browser only: the server-side singleton is shared by all visitors.');
+  }
   apiInstance = defineOneEntry(PROJECT_URL, {
     token: APP_TOKEN,
     langCode,
@@ -95,7 +101,7 @@ export function isError(result: unknown): result is { statusCode: number; messag
 }
 ```
 
-> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if the server issues tokens to the user (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; at runtime — `getApi().AuthProvider.setDeviceMetadata(browserString)`, an empty string resets the override). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
+> **deviceMetadata (SDK ≥ 1.0.155).** The `defineOneEntry` config also accepts `deviceMetadata` — needed only if the server issues tokens to the user (for example, server-side OAuth code exchange from `/create-google-oauth`): the server must stamp the browser fingerprint obtained on the client via `getApi().AuthProvider.getDeviceMetadata()` (the method is available on each module, not on the `getApi()` object itself; pass it in the `deviceMetadata` of a per-request instance `defineOneEntry(url, { token, deviceMetadata })`; do not call `setDeviceMetadata` on the shared server-side `getApi()` — the override will leak between visitors). Otherwise, the refresh token will be tied to the server's fingerprint and will not be updated from the browser. More details — `/create-google-oauth`.
 
 ## Step 3: Configure next.config.ts for images
 
