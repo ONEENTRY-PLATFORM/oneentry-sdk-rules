@@ -27,7 +27,7 @@ Events, Orders, Payments, Subscriptions, Users, WebSocket
 
 | What is needed | Method | Searches by |
 | --- | --- | --- |
-| One search string for the entire site | `Search.globalSearch(query, types?, …)` | names **and attribute values** of visible records, immediately across 18 types of entities |
+| One search string for the entire site | `Search.globalSearch(query, types?, …)` | names **and attribute values** of visible records, immediately across 25 types of entities |
 | Autocomplete within a single module | `Products.searchProduct` / `Pages.searchPage` / `Blocks.searchBlock` | only the name (substring) |
 | "Find by meaning," not by letters | `<Module>.get…ByVectorSearch(body, langCode?, offset?, limit?)` | vector similarity of embeddings |
 
@@ -178,6 +178,7 @@ getDiscountsByVectorSearch(body: IDiscountsVectorSearch, langCode?, offset?, lim
 - `validateDiscountsCoupon` checks the coupon without binding to the cart; to calculate a discount on a specific cart, use `Orders.previewOrder` (see `.claude/rules/orders.md`).
 - Bonuses: `getBonusBalance` / `getBonusHistory` require user authorization. `IBonusTransactionType` = `'ACCRUAL' | 'USAGE' | 'REDUCE' | 'REVERSAL_ACCRUAL' | 'REVERSAL_USAGE' | 'EXPIRATION'`. Dates `dateFrom`/`dateTo` must be full ISO only (`2026-01-01T00:00:00.000Z`); a bare date → `400`.
 - **Bonus amounts are decimal strings since v1.0.179.** `amount` is declared `string` (`"100.00"`), `remainingAmount` is `string | null`. Cast to a number (`Number`/`parseFloat`) before arithmetic and comparisons.
+- **Since v1.0.181 the discount condition shape `IDiscountCondition` is corrected:** `{ id, conditionType, entityIds: { id, isNested }[], value }`. The field is **`conditionType`** (not `type`), and `value` is an object whose shape depends on the condition type (e.g. `{ amount }` for `MIN_CART_AMOUNT`, `{ value, condition }` for `ATTRIBUTE`). It used to be wrongly typed `{ type, value: string }` — code reading `condition.type` got `undefined`.
 - Coupon code: case does not matter, but **surrounding spaces are not trimmed** (`" CODE "` → `Coupon not found`) — do `trim()` before the call; an empty code → IError `400 Coupon code is required`, not `{ valid: false }`. `validate` answers `valid: true` even for a discount with an expired `endDate` — check the term by the discount's own `startDate`/`endDate`.
 - Before v1.0.177 `getAllDiscounts`/`getDiscountByMarker` unwrapped the response by the client's language, not by the call's `langCode`.
 - ⚠️ **`getBonusHistory` returns the container `{ items, total }`, not an array (corrected in the types in v1.0.168).** Until then the method was declared as `IBonusTransactionEntity[]`, and code written from the type read `.length` off an object and got `undefined`. An account with no transactions gives `{"items":[],"total":0}`.
@@ -245,7 +246,7 @@ getAllForms(langCode?, offset?, limit?): IFormsResponse   // paginated: { total,
 getFormByMarker(marker, langCode?): IFormsEntity
 ```
 
-> `IFormsEntity.type` narrowed to `'order' | 'sign_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`. Since v1.0.179 `IFormsEntity` declares `formId?: number` and `moduleId?: number`.
+> `IFormsEntity.type` narrowed to `'order' | 'sign_in_up' | 'collection' | 'data' | 'rating' | null`. `IFormConfig` (element `moduleFormConfigs`) received the field `exceptionIds?: string[]`. Since v1.0.179 `IFormsEntity` declares `formId?: number` and `moduleId?: number`. Since v1.0.180 `IFormConfig` gained `showAggregatedRating?: boolean | null` (whether to show the entity's aggregated rating; the Content API returns it in the form config of products/pages/blocks).
 
 ## FormData
 
@@ -253,7 +254,7 @@ getFormByMarker(marker, langCode?): IFormsEntity
 postFormsData(body: IBodyPostFormData, langCode?): IPostFormResponse
 getFormsDataByMarker(marker, formModuleConfigId, body?: IFormsDataFilter, isExtended?, langCode?, offset?, limit?, isNested?): IFormsByMarkerDataEntity   // isNested? — since v1.0.179: replies nested under their parent instead of a flat list
 updateFormsDataByid(id, body: IBodyPostFormData, langCode?): IUpdateFormsData   // ⚠️ user; since v1.0.179 body is required and typed like postFormsData (+langCode)
-updateFormsDataStatusByid(id, body?): boolean             // ⚠️ user
+updateFormsDataStatusByid(id, body: { status: FormDataStatus }): boolean   // ⚠️ user; since v1.0.181 body is required and typed (status ∈ sent|moderation|approved|banned|deleted)
 deleteFormsDataByid(id): boolean                          // ⚠️ user
 getFormsDataByVectorSearch(body: IFormsDataVectorSearch, langCode?, offset?, limit?): IVectorSearchResponse<IFormsDataSearchResponse>  // semantic search
 ```
@@ -414,10 +415,11 @@ validateMarker(marker): boolean
 ## Search
 
 ```ts
-globalSearch(query, types?: TGlobalSearchEntityType[], visibility?: 'all' | 'visible' | 'hidden', offset?, limit?, langCode?, limitPerType?): IGlobalSearchResponse   // limitPerType? — since v1.0.179: dropdown mode, max items per type (default 5, max 20; independent from offset/limit)
+globalSearch(query, types?: TGlobalSearchEntityType[], visibility?: 'all' | 'visible' | 'hidden', offset?, limit?, langCode?, limitPerType?, correct?): IGlobalSearchResponse   // limitPerType? — since v1.0.179; correct? — since v1.0.181: correct typos by the dictionary before searching (API default true; false — search as is)
+searchCorrect(query, langCode?, scope?): ISearchCorrectResponse   // since v1.0.181: GET /api/content/search/correct — "did you mean" suggestion
 ```
 
-Public cross-entity search (`GET /api/content/search`, app-token) — the only method that, in one request, goes **both by names and by attribute values** across 18 types of entities (`products`, `pages`, `blocks`, `slides`, `templates`, `discounts`, `user_groups`, `users`, `admins`, `menus`, `forms`, `attributes_sets`, `attributes`, `orders`, `workflows`, `events`, `subscriptions`, `collections`). The basis for "one search string for the entire site"; for searching only products, use `Products.searchProduct` (see `/create-search`).
+Public cross-entity search (`GET /api/content/search`, app-token) — the only method that, in one request, goes **both by names and by attribute values** across 25 types of entities (`products`, `pages`, `blocks`, `slides`, `templates`, `discounts`, `user_groups`, `users`, `admins`, `menus`, `forms`, `attributes_sets`, `attributes`, `orders`, `workflows`, `events`, `subscriptions`, `collections`, and since v1.0.181 — `filters`, `payment_accounts`, `ai_provider_accounts`, `custom_modules`, `users_auth_providers`, `product_relations_templates`, `files`). The basis for "one search string for the entire site"; for searching only products, use `Products.searchProduct` (see `/create-search`).
 
 - The response **is grouped by types**, not flat: `{ query, groups: [{ type, items, hasMore }] }`. There is no flat array — `groups.flatMap((g) => g.items)`.
 - ⚠️ **`offset`/`limit` — drilldown mode**: the API accepts them only if exactly one available type is passed in `types`, otherwise it responds with `400`. Without them, each group returns in full, and the SDK does not substitute anything by default. Pagination of output "across all types at once" is impossible by design: first a general request, then a drilldown by the selected type.
@@ -425,6 +427,7 @@ Public cross-entity search (`GET /api/content/search`, app-token) — the only m
 - ⚠️ **`langCode` was added in v1.0.168 and defaults to the language given to `defineOneEntry`.** The search index is **per language**: before 1.0.168 the method sent no language at all, and on a bilingual project a word of the second locale returned an empty group while the same request with the right `langCode` returned a full page. On a multilingual site pass the language of the current page explicitly instead of relying on the client's language (CMS-912).
 - The element carries **the context of the match**, not the entity itself: `matchKind` (`'exact' | 'title' | 'attributeName' | 'attributeValue'`), `matchedField`, `fragment` (plain text around the match, without markup — highlight it yourself), `langCode`, plus `parent` for entities without their own page (slide → block, order → storage) and `matchedAttribute`. `attributeValues`, `localizeInfos`, and prices are **not there** — for cards go to `Products.getProductsByIds` by collected `id`.
 - `id` — `number | string`: for `workflows` and `attributes` it is string. Do not blindly convert to a number.
+- Since v1.0.181 **`searchCorrect(query, langCode?, scope?)`** (`GET /search/correct`) returns `{ query, corrected: string | null, tokens: [{ from, to: string | null, distance?, docFreq?, reason? }] }` — the corrected query (`corrected: null` — nothing to correct) and a per-word breakdown (an uncorrected word carries only `from`/`to` in its token; the other fields are optional). For a "did you mean" hint. Alongside, `globalSearch` gained a `correct?` flag — the search runs on the corrected query, and the correction is returned in the response headers.
 
 ```ts
 const res = await getApi().Search.globalSearch(query, ['products'], 'visible', 0, 20);

@@ -665,6 +665,8 @@ export async function submitContactForm(formValues: Record<string, any>) {
 
 `result.formData.id` — id of the created record.
 
+> `result.actionMessage` is a **string** (the text shown after submit). Before v1.0.183, submitting in a language other than the default (`postFormsData(body, 'ru_RU')`) leaked it as a locale-map `{ "en_US": "…" }` — the message is keyed by the locales it is defined in in the form config (usually only the default), not by the submit language — and the storefront rendered `[object Object]`. Since 1.0.183 the SDK always resolves it to a string (submit language → client language → first available value).
+
 > Before v1.0.176, `postFormsData(body, langCode)` with a language other than the client's returned `result.formData.formData` as an object `{ "ru_RU": [ … ] }`. Since 1.0.176 it is an array, as when sending in the client's language.
 
 > ⚠️ `fingerprint` — now `string | null`. For anonymous submissions and submissions by app-token (without user session) it comes as `null`. Do not rely on its presence — check for `null` before use.
